@@ -1,701 +1,635 @@
-# Ashi@ 設計概要
+English | [日本語](./README_JP.md)
 
-## 1. コンセプト
+# Ashi@ Architecture and Safety Design
 
-**Ashi@（あしあっと）**は、SNS上に投稿されたAshiato Syntaxを、位置情報を基準として発見・閲覧するためのWebサービスである。
+## 1. Overview
 
-Ashi@自身がSNSの投稿データベースを構築するのではなく、**各SNSが提供する公開検索APIをブラウザから直接利用する**。
+Ashi@ is a web service for discovering and displaying posts containing
+[Ashiato Syntax](https://github.com/ashiato-syntax/ashiato-syntax) on a map.
 
-Ashi@は、SNS上のAshiatoを「保存する」のではなく、**SNS上に存在するAshiatoを一時的に発見し、地図上に表示するための薄いレイヤー**として設計する。
+Ashi@ is not a social network and does not maintain a database of social
+network posts.
 
----
+Ashi@ is designed as a thin service between the user's browser and
+supported social network services.
 
-# 2. 対応SNS
+The primary design goals are:
 
-### v1
-
-**Misskeyを対象とする。**
-
-Misskeyでは、
-
-* 認証なしで検索APIを利用できる
-* ハッシュタグ検索が利用できる
-* ページングが可能
-* CORS経由でブラウザから直接利用できる
-
-ため、Ashi@のアーキテクチャと相性が良い。
-
-Ashiato Syntaxの全文検索ではなく、**`#Ashiato` ハッシュタグをDiscovery Markerとして使用する。**
-
-### Bluesky
-
-**初期版では対応しない。**
-
-Blueskyについては、
-
-* 認証なし検索の制約
-* ページングの制約
-* 検索APIの挙動
-* 利用規模が大きくなった場合のRate Limit
-* CORSおよびAPI利用条件
-
-等を考慮し、Misskey版の運用結果を見てから対応を検討する。
-
-したがって、
-
-> **最初から複数SNS対応を目指さず、まずMisskeyで成立させる。**
+- Minimize the amount of data retained by Ashi@
+- Avoid unnecessary integration with social network accounts
+- Avoid server-side collection of social network posts
+- Minimize infrastructure and operational costs
+- Reduce privacy, security, and legal risks
+- Keep the user experience simple
 
 ---
 
-# 3. 基本アーキテクチャ
+## 2. Initial Scope
 
-最大の特徴は、
+### 2.1 Supported Service
 
-> **SNS検索をAshi@バックエンドで行わない。**
+The initial version targets **Misskey**.
 
-ことである。
+Misskey is suitable for the initial implementation because its public
+search functionality can be accessed directly from the browser and
+supports the mechanisms required by Ashi@.
+
+### 2.2 Bluesky
+
+Bluesky support is deferred.
+
+After deploying and observing the Misskey version, browser-side search,
+pagination, rate limits, API behavior, and operational impact will be
+evaluated before deciding whether Bluesky support is necessary and
+practical.
+
+Ashi@ will not introduce server-side crawling or search proxies merely to
+support additional services.
+
+---
+
+## 3. Core Architecture
+
+Ashi@ uses a **client-side discovery architecture**.
+
+Social network searches are performed directly by the user's browser.
 
 ```text
-┌───────────────┐
-│     Browser   │
-│   (Ashi@ UI)  │
-└───────┬───────┘
-        │
-        ├──────────────→ Misskey API
-        │                 │
-        │                 │ #Ashiato
-        │                 ↓
-        │              Notes
-        │                 │
-        │                 ↓
-        │          Syntax解析・Hash生成
-        │
-        └──────────────→ Ashi@ API
-                           │
-                           ↓
-                    Issuance Registry
-                           │
-                           ↓
-                    表示 / 非表示判定
+                    ┌─────────────────┐
+                    │     Browser     │
+                    │    Ashi@ UI     │
+                    └────────┬────────┘
+                             │
+                ┌────────────┴────────────┐
+                │                         │
+                ▼                         ▼
+        ┌───────────────┐        ┌────────────────┐
+        │    Misskey    │        │      Ashi@     │
+        │ Public Search │        │ Issuance       │
+        │   #Ashiato    │        │ Registry API   │
+        └───────┬───────┘        └───────┬────────┘
+                │                        │
+                │ Notes                  │ hash
+                ▼                        ▼
+        Syntax extraction          display status
+                │
+                ▼
+        Canonical Form
+                │
+                ▼
+             Hash
+                │
+                └───────────────► Registry check
+                                      │
+                                      ▼
+                               Display / Hide
 ```
 
-つまり、Misskeyから取得した投稿内容は**Ashi@バックエンドには送らない**。
-
-ブラウザ上で、
-
-1. Misskeyから投稿を取得
-2. Ashiato Syntaxを抽出
-3. Canonical Formを生成
-4. Hashを計算
-5. Ashi@へHashだけ問い合わせる
-6. Registryに存在し、かつ`表示`なら地図に表示
-
-という処理を行う。
+Ashi@'s backend does not receive or store the social network search
+results themselves.
 
 ---
 
-# 4. Ashi@バックエンドが保持する情報
+## 4. Client-Side Search
 
-極力少なくする。
+Ashi@ performs social network searches from the frontend.
 
-基本的には以下だけ。
+For Misskey:
 
-```text
-Issuance Registry
+1. The browser searches for `#Ashiato`.
+2. Search results are received directly from Misskey.
+3. The browser extracts Ashiato Syntax from each post.
+4. The browser generates the Syntax Canonical Form.
+5. The browser calculates the Syntax hash.
+6. The browser queries the Ashi@ Issuance Registry using the hash.
+7. If the hash exists and its `display` value is `true`, the Ashiato is
+   displayed.
 
-hash
-display_status
-created_at / expiry_at
-```
-
-概念的には、
-
-| データ         | 用途                   |
-| ----------- | -------------------- |
-| Syntax Hash | Ashi@が発行したSyntaxかを識別 |
-| 表示/非表示      | Ashi@上での表示制御         |
-| 有効期限        | 7日後の自動削除             |
-
-である。
-
-### 保持しないもの
-
-Ashi@バックエンドは原則として以下を保持しない。
-
-* 投稿本文
-* SNS上の投稿全文
-* 投稿者名
-* SNSアカウントID
-* SNS投稿URL
-* 画像
-* 音声
-* 元の位置情報
-* GPS座標
-* 行動履歴
-* SNS上の検索結果
-* ユーザーアカウント情報
-
-つまり、
-
-> **「誰が」「何を」「どこに投稿したか」をAshi@のDBに蓄積しない。**
+The social network post itself is not sent to Ashi@'s backend.
 
 ---
 
-# 5. Issuance Registry
+## 5. Discovery Method
 
-Ashi@では、**Syntaxの発行ID**を利用して正規発行されたSyntaxを識別する。
+Ashiato Syntax itself does not define how posts containing the Syntax are
+discovered.
 
-SyntaxにはAshi@固有の発行IDを`x-*`拡張フィールドとして含める。
-
-例えば概念的には、
-
-```text
-x-ashiato-web-issuance-id
-```
-
-のような拡張フィールドを使用する。
-
-この発行IDを含むSyntaxについてCanonical Formを生成し、そのHashをAshi@側のRegistryに登録する。
-
----
-
-# 6. 不正投稿対策
-
-単純に、
-
-> `#Ashiato` + 正しいSyntax
-
-だけで表示可能にすると、第三者が勝手にAshiatoを生成できる。
-
-そこで、
-
-```text
-Ashi@でSyntax発行
-       ↓
-発行ID付与
-       ↓
-Canonical Form生成
-       ↓
-Hash登録
-       ↓
-SNSへ投稿
-```
-
-という流れにする。
-
-閲覧時は、
-
-```text
-SNS投稿
- ↓
-Syntax抽出
- ↓
-Canonical Form
- ↓
-Hash
- ↓
-Issuance Registry
- ↓
-存在する？
- ├─ No → 表示しない
- └─ Yes
-      ↓
-   表示状態？
-      ├─ No → 表示しない
-      └─ Yes → 表示
-```
-
-とする。
-
-### 偽投稿への耐性
-
-第三者が正規投稿のSyntaxをコピーして偽投稿しても、**同一HashになるためRegistry上では正規Syntaxとして扱われる**。
-
-そのため、さらに必要となるのが**検索結果の処理順序**である。
-
-同一Syntaxが複数投稿された場合、SNS検索結果を**古い投稿から処理する**ことで、正規投稿がIndexされる前にコピー投稿によって処理を奪われるリスクを低減する。
-
----
-
-# 7. 7日間の有効期間
-
-Ashi@のRegistryに登録された情報は、**最長7日間で自動削除する。**
-
-```text
-発行
- ↓
-Registry登録
- ↓
-最大7日
- ↓
-自動削除
-```
-
-7日経過後は、Ashi@からそのSyntaxを正規発行されたものとして照合できなくなる。
-
-これによりAshi@が、
-
-> **SNS上の投稿を永久的にインデックスするサービス**
-
-になることを防ぐ。
-
-また、長期的な位置情報データベースや行動履歴データベースを構築しない。
-
----
-
-# 8. Discovery
-
-Ashi@はMisskey上のAshiatoを発見するため、
+Ashi@ uses the following discovery mechanism for Misskey:
 
 ```text
 #Ashiato
 ```
 
-を利用する。
+`#Ashiato` is an Ashi@ service-level convention and is not part of the
+Ashiato Syntax specification.
 
-これは**Ashiato Syntaxそのものの仕様ではない**。
-
-Ashiato SyntaxはDiscovery Methodを規定せず、Ashi@というサービスがMisskey上で採用するDiscovery方式である。現在のSyntax READMEでもこの分離が明記されている。([GitHub][1])
-
-```text
-Ashiato Syntax
-    ↓
-Discovery方法は規定しない
-
-Ashi@
-    ↓
-#Ashiato
-    ↓
-Misskey検索
-```
+Other implementations may use different discovery mechanisms.
 
 ---
 
-# 9. フロントエンド検索
+## 6. Issuance Registry
 
-SNS検索は**フロントエンドから直接行う**。
+Ashi@ uses an Issuance Registry to determine whether a Syntax was issued
+by Ashi@.
 
-これには大きなメリットがある。
+Ashi@-issued Syntax contains an issuance ID using an `x-*` extension
+field.
 
-### Ashi@サーバーの負荷
+The issuance ID is part of the Syntax and is included when generating its
+Canonical Form and hash.
 
-SNS検索リクエストがAshi@サーバーを経由しない。
-
-そのため、
-
-```text
-ユーザー100人
- ↓
-Misskey APIへ100人が直接アクセス
-```
-
-となり、
-
-```text
-ユーザー100人
- ↓
-Ashi@サーバー
- ↓
-Misskey API
-```
-
-とはならない。
-
-したがって、Ashi@自身がSNS検索APIのRate Limitを食い潰す構造になりにくい。
-
----
-
-# 10. Ashi@側のAPI
-
-Ashi@側のAPIは極めて単純になる。
-
-主な処理は、
-
-### Hash照会
-
-```text
-POST /registry/check
-```
-
-など。
-
-入力：
-
-```text
-hash[]
-```
-
-出力：
+The Registry stores only the following two fields:
 
 ```text
 hash
 display
 ```
 
-程度。
+No social network post data is stored.
 
-つまりAshi@バックエンドは、
+### 6.1 Registry Semantics
 
-> **「このHashを表示してよいか？」**
+Conceptually:
 
-という問い合わせに答えるだけである。
+```text
+hash      : hash identifying an issued Syntax
+display   : whether Ashi@ should display it
+```
+
+The Registry does not store:
+
+- post content
+- author information
+- social network account IDs
+- social network post IDs
+- post URLs
+- images
+- audio
+- GPS coordinates
+- social network search results
+- user accounts
+- browsing history
 
 ---
 
-# 11. 表示制御
+## 7. Hash-Based Identification
 
-Registryには、
+Ashi@ does not directly associate an issuance ID with a social network
+post.
+
+Instead, the Syntax itself is canonicalized and hashed.
+
+```text
+Ashiato Syntax
+      │
+      ▼
+Canonical Form
+      │
+      ▼
+Hash
+      │
+      ▼
+Issuance Registry
+```
+
+The same Syntax in Canonical Form produces the same hash.
+
+This allows Ashi@ to recognize an issued Syntax without storing the
+original Syntax or the social network post.
+
+---
+
+## 8. Protection Against Unauthorized Copies
+
+A legitimate Ashiato Syntax may be copied by a third party and used in a
+fake post before the legitimate post appears in search results.
+
+Because a copied Syntax produces the same hash, when multiple search
+results contain the same Syntax, older posts should be processed first.
+
+This reduces the possibility that a copied post interferes with recognition
+of the legitimate post.
+
+The Issuance Registry does not prove that a particular social network
+account created a given post.
+
+---
+
+## 9. Registry Lifetime
+
+Every Registry entry is automatically deleted after **7 days**.
+
+The 7-day lifetime is enforced using the database's TTL mechanism.
+
+The application does not rely on a separate periodic deletion job.
+
+```text
+Registry entry
+      │
+      │ DB TTL
+      ▼
+    7 days
+      │
+      ▼
+Automatic deletion
+```
+
+This prevents Ashi@ from maintaining a permanent index of issued Ashiato
+Syntax.
+
+### 9.1 Database Minimization
+
+The Registry should contain only:
+
+```text
+hash
+display
+```
+
+When the database's native TTL mechanism can manage expiration, unnecessary
+timestamps and metadata should not be stored.
+
+---
+
+## 10. Future-Dated Ashiato
+
+Ashi@ v1 does not allow issuance of Ashiato whose specified time is in the
+future relative to the issuance time.
+
+This restriction keeps the Issuance Registry short-lived and simple.
+
+Ashiato Syntax itself does not prohibit future dates.
+
+Therefore:
+
+```text
+Ashiato Syntax
+    └─ Future dates may be representable
+
+Ashi@
+    └─ Future-dated issuance is not supported in v1
+```
+
+Future-dated Ashiato may be considered as a separate feature in a future
+version.
+
+---
+
+## 11. Display Control
+
+The Registry contains a `display` value.
 
 ```text
 display = true
+```
+
+means that Ashi@ may display the Ashiato.
+
+```text
 display = false
 ```
 
-の状態を持たせる。
+means that Ashi@ must not display the Ashiato.
 
-ブラウザがHashを照会し、
+Changing `display` affects only Ashi@.
+
+It does not delete or modify the original social network post.
+
+---
+
+## 12. Non-Display Requests
+
+Ashi@ provides a mechanism for requesting that an Ashiato be hidden from
+Ashi@.
+
+The purpose is to prevent problematic or unwanted Ashiato from being
+displayed on Ashi@.
+
+Ashi@ does not attempt to delete or modify the corresponding post on the
+social network.
+
+### 12.1 Abuse Prevention
+
+A non-display request must not be directly executable merely by calling a
+public API endpoint.
+
+The frontend's 30-second waiting period is not considered a security
+mechanism by itself. The server must independently enforce the waiting
+period.
+
+A short-lived challenge should be used, for example:
 
 ```text
-Registryに存在
+Client
+  │
+  │ Start request
+  ▼
+Ashi@ server
+  │
+  ├─ Rate Limit
+  ├─ Bot challenge
+  └─ Issue temporary challenge
+        │
+        │ wait ≥ 30 seconds
+        ▼
+Client
+  │
+  │ Complete request
+  ▼
+Ashi@ server
+  │
+  ├─ Validate challenge
+  ├─ Verify elapsed time
+  ├─ Verify Bot protection
+  ├─ Verify Rate Limit
+  └─ Verify target hash
+        │
+        ▼
+    display = false
+```
+
+### 12.2 Rate Limiting
+
+Rate limits should be applied to prevent abuse through large numbers of
+non-display requests.
+
+Possible controls include:
+
+- IP-based rate limiting
+- Session-based rate limiting
+- Per-hash request limiting
+- Bot detection
+- Short-lived request challenges
+
+IP addresses should not be treated as permanent user identities.
+
+---
+
+## 13. Temporary Request Data
+
+Data required only to process a non-display request should be temporary.
+
+Ashi@ should not maintain a permanent moderation history or requester
+database unless required for security or legal reasons.
+
+For example, a temporary challenge may contain:
+
+```text
+challenge
+target hash
+creation time
+```
+
+The challenge should automatically expire after the request is completed
+or times out.
+
+---
+
+## 14. No Ashi@ User Accounts
+
+Ashi@ does not require users to create an Ashi@ account.
+
+Ashi@ does not require OAuth or account linking with Misskey or other social
+network services.
+
+Ashi@ does not store:
+
+- Misskey access tokens
+- social network account IDs
+- user profiles
+- passwords
+- social network authentication credentials
+
+---
+
+## 15. No Social Network Content Database
+
+Ashi@ does not maintain a database of social network content.
+
+In particular, Ashi@ does not permanently store:
+
+- posts
+- authors
+- images
+- audio
+- comments
+- social network URLs
+- search results
+
+The browser retrieves the necessary information directly from the
+supported social network.
+
+---
+
+## 16. No Location History
+
+Ashi@ does not maintain user location histories.
+
+Ashi@ should not create long-term databases associating:
+
+```text
+user
 +
-display = true
+time
++
+location
 ```
 
-の場合のみ表示する。
-
-非表示の場合はSNS上の投稿そのものを削除するのではなく、
-
-> **Ashi@上で表示しない**
-
-だけである。
-
-SNS側の投稿については、投稿先SNSの仕組みに委ねる。
+The service is not intended to track users.
 
 ---
 
-# 12. 非表示申請
+## 17. Location Privacy
 
-Ashi@には非表示申請機能を設ける。
+Location information can reveal:
 
-ただし、**ワンタップで即時非表示にはしない。**
+- a person's whereabouts
+- movement patterns
+- living areas
+- workplaces
+- private locations
+- other personal information
 
-想定フロー：
+Accordingly, Ashi@ should avoid displaying unnecessarily precise
+locations.
+
+Ashi@ may use, for example, approximately 100-meter-level precision as its
+default display policy.
+
+This is an Ashi@ service policy and is not a requirement of Ashiato Syntax.
+
+---
+
+## 18. Display Delay
+
+Ashi@ should not display newly created Ashiato immediately in order to
+reduce the risk of real-time location tracking.
+
+For example:
 
 ```text
-非表示申請
- ↓
-30秒待機
- ↓
-Bot判定
- ↓
-Rate Limit確認
- ↓
-申請受付
- ↓
-Registryのdisplay=false
+SNS post
+   │
+   ▼
+Waiting period
+   │
+   ▼
+Ashi@ display
 ```
 
-### 目的
-
-「気に入らないAshiatoを片っ端から通報する」といった嫌がらせを困難にする。
-
-30秒待機だけではなく、
-
-* IP単位Rate Limit
-* セッション単位Rate Limit
-* Bot判定
-* 同一Hashへの大量申請抑制
-* 異常な申請パターンの検知
-
-等を組み合わせる。
+The exact delay is an Ashi@ service policy and is not part of the Ashiato
+Syntax specification.
 
 ---
 
-# 13. モデレーション方針
+## 19. No Proof of Presence
 
-Ashi@は**SNSのコンテンツモデレーションサービスにならない**。
+Ashiato Syntax does not prove that the person who generated or posted the
+Syntax was physically present at the specified location.
 
-非表示申請の対象は、
+Ashi@ should not describe an Ashiato as cryptographic or authoritative
+proof of physical presence.
 
-> **Ashi@上でそのAshiatoを表示するか**
-
-である。
-
-投稿本文をAshi@側で保存して審査する仕組みにはしない。
-
-そのため、Ashi@が保持する情報を最小限にできる。
+If proof-of-presence functionality is required in the future, it should be
+designed as a separate mechanism.
 
 ---
 
-# 14. 位置情報の安全設計
+## 20. Map Architecture
 
-Ashi@では、位置情報をそのまま高精度で表示しない。
+Ashi@ does not require a commercial map API.
 
-基本方針として、
+The map interface may use:
 
-### デフォルト
+- a blank map
+- grid lines
+- coordinate-based rendering
+- simple geographic shapes
+- Ashiato markers
 
-**約100m程度の精度**
-
-を想定する。
-
-さらにユーザーが位置精度を調整できるようにする。
-
-ただし、これは**Ashiato Syntaxの仕様ではなくAshi@のポリシー**である。
-
-Syntax側では、
-
-> 必要以上に高精度な位置情報を公開しない
-
-ことを推奨する。
+This minimizes dependency on external map providers, API usage limits, and
+map service costs.
 
 ---
 
-# 15. 遅延公開
+## 21. Infrastructure Minimization
 
-Ashi@では、**投稿されてから1時間以内のAshiatoを表示しない**。
+Ashi@ is designed to minimize backend infrastructure requirements.
 
-目的は、
+The backend primarily provides:
 
-* 現在地のリアルタイム特定防止
-* ストーカー等への悪用防止
-* 投稿者の行動追跡防止
+- Issuance Registry
+- hash lookup
+- display-state changes
+- non-display request handling
 
-である。
+Social network search is performed by the browser.
 
-したがって、
+Map rendering does not require a third-party map service.
+
+Ashi@ does not require a large content database.
+
+---
+
+## 22. Privacy and Security Principles
+
+Ashi@ follows these principles:
+
+1. Collect as little information as possible.
+2. Do not store social network posts unnecessarily.
+3. Do not store social network account information.
+4. Do not maintain permanent Ashiato indexes.
+5. Delete Registry entries automatically after 7 days.
+6. Process social network searches on the client side.
+7. Do not maintain user location histories.
+8. Apply location-precision and display-delay safety measures.
+9. Make non-display requests resistant to automation and bulk abuse.
+10. Expire temporary security data after a short period.
+
+---
+
+## 23. Legal and Policy Considerations
+
+This architecture is designed to reduce privacy, security, and legal risks
+by minimizing the information and content handled by Ashi@.
+
+However, minimizing stored data does not eliminate legal or contractual
+responsibilities.
+
+Ashi@ should separately consider:
+
+- applicable privacy laws
+- copyright
+- privacy and personality rights
+- defamation
+- social network terms of service
+- API usage policies
+- laws and regulations applicable to information distribution platforms
+- requests concerning unlawful or infringing content
+
+Ashi@ should provide an appropriate contact mechanism for legal and
+rights-related requests.
+
+Before making the service publicly available, applicable laws and regulations, the terms of service of supported social networking services, API usage policies, and other relevant requirements should be reviewed. Where matters are difficult to determine, professional advice should be sought as necessary.
+
+---
+
+## 24. Explicit Non-Goals
+
+Ashi@ is not intended to become:
+
+- a social network
+- a social network archive
+- a permanent search engine for SNS posts
+- a user profiling system
+- a location tracking service
+- a social network account manager
+- a content moderation platform for external social networks
+- a long-term location database
+
+Whenever new features are proposed, they should be evaluated against these
+non-goals.
+
+---
+
+## 25. Design Summary
+
+Ashi@ intentionally follows a **thin-service architecture**.
 
 ```text
-SNS投稿
- ↓
-1時間
- ↓
-Ashi@で表示可能
+                 Social Network
+                       │
+                 Public Search
+                       │
+                       ▼
+                  User Browser
+                       │
+            ┌──────────┴──────────┐
+            │                     │
+            ▼                     ▼
+      Syntax Processing      Ashi@ Registry
+            │                     │
+            │ hash                │
+            └──────────►          │
+                           display?
+                               │
+                     ┌─────────┴─────────┐
+                     │                   │
+                    yes                  no
+                     │                   │
+                     ▼                   ▼
+                  Display             Hide
 ```
 
-となる。
-
-これもAshiato Syntaxの仕様ではなく、Ashi@の安全ポリシーである。
-
----
-
-# 16. 現地投稿について
-
-Ashi@は、**Syntax自体によって現地存在を証明しない**。
-
-Ashiato Syntaxは、
-
-> 「この場所・時間を条件とする情報」
-
-を表現するだけであり、
-
-> 「投稿者が実際にその場所にいた」
-
-ことを証明するものではない。
-
-Ashi@が将来的に「現地に行った人だけ投稿可能」というUXを採用する場合、それはAshi@側の機能となる。
-
-初期設計では、**現地投稿をSyntaxレベルでは要求しない**。
-
----
-
-# 17. 地図
-
-Ashi@では、外部地図サービスへの依存を可能な限り避ける。
-
-地図は、
-
-* 白地図
-* グリッド
-* Geohash等の位置単位
-* Ashiatoの存在表示
-
-を中心とする。
-
-Google Maps等の詳細な地図データを必須としない。
-
-これにより、
-
-* 地図API利用料
-* API Key管理
-* 地図サービスの利用規約
-* タイルアクセス量
-* 外部サービス障害
-
-等への依存を減らす。
-
----
-
-# 18. アカウント
-
-**Ashi@独自のユーザーアカウントを要求しない。**
-
-SNSアカウントとのOAuth連携も基本的に行わない。
-
-つまり、
-
-```text
-Misskey
-  ↑
-アカウント連携なし
-
-Ashi@
-  ↑
-ログインなし
-```
-
-という構成。
-
-これにより、
-
-* アカウント情報を保持しない
-* OAuth Tokenを保持しない
-* パスワードを扱わない
-* SNSアカウントとの紐付けを作らない
-
-というメリットがある。
-
----
-
-# 19. 法的・プライバシー面での基本方針
-
-Ashi@は、
-
-> **「SNSコンテンツを収集・蓄積するサービス」ではなく、「SNSの公開検索結果をユーザーのブラウザ上で処理するサービス」**
-
-として設計する。
-
-Ashi@側に保存するのは、
-
-```text
-Syntax Hash
-表示/非表示
-有効期限
-```
-
-のみ。
-
-したがって、SNS上の本文・画像・投稿者情報等をAshi@のDBに蓄積する設計を避ける。
-
-ただし、これは**法的責任をゼロにするものではない**。
-
-利用規約、API利用条件、個人情報保護法、著作権、名誉毀損、プロバイダ責任等については、調べとく必要あり。
-
----
-
-# 20. Abuse対策
-
-最低限、
-
-### SNS検索
-
-Ashi@サーバーを経由しない。
-
-### Registry
-
-API Rate Limitを設ける。
-
-### 非表示申請
-
-* 30秒待機
-* Bot判定
-* IP Rate Limit
-* セッションRate Limit
-* 同一Hashへの大量申請抑制
-
-### Syntax発行
-
-* 発行Rate Limit
-* 発行ID
-* Registryへの登録
-* 7日間で自動削除
-
-を行う。
-
----
-
-# 21. Ashi@の設計思想
-
-最終的には、かなり明確にこうなる。
-
-> **Ashi@はSNSの代替ではない。**
-
-> **Ashi@はSNSのデータベースでもない。**
-
-> **Ashi@はAshiato Syntaxの検索・閲覧レイヤーである。**
-
-そして、
-
-```text
-SNS
-│
-│ 投稿・保存・アカウント管理
-│
-▼
-Misskey
-│
-│ 公開検索API
-│
-▼
-Browser
-│
-│ Syntax解析
-│ Hash生成
-│
-├──────────────→ Ashi@
-│                    │
-│                    │ Registry照会
-│                    ▼
-│                表示 / 非表示
-│
-▼
-地図表示
-```
-
-という構造になる。
-
----
-
-# 22. 特に重要な設計上のポイント
-
-この設計の強みは、**責任・データ・コストを全部「薄く」できること**。
-
-### データ
-
-SNSコンテンツを保持しない。
-
-### インフラ
-
-SNS検索はクライアントから直接行う。
-
-### アカウント
-
-持たない。
-
-### 地図
-
-外部地図サービスへの依存を避ける。
-
-### Index
-
-Hashだけ。しかも7日で消える。
-
-### モデレーション
-
-本文を収集して審査するのではなく、Hash単位の表示/非表示。
-
-### 対象SNS
-
-まずMisskeyだけ。
-
-### 規格
-
-Ashiato SyntaxとAshi@を分離。
-
-この結果、
-
-> **「ユーザーから見ると普通の地図サービスなのに、運営側が持つデータは極端に少ない」**
-
-という、かなり珍しいアーキテクチャになる。
-
-そして今のAshiato Syntax READMEにある「Syntaxとサービス実装の分離」「Discoveryはサービス側で決める」「Security/Privacyは実装側の責務」という方針とも綺麗につながっている。
+Ashi@ does not attempt to own or accumulate social network data.
+
+It maintains only the minimum information necessary to identify Ashiato
+Syntax issued by Ashi@ and determine whether that Ashiato may be displayed
+on Ashi@.
+
+> **The social network owns the content.**
+>
+> **The browser discovers and processes the content.**
+>
+> **Ashi@ provides only short-lived issuance verification and display
+> control.**
