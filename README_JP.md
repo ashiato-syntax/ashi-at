@@ -62,7 +62,7 @@ SNS検索は利用者のブラウザから直接実行する。
                 │                        │
                 │ Notes                  │ hash
                 ▼                        ▼
-        Syntax extraction          display status
+        Syntax extraction          visibility status
                 │
                 ▼
         Canonical Form
@@ -73,7 +73,7 @@ SNS検索は利用者のブラウザから直接実行する。
                 └───────────────► Registry check
                                       │
                                       ▼
-                               Display / Hide
+                               Visibility
 ```
 
 Ashi@のバックエンドは、SNS検索結果そのものを受け取ったり保存したりしない。
@@ -92,7 +92,7 @@ Misskeyの場合、処理は以下のとおりである。
 4. SyntaxのCanonical Formを生成する。
 5. Canonical FormからHashを生成する。
 6. Hashを使ってAshi@ Issuance Registryへ照会する。
-7. Hashが存在し、`display` が `true` であればAshiatoを表示する。
+7. Hashが存在し、`visibility` が `public` であればAshiatoを表示する。
 
 SNS投稿そのものをAshi@のバックエンドへ送信しない。
 
@@ -347,7 +347,7 @@ Ashi@ server
   └─ Verify target hash
         │
         ▼
-    display = false
+    visibility = suppressed
 ```
 
 ### 12.2 Rate Limit
