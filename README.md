@@ -71,7 +71,7 @@ Social network searches are performed directly by the user's browser.
                 │                        │
                 │ Notes                  │ hash
                 ▼                        ▼
-        Syntax extraction          display status
+        Syntax extraction          visibility status
                 │
                 ▼
         Canonical Form
@@ -82,7 +82,7 @@ Social network searches are performed directly by the user's browser.
                 └───────────────► Registry check
                                       │
                                       ▼
-                               Display / Hide
+                               Visibility
 ```
 
 Ashi@'s backend does not receive or store the social network search
@@ -102,7 +102,7 @@ For Misskey:
 4. The browser generates the Syntax Canonical Form.
 5. The browser calculates the Syntax hash.
 6. The browser queries the Ashi@ Issuance Registry using the hash.
-7. If the hash exists and its `display` value is `true`, the Ashiato is
+7. If the hash exists and its `visibility` value is `public`, the Ashiato is
    displayed.
 
 The social network post itself is not sent to Ashi@'s backend.
@@ -299,21 +299,21 @@ version.
 
 ## 11. Display Control
 
-The Registry contains a `display` value.
+The Registry contains a `visibility` value.
 
 ```text
-display = true
+visibility = public
 ```
 
 means that Ashi@ may display the Ashiato.
 
 ```text
-display = false
+visibility = suppressed
 ```
 
 means that Ashi@ must not display the Ashiato.
 
-Changing `display` affects only Ashi@.
+Changing `visibility` affects only Ashi@.
 
 It does not delete or modify the original social network post.
 
@@ -367,7 +367,7 @@ Ashi@ server
   └─ Verify target hash
         │
         ▼
-    display = false
+    visibility = suppressed
 ```
 
 ### 12.2 Rate Limiting
@@ -560,7 +560,7 @@ The backend primarily provides:
 
 - Issuance Registry
 - hash lookup
-- display-state changes
+- visibility-state changes
 - non-display request handling
 
 Social network search is performed by the browser.
@@ -667,7 +667,7 @@ Ashi@ intentionally follows a **thin-service architecture**.
 Ashi@ does not attempt to own or accumulate social network data.
 
 It maintains only the minimum information necessary to identify Ashiato
-Syntax issued by Ashi@ and determine whether that Ashiato may be displayed
+Syntax issued by Ashi@ and determine how that Ashiato should be handled
 on Ashi@.
 
 > **The social network owns the content.**
