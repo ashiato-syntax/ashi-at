@@ -142,18 +142,40 @@ The Registry stores only the following two fields:
 
 ```text
 hash
-display
+visibility
 ```
 
 No social network post data is stored.
+
+All Ashiato issued by Ashi@, including Secret Ashiato, are registered in the Registry. Registry registration also serves to verify that the Syntax was legitimately issued by Ashi@.
 
 ### 6.1 Registry Semantics
 
 Conceptually:
 
 ```text
-hash      : hash identifying an issued Syntax
-display   : whether Ashi@ should display it
+hash       : hash identifying an issued Syntax
+visibility : publication state on Ashi@
+
+`visibility` has three states:
+
+```text
+public
+    → displayed on the map
+    → discoverable on site
+
+unlisted
+    → not displayed on the map
+    → discoverable on the social network when physically on site
+
+suppressed
+    → not displayed on the map
+    → excluded from Ashi@ discovery
+```
+
+`unlisted` and `suppressed` are intentionally distinct.
+`unlisted` is a Secret Ashiato: it is not listed on the map, but can still be discovered on site.
+`suppressed` is an Ashiato hidden as a result of a non-display request or similar action, and is excluded from Ashi@ discovery.
 ```
 
 The Registry does not store:
@@ -243,7 +265,7 @@ The Registry should contain only:
 
 ```text
 hash
-display
+visibility
 ```
 
 When the database's native TTL mechanism can manage expiration, unnecessary
@@ -495,6 +517,24 @@ designed as a separate mechanism.
 
 ---
 
+## 20. Encryption Mode
+
+Ashiato Syntax does not provide an encryption mode in v1.
+
+Normal Ashiato Syntax is treated as public information. Ashi@ does not technically prevent third parties from independently parsing Ashiato Syntax and creating their own maps or clients.
+
+If future requirements show that a Secret Ashiato must cryptographically guarantee that its contents can only be obtained on site, an encryption or concealment mechanism may be designed as a separate Ashiato Syntax extension.
+
+The v1 design does not aim to:
+
+- technically prevent third-party display of Ashiato
+- distribute or manage encryption keys
+- cryptographically prove physical presence
+
+If an encryption mode is introduced later, it should preserve the general and implementation-independent nature of Ashiato Syntax.
+
+---
+
 ## 20. Map Architecture
 
 Ashi@ does not require a commercial map API.
@@ -512,7 +552,7 @@ map service costs.
 
 ---
 
-## 21. Infrastructure Minimization
+## 26. Infrastructure Minimization
 
 Ashi@ is designed to minimize backend infrastructure requirements.
 
@@ -531,7 +571,7 @@ Ashi@ does not require a large content database.
 
 ---
 
-## 22. Privacy and Security Principles
+## 26. Privacy and Security Principles
 
 Ashi@ follows these principles:
 
@@ -543,12 +583,14 @@ Ashi@ follows these principles:
 6. Process social network searches on the client side.
 7. Do not maintain user location histories.
 8. Apply location-precision and display-delay safety measures.
-9. Make non-display requests resistant to automation and bulk abuse.
-10. Expire temporary security data after a short period.
+9. Distinguish Secret Ashiato from suppressed Ashiato in the Registry.
+10. Make non-display requests resistant to automation and bulk abuse.
+11. Expire temporary security data after a short period.
+12. Do not introduce an encryption mode in v1; consider it as a separate extension only if future requirements justify it.
 
 ---
 
-## 23. Legal and Policy Considerations
+## 26. Legal and Policy Considerations
 
 This architecture is designed to reduce privacy, security, and legal risks
 by minimizing the information and content handled by Ashi@.
@@ -570,11 +612,12 @@ Ashi@ should separately consider:
 Ashi@ should provide an appropriate contact mechanism for legal and
 rights-related requests.
 
-Before making the service publicly available, applicable laws and regulations, the terms of service of supported social networking services, API usage policies, and other relevant requirements should be reviewed. Where matters are difficult to determine, professional advice should be sought as necessary.
+A legal review should be conducted before public deployment where
+appropriate.
 
 ---
 
-## 24. Explicit Non-Goals
+## 26. Explicit Non-Goals
 
 Ashi@ is not intended to become:
 
@@ -592,7 +635,7 @@ non-goals.
 
 ---
 
-## 25. Design Summary
+## 26. Design Summary
 
 Ashi@ intentionally follows a **thin-service architecture**.
 
@@ -611,7 +654,7 @@ Ashi@ intentionally follows a **thin-service architecture**.
             │                     │
             │ hash                │
             └──────────►          │
-                           display?
+                           visibility?
                                │
                      ┌─────────┴─────────┐
                      │                   │
