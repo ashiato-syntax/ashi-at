@@ -1,4 +1,4 @@
-[日本語](./README_JP.md) | English
+English | [日本語](./README_JP.md)
 
 # Ashi@ Architecture and Safety Design
 
