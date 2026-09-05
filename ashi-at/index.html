@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ja">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width,initial-scale=1,viewport-fit=cover"
+        />
+        <meta
+            name="description"
+            content="Ashi@ — Ashiatoを偶然見つけるためのMisskeyクライアント"
+        />
+        <title>Ashi@</title>
+        <link rel="stylesheet" href="/style.css" />
+    </head>
+    <body>
+        <main id="app">
+            <header>
+                <h1>Ashi@</h1>
+                <p>Ashiato Syntaxのビューワー</p>
+            </header>
+            <section class="controls">
+                <label
+                    >Misskey instance<input
+                        id="instance"
+                        value="https://misskey.io"
+                        inputmode="url" /></label
+                ><label
+                    >Hashtag<input
+                        id="hashtag"
+                        value="ashiato"
+                        autocomplete="off" /></label
+                ><button id="search" type="button">探す</button>
+            </section>
+            <p id="status" role="status">準備完了。</p>
+            <section id="map" aria-label="Ashiato map"></section>
+            <section>
+                <h2>発見したAshiato</h2>
+                <ul id="results"></ul>
+            </section>
+        </main>
+        <script type="module" src="/src/main.js"></script>
+    </body>
+</html>
