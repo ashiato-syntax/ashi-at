@@ -15,8 +15,8 @@ export function createMap(el) {
 
 export async function addBoundaries(map) {
   const [prefectureResponse, municipalityResponse] = await Promise.all([
-    fetch("/data/prefectures.json"),
-    fetch("/data/N03-21_210101.json"),
+    fetch("/data/maps/s0010/prefectures.json"),
+    fetch("/data/maps/s0010/N03-21_210101.json"),
   ]);
 
   if (!prefectureResponse.ok || !municipalityResponse.ok) {
