@@ -7,10 +7,17 @@ import {
   loadMunicipalityBoundaries,
 } from "./map.js";
 import { decodeGeohash } from "./geohash.js";
-import { buildPrefectureIndex, findPrefecturesInView } from "./prefectureIndex.js";
+import {
+  buildPrefectureIndex,
+  findPrefecturesInView,
+} from "./prefectureIndex.js";
 
+// これよりズームしたら、都道府県名ラベルを表示
+const MIN_ZOOM_FOR_PREFECTURE_LABELS = 7;
 // これよりズームしたら、当該都道府県の市区町村GeoJsonを読み込む
 const MIN_ZOOM_FOR_MUNICIPALITIES = 9;
+// これよりズームしたら、市区町村名ラベルを表示
+const MIN_ZOOM_FOR_MUNICIPALITY_LABELS = 10;
 
 const $ = (s) => document.querySelector(s),
   map = createMap("map"),
@@ -19,8 +26,12 @@ const $ = (s) => document.querySelector(s),
 
 let layers = [];
 let prefectureIndex = [];
+let prefectureLabelLayer = null;
+let prefectureLabelsVisible = false;
+
 const municipalityLayers = new Map();
 let municipalitiesVisible = false;
+let municipalityLabelsVisible = false;
 
 function setStatus(t, e = false) {
   status.textContent = t;
@@ -29,21 +40,50 @@ function setStatus(t, e = false) {
 
 async function initBoundaries() {
   try {
-    const prefectureData = await loadPrefectureBoundaries(map);
+    const { data: prefectureData, labelLayer } =
+      await loadPrefectureBoundaries(map);
     prefectureIndex = buildPrefectureIndex(prefectureData);
+    prefectureLabelLayer = labelLayer;
+    syncLabelVisibility();
     await syncMunicipalityLayers();
-    map.on("moveend", syncMunicipalityLayers);
+    map.on("moveend", () => {
+      syncLabelVisibility();
+      syncMunicipalityLayers();
+    });
   } catch (error) {
     console.error(error);
     setStatus("地図境界の読み込みに失敗しました。", true);
   }
 }
 
+function syncLabelVisibility() {
+  const zoom = map.getZoom();
+
+  const wantPrefLabels = zoom >= MIN_ZOOM_FOR_PREFECTURE_LABELS;
+  if (wantPrefLabels !== prefectureLabelsVisible && prefectureLabelLayer) {
+    if (wantPrefLabels) prefectureLabelLayer.addTo(map);
+    else map.removeLayer(prefectureLabelLayer);
+    prefectureLabelsVisible = wantPrefLabels;
+  }
+
+  const wantMunicipalityLabels = zoom >= MIN_ZOOM_FOR_MUNICIPALITY_LABELS;
+  if (wantMunicipalityLabels !== municipalityLabelsVisible) {
+    for (const entry of municipalityLayers.values()) {
+      if (entry === "loading") continue;
+      if (wantMunicipalityLabels) entry.labelLayer.addTo(map);
+      else map.removeLayer(entry.labelLayer);
+    }
+    municipalityLabelsVisible = wantMunicipalityLabels;
+  }
+}
+
 async function syncMunicipalityLayers() {
   if (map.getZoom() < MIN_ZOOM_FOR_MUNICIPALITIES) {
     if (municipalitiesVisible) {
-      for (const layer of municipalityLayers.values()) {
-        if (layer !== "loading") map.removeLayer(layer);
+      for (const entry of municipalityLayers.values()) {
+        if (entry === "loading") continue;
+        map.removeLayer(entry.boundaryLayer);
+        map.removeLayer(entry.labelLayer);
       }
       municipalitiesVisible = false;
     }
@@ -53,8 +93,10 @@ async function syncMunicipalityLayers() {
   if (!municipalitiesVisible) {
     // ズームが閾値を超えた場合は、市区町村境界を読み込み表示するが、
     // 既に読み込み済みであればそちらを再利用する
-    for (const layer of municipalityLayers.values()) {
-      if (layer !== "loading") layer.addTo(map);
+    for (const entry of municipalityLayers.values()) {
+      if (entry === "loading") continue;
+      entry.boundaryLayer.addTo(map);
+      if (municipalityLabelsVisible) entry.labelLayer.addTo(map);
     }
     municipalitiesVisible = true;
   }
@@ -73,8 +115,9 @@ async function syncMunicipalityLayers() {
 
     municipalityLayers.set(pref.code, "loading");
     try {
-      const layer = await loadMunicipalityBoundaries(map, pref.code);
-      municipalityLayers.set(pref.code, layer);
+      const entry = await loadMunicipalityBoundaries(map, pref.code);
+      if (municipalityLabelsVisible) entry.labelLayer.addTo(map);
+      municipalityLayers.set(pref.code, entry);
     } catch (error) {
       console.error(`市区町村境界の読み込みに失敗(${pref.name}):`, error);
       municipalityLayers.delete(pref.code); // 後の moveend で再試行
@@ -133,6 +176,7 @@ async function search() {
     btn.disabled = false;
   }
 }
+
 function openAshiato(r) {
   alert(
     `Ashiatoを発見しました。\n\nGeohash: ${r.model.geohash}\n\n現地到達判定は次の実装段階で有効化します。`,

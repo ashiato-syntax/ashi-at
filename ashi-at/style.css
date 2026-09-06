@@ -75,11 +75,37 @@ button {
     overflow-wrap: anywhere;
 }
 .graticule-label span {
+    display: inline-block;
+    transform: translate(-50%, -50%);
     font:
         11px ui-monospace,
         monospace;
     color: #5f6368;
     white-space: nowrap;
+}
+.pref-label {
+    display: inline-block;
+    transform: translate(-50%, -50%);
+    font:
+        600 12px system-ui,
+        sans-serif;
+    color: #888;
+    white-space: nowrap;
+    text-shadow:
+        0 0 3px #fff,
+        0 0 3px #fff;
+}
+.municipality-label {
+    display: inline-block;
+    transform: translate(-50%, -50%);
+    font:
+        10px system-ui,
+        sans-serif;
+    color: #888;
+    white-space: nowrap;
+    text-shadow:
+        0 0 3px #fff,
+        0 0 3px #fff;
 }
 @media (max-width: 700px) {
     .controls {
