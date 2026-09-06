@@ -9,6 +9,14 @@ import { addGraticule } from "./graticule.js";
 // https://github.com/smartnews-smri/japan-topography　の1%GeoJsonを使って描画してる
 const JAPAN_BOUNDS = L.latLngBounds([17, 122], [46, 154]);
 
+// Ashiatoの状態別の色。opened(灰)になるのは、同じセル内の全レコードが
+// 開封済みになったときだけ(main.js の computeCellState を参照)。
+const ASHIATO_COLORS = {
+  locked: "#9bc403",
+  unlocked: "#9bc403",
+  opened: "#888",
+};
+
 export function createMap(el) {
   const map = L.map(el, {
     attributionControl: false,
@@ -29,6 +37,15 @@ export function createMap(el) {
   map.getPane("ashiatoPane").style.zIndex = 700;
   map.createPane("ashiatoHitPane");
   map.getPane("ashiatoHitPane").style.zIndex = 710;
+
+  // 現在地はAshiatoよりさらに手前
+  map.createPane("currentLocationPane");
+  map.getPane("currentLocationPane").style.zIndex = 750;
+
+  // ポップアップ(同じセルに複数Ashiatoがある場合の一覧)は常に最前面。
+  // Leafletが標準で用意しているpopupPaneのzIndexを、Ashiato/現在地より
+  // 上に上書きするだけで良い(専用paneを新設する必要はない)。
+  map.getPane("popupPane").style.zIndex = 900;
 
   return map;
 }
@@ -140,25 +157,39 @@ function ringCentroid(ring) {
   return { lon: cx / (6 * area), lat: cy / (6 * area), area: Math.abs(area) };
 }
 
-const ASHIATO_COLORS = {
-  locked: "#9bc403",
-  unlocked: "#9bc403",
-  opened: "#888",
-};
-
-export function addAshiato(map, result, onOpen) {
-  const b = decodeGeohash(result.model.geohash);
+// 1つのgeohashセルにつき1グループ(円1〜2個)を描画する。
+// count(そのセルに紐づくAshiatoレコード数)が2件以上のときは、外側の輪+内側の点
+// による二重丸にして、「同じ場所に複数のAshiatoがある」ことを視覚的に示す。
+// クリック判定(hitArea)は常に1つ(グループ全体で1つのタップ対象)。
+export function addAshiatoGroup(map, geohash, count, onOpen) {
+  const b = decodeGeohash(geohash);
   const centerLat = (b.minLat + b.maxLat) / 2;
   const centerLon = (b.minLon + b.maxLon) / 2;
+  const latlng = [centerLat, centerLon];
 
-  const visual = L.circleMarker([centerLat, centerLon], {
+  const outer = L.circleMarker(latlng, {
     color: ASHIATO_COLORS.locked,
-    radius: 4,
+    radius: count > 1 ? 6 : 4,
+    weight: count > 1 ? 2 : 3,
+    fill: count === 1, // 複数件のときは外側は輪だけ(内側の点と区別するため塗りつぶさない)
     interactive: false,
     pane: "ashiatoPane",
   });
 
-  const hitArea = L.circleMarker([centerLat, centerLon], {
+  const visualLayers = [outer];
+
+  if (count > 1) {
+    const inner = L.circleMarker(latlng, {
+      color: ASHIATO_COLORS.locked,
+      radius: 2,
+      interactive: false,
+      pane: "ashiatoPane",
+    });
+    visualLayers.push(inner);
+  }
+
+  // タップ判定用(見た目の円の数に関わらず1つ)
+  const hitArea = L.circleMarker(latlng, {
     color: ASHIATO_COLORS.locked,
     radius: 8,
     stroke: false,
@@ -168,27 +199,29 @@ export function addAshiato(map, result, onOpen) {
     pane: "ashiatoHitPane",
   });
 
-  hitArea.on("click", () => onOpen(result));
+  hitArea.on("click", () => onOpen());
 
-  visual.addTo(map);
+  for (const v of visualLayers) v.addTo(map);
   hitArea.addTo(map);
 
-  return { visual, hitArea };
+  return { visualLayers, hitArea };
+}
+
+export function removeAshiatoGroup(map, { visualLayers, hitArea }) {
+  for (const v of visualLayers) map.removeLayer(v);
+  map.removeLayer(hitArea);
 }
 
 // state: "locked" | "unlocked" | "opened"
-export function setAshiatoState({ visual, hitArea }, state) {
+export function setAshiatoState({ visualLayers, hitArea }, state) {
   const color = ASHIATO_COLORS[state];
   const fillOpacity = state === "locked" ? 0 : 0.5;
-  visual.setStyle({ color });
+  for (const v of visualLayers) v.setStyle({ color });
   hitArea.setStyle({ color, fillOpacity });
 }
 
 // 現在地マーカー+精度円。専用paneに乗せ、Ashiatoより手前に表示する
 export function createCurrentLocationLayer(map) {
-  map.createPane("currentLocationPane");
-  map.getPane("currentLocationPane").style.zIndex = 750;
-
   const accuracyCircle = L.circle([0, 0], {
     radius: 0,
     pane: "currentLocationPane",

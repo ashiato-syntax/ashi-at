@@ -26,19 +26,69 @@
                         value="https://misskey.io"
                         inputmode="url" /></label
                 ><button id="search" type="button">探す</button
-                ><button id="loadNewer" type="button" hidden>最新を確認</button
-                ><button id="toggleGps" type="button" class="secondary">現在地をON</button
-                ><button id="clearCache" type="button" class="secondary">
-                    キャッシュを消す
+                ><button id="loadNewer" type="button" hidden>最新を確認</button>
+                <button
+                    id="unlockedListToggle"
+                    type="button"
+                    class="secondary icon-button"
+                    aria-haspopup="dialog"
+                    aria-label="開封可能な「あしあと」一覧"
+                >
+                    🗺️
+                    <span id="unlockedBadge" class="badge-dot" hidden></span>
                 </button>
+                <div class="menu">
+                    <button
+                        id="menuToggle"
+                        type="button"
+                        class="secondary"
+                        aria-haspopup="true"
+                        aria-expanded="false"
+                        aria-label="メニュー"
+                    >
+                        ☰
+                    </button>
+                    <div id="menuDropdown" class="menu-dropdown" hidden>
+                        <button id="clearCache" type="button">
+                            キャッシュを消す
+                        </button>
+                        <button id="aboutButton" type="button">
+                            Ashi@について
+                        </button>
+                    </div>
+                </div>
             </section>
             <p id="status" role="status">準備中…</p>
-            <section id="map" aria-label="Ashiato map"></section>
-            <section>
-                <h2>開封可能なAshiato</h2>
-                <ul id="results"></ul>
-            </section>
+            <div class="map-wrap">
+                <section id="map" aria-label="Ashiato map"></section>
+                <button
+                    id="toggleGps"
+                    type="button"
+                    class="gps-toggle"
+                    aria-pressed="false"
+                >
+                    <span class="gps-toggle-track"
+                        ><span class="gps-toggle-knob"></span
+                    ></span>
+                    <span class="gps-toggle-label">現在地</span>
+                </button>
+            </div>
         </main>
+        <dialog id="unlockedListDialog">
+            <h2>開封可能な「あしあと」</h2>
+            <ul id="unlockedList" class="unlocked-list"></ul>
+            <button id="unlockedListClose" type="button">閉じる</button>
+        </dialog>
+        <dialog id="aboutDialog">
+            <h2>Ashi@について</h2>
+            <p>
+                Ashi@は、Misskeyの「#Ashiato」投稿に埋め込まれた位置情報(Geohash)をもとに、実際にその場所へ行くと開封できる、すれ違い通信のようなワクワクを届けるクライアントです。
+            </p>
+            <p>
+                投稿本文や投稿者情報を保存することはなく、位置判定に必要な最小限の情報だけをブラウザ内に14日間だけキャッシュします。地図には商用タイルサーバーを使わず、都道府県・市区町村の境界線のみを表示しています。
+            </p>
+            <button id="aboutClose" type="button">閉じる</button>
+        </dialog>
         <script type="module" src="/src/main.js"></script>
     </body>
 </html>

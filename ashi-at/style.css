@@ -29,7 +29,7 @@ header p {
 }
 .controls {
     display: grid;
-    grid-template-columns: 1fr auto auto auto;
+    grid-template-columns: 1fr auto auto auto auto;
     gap: 10px;
     align-items: end;
 }
@@ -55,11 +55,115 @@ button.secondary {
     color: #666;
     border-color: #ddd;
 }
+
+/* アイコン1文字だけのボタン(開封可能リストの入口など)。バッジの基準位置にする */
+.icon-button {
+    position: relative;
+    min-width: 42px;
+    padding: 8px;
+    text-align: center;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+.badge-dot {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #e0472c;
+    border: 2px solid #f5f5f5;
+}
+
 .status {
     min-height: 1.5em;
 }
 .status.error {
     color: #b00020;
+}
+
+/* --- ハンバーガーメニュー ------------------------------------------- */
+.menu {
+    position: relative;
+}
+.menu-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    display: grid;
+    min-width: 180px;
+    overflow: hidden;
+    z-index: 30;
+}
+.menu-dropdown[hidden] {
+    display: none;
+}
+.menu-dropdown button {
+    min-height: 44px;
+    border: none;
+    border-radius: 0;
+    text-align: left;
+    background: #fff;
+}
+.menu-dropdown button:hover {
+    background: #f5f5f5;
+}
+
+/* --- Ashi@についてダイアログ / 開封可能リストダイアログ共通 ----------- */
+dialog#aboutDialog,
+dialog#unlockedListDialog {
+    border: none;
+    border-radius: 12px;
+    padding: 20px;
+    width: min(90vw, 420px);
+}
+dialog#aboutDialog::backdrop,
+dialog#unlockedListDialog::backdrop {
+    background: rgba(0, 0, 0, 0.4);
+}
+dialog#aboutDialog h2,
+dialog#unlockedListDialog h2 {
+    margin-top: 0;
+}
+dialog#aboutDialog p {
+    line-height: 1.6;
+}
+dialog#aboutDialog #aboutClose,
+dialog#unlockedListDialog #unlockedListClose {
+    margin-top: 12px;
+}
+
+/* --- 開封可能なAshiatoリスト(ダイアログ内) ---------------------------- */
+.unlocked-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+    max-height: 50vh;
+    overflow-y: auto;
+}
+.unlocked-list button {
+    width: 100%;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+.unlocked-list li.opened button {
+    color: #888;
+}
+.unlocked-list-empty {
+    color: #666;
+    margin: 8px 0;
+}
+
+/* --- 地図 + 現在地トグル --------------------------------------------- */
+.map-wrap {
+    position: relative;
 }
 #map {
     height: 60vh;
@@ -67,18 +171,66 @@ button.secondary {
     border-radius: 12px;
     overflow: hidden;
     background: #fff;
+    position: relative;
+    z-index: 0;
 }
-#results {
-    list-style: none;
-    padding: 0;
+.gps-toggle {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 5px 10px 5px 5px;
+    border-radius: 999px;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+    font-size: 0.8rem;
+}
+.gps-toggle-track {
+    width: 34px;
+    height: 20px;
+    border-radius: 999px;
+    background: #ccc;
+    position: relative;
+    flex: none;
+    transition: background 0.15s ease;
+}
+.gps-toggle-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    transition: transform 0.15s ease;
+}
+.gps-toggle[aria-pressed="true"] .gps-toggle-track {
+    background: #4285f4;
+}
+.gps-toggle[aria-pressed="true"] .gps-toggle-knob {
+    transform: translateX(14px);
+}
+.gps-toggle.unavailable {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 同じgeohashセルに複数のAshiatoがある場合、地図クリックで出るポップアップ内の一覧 */
+.ashiato-popup-list {
     display: grid;
-    gap: 8px;
+    gap: 6px;
+    max-width: 220px;
 }
-#results button {
+.ashiato-popup-list button {
     width: 100%;
     text-align: left;
     overflow-wrap: anywhere;
 }
+
 .graticule-label span {
     display: inline-block;
     transform: translate(-50%, -50%);
@@ -120,26 +272,4 @@ button.secondary {
         height: 55vh;
         min-height: 320px;
     }
-}
-.controls {
-    display: grid;
-    grid-template-columns: 1fr auto auto auto auto;
-    gap: 10px;
-    align-items: end;
-}
-#results {
-    list-style: none;
-    padding: 0;
-    display: grid;
-    gap: 8px;
-    max-height: 40vh;
-    overflow-y: auto;
-}
-#results button {
-    width: 100%;
-    text-align: left;
-    overflow-wrap: anywhere;
-}
-#results li.opened button {
-    color: #888;
 }
