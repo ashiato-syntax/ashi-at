@@ -6,7 +6,10 @@ import {
   loadPrefectureBoundaries,
   loadMunicipalityBoundaries,
 } from "./map.js";
-import { decodeGeohash } from "./geohash.js";
+import {
+  decodeGeohash,
+  geohashCellSizeMeters
+} from "./geohash.js";
 import {
   buildPrefectureIndex,
   findPrefecturesInView,
@@ -147,8 +150,11 @@ initBoundaries();
 
 // --- Ashiatoのページング + ローカルキャッシュ ---------------------------
 
-function openAshiato() {
-  alert(`このあしあとは、現地に行くと開封できます`);
+function openAshiato(result) {
+  const { widthM, heightM } = geohashCellSizeMeters(result.model.geohash);
+  alert(
+    `このあしあとは、現地に行くと開封できます\n\n当たり判定エリアサイズ:\n(東西 ${Math.round(widthM)}m, 南北 ${Math.round(heightM)}m)`,
+  );
 }
 
 function renderRecord(record) {

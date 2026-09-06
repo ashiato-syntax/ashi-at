@@ -29,3 +29,21 @@ export function decodeGeohash(hash) {
     centerLon: (lon[0] + lon[1]) / 2,
   };
 }
+
+// Geohashセル1つ分の、緯度・経度方向それぞれの物理サイズ(メートル)を概算する。
+// 地球を球とみなした単純な近似(緯度1度 ≒ 111.32km)。
+// 経度方向は緯度によって縮むので、セル中心の緯度でcos補正する。
+// 発見判定の目安を表示する程度の用途なので、この精度で十分。
+const METERS_PER_DEGREE_LAT = 111320;
+
+export function geohashCellSizeMeters(hash) {
+  const { minLat, maxLat, minLon, maxLon, centerLat } = decodeGeohash(hash);
+
+  const heightM = (maxLat - minLat) * METERS_PER_DEGREE_LAT;
+  const widthM =
+    (maxLon - minLon) *
+    METERS_PER_DEGREE_LAT *
+    Math.cos((centerLat * Math.PI) / 180);
+
+  return { widthM, heightM };
+}
