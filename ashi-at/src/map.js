@@ -24,6 +24,10 @@ export function createMap(el) {
   map.createPane("prefecturePane");
   map.getPane("prefecturePane").style.zIndex = 420;
 
+  // Ashiatoは最前面に表示する
+  map.createPane("ashiatoPane");
+  map.getPane("ashiatoPane").style.zIndex = 700;
+
   return map;
 }
 
@@ -142,8 +146,9 @@ export function addAshiato(map, result, onOpen) {
 
   const r = L.circleMarker([centerLat, centerLon], {
     color: "#9bc403",
-    radius: 3,
+    radius: 4,
     interactive: true,
+    pane: "ashiatoPane",
   });
 
   r.on("click", () => onOpen(result));

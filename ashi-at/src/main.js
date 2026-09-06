@@ -152,7 +152,6 @@ async function search() {
 
     for (const r of found) {
       layers.push(addAshiato(map, r, openAshiato));
-
       const li = document.createElement("li"),
         b = document.createElement("button");
 
@@ -167,7 +166,7 @@ async function search() {
     }
 
     setStatus(
-      `${notes.length}件のノートから、${found.length}件のAshiatoを発見。`,
+      `${found.length}件のAshiatoを発見。`,
     );
   } catch (e) {
     console.error(e);
@@ -179,7 +178,7 @@ async function search() {
 
 function openAshiato(r) {
   alert(
-    `Ashiatoを発見しました。\n\nGeohash: ${r.model.geohash}\n\n現地到達判定は次の実装段階で有効化します。`,
+    `Ashiatoがあります\n\n`,
   );
 }
 $("#search").onclick = search;
