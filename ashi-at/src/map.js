@@ -136,14 +136,18 @@ function ringCentroid(ring) {
 
 export function addAshiato(map, result, onOpen) {
   const b = decodeGeohash(result.model.geohash);
-  const r = L.rectangle(
-    [
-      [b.minLat, b.minLon],
-      [b.maxLat, b.maxLon],
-    ],
-    { interactive: true },
-  );
+
+  const centerLat = (b.minLat + b.maxLat) / 2;
+  const centerLon = (b.minLon + b.maxLon) / 2;
+
+  const r = L.circleMarker([centerLat, centerLon], {
+    color: "#9bc403",
+    radius: 3,
+    interactive: true,
+  });
+
   r.on("click", () => onOpen(result));
   r.addTo(map);
+
   return r;
 }
