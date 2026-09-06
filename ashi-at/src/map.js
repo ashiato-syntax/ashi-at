@@ -15,7 +15,7 @@ export function createMap(el) {
     minZoom: 4, // ズームアウトの制限。大体日本が全部収まるくらい
     maxBounds: JAPAN_BOUNDS,
     maxBoundsViscosity: 0.8, // 表示領域をはみ出たらふわっと戻す
-  }).setView([35, 135], 5);
+  }).setView([34.69, 135.50], 9);
   addGraticule(map);
 
   // 都道府県の境界線が常に市区町村の境界線より前面に描画されるように、専用のペインを割り当て
