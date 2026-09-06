@@ -27,6 +27,8 @@ export function createMap(el) {
   // Ashiatoは最前面に表示する
   map.createPane("ashiatoPane");
   map.getPane("ashiatoPane").style.zIndex = 700;
+  map.createPane("ashiatoHitPane");
+  map.getPane("ashiatoHitPane").style.zIndex = 710;
 
   return map;
 }
@@ -144,15 +146,29 @@ export function addAshiato(map, result, onOpen) {
   const centerLat = (b.minLat + b.maxLat) / 2;
   const centerLon = (b.minLon + b.maxLon) / 2;
 
-  const r = L.circleMarker([centerLat, centerLon], {
+  // 見た目用
+  const visual = L.circleMarker([centerLat, centerLon], {
     color: "#9bc403",
     radius: 4,
-    interactive: true,
+    interactive: false,
     pane: "ashiatoPane",
   });
 
-  r.on("click", () => onOpen(result));
-  r.addTo(map);
+  // タップ判定用
+  const hitArea = L.circleMarker([centerLat, centerLon], {
+    color: "#9bc403",
+    radius: 8,
+    stroke: false,
+    fill: true,
+    fillOpacity: 0.5,
+    interactive: true,
+    pane: "ashiatoHitPane",
+  });
 
-  return r;
+  hitArea.on("click", () => onOpen(result));
+
+  visual.addTo(map);
+  hitArea.addTo(map);
+
+  return hitArea;
 }

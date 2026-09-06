@@ -136,7 +136,7 @@ async function search() {
   try {
     const notes = await searchNotesByTag(
       $("#instance").value,
-      $("#hashtag").value,
+      "Ashiato",
     );
 
     layers.forEach((x) => map.removeLayer(x));
@@ -166,11 +166,11 @@ async function search() {
     }
 
     setStatus(
-      `${found.length}件のAshiatoを発見。`,
+      `${found.length}件のAshiatoを発見`,
     );
   } catch (e) {
     console.error(e);
-    setStatus(e.message || "検索に失敗しました。", true);
+    setStatus(e.message || "検索に失敗しました", true);
   } finally {
     btn.disabled = false;
   }
@@ -178,10 +178,10 @@ async function search() {
 
 function openAshiato(r) {
   alert(
-    `Ashiatoがあります\n\n`,
+    `Ashiatoがあります\n\n現地に行くと開封できます`,
   );
 }
 $("#search").onclick = search;
-$("#hashtag").onkeydown = (e) => {
+$("#instance").onkeydown = (e) => {
   if (e.key === "Enter") search();
 };
