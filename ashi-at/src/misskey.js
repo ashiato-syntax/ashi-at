@@ -27,12 +27,23 @@ export async function apiRequest(instance, endpoint, body = {}) {
   return res.json();
 }
 
-export function searchNotesByTag(instance, tag, limit = 100) {
+/**
+ * @param {string} instance
+ * @param {string} tag
+ * @param {{ limit?: number, sinceId?: string, untilId?: string }} [opts]
+ *   sinceId: これより新しいノートを取得(「最新を確認」方向)
+ *   untilId: これより古いノートを取得(「さらに過去を探す」方向)
+ *   両方省略すれば「最新から」の初回検索になる。
+ */
+export function searchNotesByTag(instance, tag, opts = {}) {
+  const { limit = 30, sinceId, untilId } = opts;
   const clean = tag.trim().replace(/^#/, "");
 
   if (!clean) throw new Error("ハッシュタグを指定してください。");
-  return apiRequest(instance, "notes/search-by-tag", {
-    tag: clean,
-    limit: Math.min(Math.max(limit, 1), 100),
-  });
+
+  const body = { tag: clean, limit: Math.min(Math.max(limit, 1), 100) };
+  if (sinceId) body.sinceId = sinceId;
+  if (untilId) body.untilId = untilId;
+
+  return apiRequest(instance, "notes/search-by-tag", body);
 }

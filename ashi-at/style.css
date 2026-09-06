@@ -29,7 +29,7 @@ header p {
 }
 .controls {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto auto auto;
     gap: 10px;
     align-items: end;
 }
@@ -49,6 +49,11 @@ button {
 }
 button {
     cursor: pointer;
+}
+button.secondary {
+    background: #f5f5f5;
+    color: #666;
+    border-color: #ddd;
 }
 .status {
     min-height: 1.5em;
