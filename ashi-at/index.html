@@ -16,8 +16,42 @@
     <body>
         <main id="app">
             <header>
-                <h1>Ashi@</h1>
-                <p>どこにいた？</p>
+                <div class="top-actions">
+                    <button
+                        id="unlockedListToggle"
+                        type="button"
+                        class="secondary icon-button"
+                        aria-haspopup="dialog"
+                        aria-label="開封可能な「あしあと」一覧"
+                    >
+                        👣
+                        <span id="unlockedBadge" class="badge-dot" hidden></span>
+                    </button>
+                    <div class="menu">
+                        <button
+                            id="menuToggle"
+                            type="button"
+                            class="secondary"
+                            aria-haspopup="true"
+                            aria-expanded="false"
+                            aria-label="メニュー"
+                        >
+                            ☰
+                        </button>
+                        <div id="menuDropdown" class="menu-dropdown" hidden>
+                            <button id="clearCache" type="button">
+                                キャッシュを消す
+                            </button>
+                            <button id="aboutButton" type="button">
+                                Ashi@について
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="header-title">
+                    <h1>Ashi@</h1>
+                    <p>どこにいた？</p>
+                </div>
             </header>
             <section class="controls">
                 <label
@@ -25,37 +59,12 @@
                         id="instance"
                         value="https://misskey.io"
                         inputmode="url" /></label
-                ><button id="search" type="button">探す</button
-                ><button id="loadNewer" type="button" hidden>最新を確認</button>
-                <button
-                    id="unlockedListToggle"
-                    type="button"
-                    class="secondary icon-button"
-                    aria-haspopup="dialog"
-                    aria-label="開封可能なあしあと一覧"
                 >
-                    👣
-                    <span id="unlockedBadge" class="badge-dot" hidden></span>
-                </button>
-                <div class="menu">
-                    <button
-                        id="menuToggle"
-                        type="button"
-                        class="secondary"
-                        aria-haspopup="true"
-                        aria-expanded="false"
-                        aria-label="メニュー"
-                    >
-                        ☰
+                <div class="search-buttons">
+                    <button id="search" type="button">探す</button>
+                    <button id="loadNewer" type="button" hidden>
+                        最新を確認
                     </button>
-                    <div id="menuDropdown" class="menu-dropdown" hidden>
-                        <button id="clearCache" type="button">
-                            キャッシュを消す
-                        </button>
-                        <button id="aboutButton" type="button">
-                            Ashi@について
-                        </button>
-                    </div>
                 </div>
             </section>
             <p id="status" role="status">準備中…</p>
@@ -75,19 +84,18 @@
             </div>
         </main>
         <dialog id="unlockedListDialog">
-            <h2>開封可能なあしあと</h2>
+            <h2>あつめたあしあと</h2>
             <ul id="unlockedList" class="unlocked-list"></ul>
             <button id="unlockedListClose" type="button">閉じる</button>
         </dialog>
         <dialog id="aboutDialog">
             <h2>Ashi@について</h2>
             <p>
-                Ashi@は、Misskeyの「#Ashiato」投稿に埋め込まれた位置情報（Ashiato Syntax）をもとに、実際にその場所へ行くと開封できるクライアントです。
+                Ashi@は、Misskeyの「#Ashiato」投稿に埋め込まれた位置・時間情報(Ashiato Syntax)をもとに、実際にその場所へ行くと開封できるクライアントです。
             </p>
             <p>
                 投稿本文や投稿者情報を保存することはなく、位置判定に必要な最小限の情報だけをブラウザ内に14日間だけキャッシュします。
-                また、見つけたあしあとの実績は、ブラウザ内に半年間キャッシュします。
-            </p>
+                開封実績や、開封可能なあしあとは、ブラウザ内に180日間キャッシュします。
             <button id="aboutClose" type="button">閉じる</button>
         </dialog>
         <script type="module" src="/src/main.js"></script>

@@ -18,18 +18,34 @@ body {
     padding: 16px;
 }
 header {
-    margin-bottom: 16px;
+    position: relative;
+    margin-bottom: 10px;
+}
+.header-title {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-right: 100px; /* .top-actions(アイコン2つ分)と重ならない余白 */
 }
 header h1 {
     margin: 0;
 }
 header p {
-    margin: 4px 0;
+    margin: 0;
     color: #666;
+}
+.top-actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 .controls {
     display: grid;
-    grid-template-columns: 1fr auto auto auto auto;
+    grid-template-columns: 1fr auto;
     gap: 10px;
     align-items: end;
 }
@@ -37,6 +53,14 @@ header p {
     display: grid;
     gap: 4px;
     font-size: 0.85rem;
+}
+.search-buttons {
+    display: flex;
+    gap: 10px;
+}
+.search-buttons button {
+    flex: 1;
+    white-space: nowrap;
 }
 input,
 button {

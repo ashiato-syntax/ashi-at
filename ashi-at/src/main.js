@@ -40,7 +40,7 @@ const MIN_ZOOM_FOR_MUNICIPALITY_LABELS = 11;
 
 // 固定タグ。将来複数タグに対応するなら cache.js のhostTagキーはそのまま使い回せる。
 const TAG = "Ashiato";
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 30;
 
 const $ = (s) => document.querySelector(s),
   map = createMap("map"),
@@ -198,9 +198,7 @@ function formatDate(value) {
 function recordDatesText(record) {
   const posted = formatDate(record.noteCreatedAt) ?? "不明";
   const opened = formatDate(record.openedAt);
-  return opened
-    ? `投稿日: ${posted} / 開封日: ${opened}`
-    : `(未開封) 投稿日: ${posted}`;
+  return opened ? `投稿日: ${posted} / 開封日: ${opened}` : `投稿日: ${posted}`;
 }
 
 // セルの見た目(円)を、現在のrecords件数・状態に合わせて作り直す。
@@ -257,7 +255,7 @@ function refreshUnlockedList() {
   if (unlocked.length === 0) {
     const empty = document.createElement("p");
     empty.className = "unlocked-list-empty";
-    empty.textContent = "まだ発見したあしあとはありません。";
+    empty.textContent = "まだ発見したAshiatoはありません。";
     unlockedList.append(empty);
     return;
   }
@@ -267,7 +265,7 @@ function refreshUnlockedList() {
       b = document.createElement("button");
 
     b.type = "button";
-    b.textContent = `${recordDatesText(record)} - ${record.geohash}`;
+    b.textContent = `${record.geohash} — ${recordDatesText(record)}`;
     b.onclick = () => {
       unlockedListDialog.close();
       const cell = ashiatoCells.get(record.geohash);
@@ -510,6 +508,8 @@ async function switchHost(host) {
       ? `キャッシュから${cached.length}件のAshiatoを復元しました。`
       : "準備完了。",
   );
+
+  return cached.length;
 }
 
 async function ensureHost() {
@@ -525,9 +525,7 @@ async function ingestNotes(host, notes) {
     if (!note?.text) continue;
     let idx = 0;
     for (const r of parseText(note.text)) {
-      records.push(
-        makeRecord(host, TAG, note.id, idx, r, note.createdAt ?? null),
-      );
+      records.push(makeRecord(host, TAG, note.id, idx, r, note.createdAt ?? null));
       idx++;
     }
   }
@@ -564,7 +562,7 @@ async function fetchOlder() {
     setStatus(
       notes.length > 0
         ? `${notes.length}件のノートを確認。表示中 ${ashiatoCells.size}箇所。`
-        : "これより古いあしあとは見つかりませんでした。",
+        : "これより古いAshiatoは見つかりませんでした。",
     );
   } catch (e) {
     console.error(e);
@@ -638,20 +636,20 @@ $("#loadNewer").onclick = fetchNewer;
 $("#toggleGps").onclick = () => setGpsEnabled(!gpsEnabled);
 $("#clearCache").onclick = async () => {
   closeMenu();
-  if (
-    !confirm(
-      "本当にキャッシュを削除しますか？\n\n消えるもの:\n\n・開封実績\n・開封可能なあしあと一覧\n・検索したあしあとのキャッシュ",
-    )
-  )
-    return;
+  if (!confirm("本当にキャッシュを削除しますか？")) return;
   await handleClearCache();
 };
 $("#instance").onkeydown = (e) => {
   if (e.key === "Enter") fetchOlder();
 };
 
-// 起動時: 今のインスタンス欄の値でキャッシュを復元しておく(ブラウザ再訪時の復元)
-ensureHost().catch((error) => {
-  console.error(error);
-  setStatus("キャッシュの読み込みに失敗しました。", true);
-});
+// 起動時: 今のインスタンス欄の値でキャッシュを復元し(ブラウザ再訪時の復元)、
+// 復元できたものが0件だった場合だけ、自動で「探す」を1回実行する。
+switchHost(normalizeInstanceUrl($("#instance").value))
+  .then((restoredCount) => {
+    if (restoredCount === 0) fetchOlder();
+  })
+  .catch((error) => {
+    console.error(error);
+    setStatus("キャッシュの読み込みに失敗しました。", true);
+  });
