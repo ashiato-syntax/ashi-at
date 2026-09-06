@@ -17,7 +17,7 @@ const MIN_ZOOM_FOR_PREFECTURE_LABELS = 7;
 // これよりズームしたら、当該都道府県の市区町村GeoJsonを読み込む
 const MIN_ZOOM_FOR_MUNICIPALITIES = 9;
 // これよりズームしたら、市区町村名ラベルを表示
-const MIN_ZOOM_FOR_MUNICIPALITY_LABELS = 10;
+const MIN_ZOOM_FOR_MUNICIPALITY_LABELS = 11;
 
 const $ = (s) => document.querySelector(s),
   map = createMap("map"),

@@ -70,9 +70,9 @@ export async function loadMunicipalityBoundaries(map, prefCode) {
 }
 
 // GeoJSONの各featureについて、名前ラベルを1つ作ってLayerGroupにまとめる。
-// ラベル位置はポリゴンのバウンディングボックス中心(重心ではない)。
-// 離島持ちのfeature(例: 多くの飛び地を1つにまとめた市)は、本土から離れた
-// 海上にラベルが出ることがある（一旦許容）
+// ラベル位置は「一番面積が大きいポリゴンパーツの重心」。離島持ちのfeature
+// (例: 本土+飛び地をまとめた都道府県)で、全パーツをまとめて重心を取ると
+// 本土と離島の間の海上に落ちることがあるため、最大パーツだけを使う。
 function buildLabelLayer(geojson, nameOf, className) {
   const group = L.layerGroup();
 
@@ -80,7 +80,9 @@ function buildLabelLayer(geojson, nameOf, className) {
     const name = nameOf(feature.properties);
     if (!name) continue;
 
-    const center = L.geoJSON(feature).getBounds().getCenter();
+    const center = labelPositionOf(feature.geometry);
+    if (!center) continue;
+
     L.marker(center, {
       icon: L.divIcon({
         className: "",
@@ -92,6 +94,44 @@ function buildLabelLayer(geojson, nameOf, className) {
   }
 
   return group;
+}
+
+function labelPositionOf(geometry) {
+  const polygons =
+    geometry.type === "Polygon" ? [geometry.coordinates] :
+    geometry.type === "MultiPolygon" ? geometry.coordinates :
+    [];
+
+  let best = null;
+  for (const polygon of polygons) {
+    const c = ringCentroid(polygon[0]); // 外接だけ。穴は無視。
+    if (!best || c.area > best.area) best = c;
+  }
+  return best ? [best.lat, best.lon] : null;
+}
+
+// 経緯度単位での、標準的な符号付き面積に基づく多角形重心（靴ひも公式）
+// 正確な測地線上の重心ではないが、テキストラベルを配置するには十分な精度
+function ringCentroid(ring) {
+  let area = 0, cx = 0, cy = 0;
+
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [x0, y0] = ring[i];
+    const [x1, y1] = ring[i + 1];
+    const cross = x0 * y1 - x1 * y0;
+    area += cross;
+    cx += (x0 + x1) * cross;
+    cy += (y0 + y1) * cross;
+  }
+  area /= 2;
+
+  if (area === 0) {
+    const n = ring.length - 1;
+    const [sx, sy] = ring.slice(0, n).reduce(([ax, ay], [x, y]) => [ax + x, ay + y], [0, 0]);
+    return { lon: sx / n, lat: sy / n, area: 0 };
+  }
+
+  return { lon: cx / (6 * area), lat: cy / (6 * area), area: Math.abs(area) };
 }
 
 export function addAshiato(map, result, onOpen) {
