@@ -9,6 +9,9 @@
 //   失効判定は「読み込まれたときにその場でフィルタする」形にとどめる。
 // - Misskey側での投稿削除・編集を能動的に追跡することはしない。時間経過による
 //   自動失効(CACHE_TTL_MS)だけで「古くなったキャッシュ」を扱う。
+// - unlockedAt/openedAt(現在地による発見/開封の記録)も、他のフィールドと同じ
+//   cachedAtベースのTTLでまとめて失効する。発見・開封状態だけを特別に延命する
+//   ロジックは持たない。
 
 const DB_NAME = "ashi-at";
 const DB_VERSION = 1;
@@ -75,6 +78,8 @@ export function makeRecord(host, tag, noteId, indexInNote, parseResult) {
     contextId: parseResult.model.contextId,
     canonical: parseResult.canonical,
     cachedAt: Date.now(),
+    unlockedAt: null, // 現在地がこのAshiatoのセル内に入った時刻(初回のみ記録)
+    openedAt: null, // 「開封する」でノートURLへ遷移した時刻(初回のみ記録)
   };
 }
 
@@ -189,6 +194,41 @@ export async function pruneCache(host, tag, { ttlMs = CACHE_TTL_MS, maxRecords =
   } catch (error) {
     console.warn("cache: pruneCache failed:", error);
   }
+}
+
+/**
+ * 既存レコードの一部フィールドだけを更新する(get→マージ→put)。
+ * 該当idのレコードが既に無い場合(キャッシュ消去後にGPSコールバックが
+ * 遅れて届いた、等)は何もしない。
+ */
+async function updateAshiatoRecord(id, patch) {
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const t = db.transaction("ashiatoCache", "readwrite");
+      const store = t.objectStore("ashiatoCache");
+      const getReq = store.get(id);
+      getReq.onsuccess = () => {
+        const existing = getReq.result;
+        if (!existing) return; // 消去済み等。黙って無視する
+        store.put({ ...existing, ...patch });
+      };
+      t.oncomplete = () => resolve();
+      t.onerror = () => reject(t.error);
+    });
+  } catch (error) {
+    console.warn(`cache: updateAshiatoRecord(${id}) failed:`, error);
+  }
+}
+
+/** 現在地がこのAshiatoのセル内に入った(発見された)ことを記録する。 */
+export function markAshiatoUnlocked(id, unlockedAt = Date.now()) {
+  return updateAshiatoRecord(id, { unlockedAt });
+}
+
+/** 「開封する」でノートURLへ遷移したことを記録する。 */
+export function markAshiatoOpened(id, openedAt = Date.now()) {
+  return updateAshiatoRecord(id, { openedAt });
 }
 
 /** ユーザーが明示的に「キャッシュを消す」を押したときだけ呼ぶ。全host・全tag対象。 */

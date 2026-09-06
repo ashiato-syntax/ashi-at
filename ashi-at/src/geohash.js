@@ -47,3 +47,9 @@ export function geohashCellSizeMeters(hash) {
 
   return { widthM, heightM };
 }
+
+// 現在地(lat, lon)が、指定したgeohashセルの矩形範囲内に入っているかを判定する
+export function isInsideGeohashCell(lat, lon, hash) {
+  const { minLat, maxLat, minLon, maxLon } = decodeGeohash(hash);
+  return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
+}

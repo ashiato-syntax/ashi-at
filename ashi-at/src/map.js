@@ -140,27 +140,30 @@ function ringCentroid(ring) {
   return { lon: cx / (6 * area), lat: cy / (6 * area), area: Math.abs(area) };
 }
 
+const ASHIATO_COLORS = {
+  locked: "#9bc403",
+  unlocked: "#9bc403",
+  opened: "#888",
+};
+
 export function addAshiato(map, result, onOpen) {
   const b = decodeGeohash(result.model.geohash);
-
   const centerLat = (b.minLat + b.maxLat) / 2;
   const centerLon = (b.minLon + b.maxLon) / 2;
 
-  // 見た目用
   const visual = L.circleMarker([centerLat, centerLon], {
-    color: "#9bc403",
+    color: ASHIATO_COLORS.locked,
     radius: 4,
     interactive: false,
     pane: "ashiatoPane",
   });
 
-  // タップ判定用
   const hitArea = L.circleMarker([centerLat, centerLon], {
-    color: "#9bc403",
+    color: ASHIATO_COLORS.locked,
     radius: 8,
     stroke: false,
     fill: true,
-    fillOpacity: 0.5,
+    fillOpacity: 0, // ロック中は不可視。setAshiatoStateで見た目を切り替える
     interactive: true,
     pane: "ashiatoHitPane",
   });
@@ -170,5 +173,53 @@ export function addAshiato(map, result, onOpen) {
   visual.addTo(map);
   hitArea.addTo(map);
 
-  return hitArea;
+  return { visual, hitArea };
+}
+
+// state: "locked" | "unlocked" | "opened"
+export function setAshiatoState({ visual, hitArea }, state) {
+  const color = ASHIATO_COLORS[state];
+  const fillOpacity = state === "locked" ? 0 : 0.5;
+  visual.setStyle({ color });
+  hitArea.setStyle({ color, fillOpacity });
+}
+
+// 現在地マーカー+精度円。専用paneに乗せ、Ashiatoより手前に表示する
+export function createCurrentLocationLayer(map) {
+  map.createPane("currentLocationPane");
+  map.getPane("currentLocationPane").style.zIndex = 750;
+
+  const accuracyCircle = L.circle([0, 0], {
+    radius: 0,
+    pane: "currentLocationPane",
+    color: "#4285f4",
+    weight: 1,
+    fillColor: "#4285f4",
+    fillOpacity: 0.15,
+    interactive: false,
+  });
+
+  const dot = L.circleMarker([0, 0], {
+    radius: 6,
+    pane: "currentLocationPane",
+    color: "#fff",
+    weight: 2,
+    fillColor: "#4285f4",
+    fillOpacity: 1,
+    interactive: false,
+  });
+
+  return {
+    show(lat, lon, accuracyM) {
+      const latlng = [lat, lon];
+      dot.setLatLng(latlng);
+      accuracyCircle.setLatLng(latlng).setRadius(accuracyM);
+      if (!map.hasLayer(dot)) dot.addTo(map);
+      if (!map.hasLayer(accuracyCircle)) accuracyCircle.addTo(map);
+    },
+    hide() {
+      if (map.hasLayer(dot)) map.removeLayer(dot);
+      if (map.hasLayer(accuracyCircle)) map.removeLayer(accuracyCircle);
+    },
+  };
 }

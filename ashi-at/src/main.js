@@ -3,12 +3,15 @@ import { parseText } from "./parser.js";
 import {
   createMap,
   addAshiato,
+  setAshiatoState,
   loadPrefectureBoundaries,
   loadMunicipalityBoundaries,
+  createCurrentLocationLayer,
 } from "./map.js";
 import {
   decodeGeohash,
-  geohashCellSizeMeters
+  geohashCellSizeMeters,
+  isInsideGeohashCell,
 } from "./geohash.js";
 import {
   buildPrefectureIndex,
@@ -22,6 +25,8 @@ import {
   putAshiatoRecords,
   pruneCache,
   clearAllCache,
+  markAshiatoUnlocked,
+  markAshiatoOpened,
 } from "./cache.js";
 
 // これよりズームしたら、都道府県名ラベルを表示
@@ -40,7 +45,6 @@ const $ = (s) => document.querySelector(s),
   status = $("#status"),
   list = $("#results");
 
-let layers = [];
 let prefectureIndex = [];
 let prefectureLabelLayer = null;
 let prefectureLabelsVisible = false;
@@ -52,7 +56,15 @@ let municipalityLabelsVisible = false;
 // ページング/キャッシュ用の状態。host(インスタンスのorigin)ごとに区画が分かれる。
 let currentHost = null;
 let cursor = null; // { oldestSeenNoteId, newestSeenNoteId } | null
-const renderedIds = new Set(); // 表示済みAshiatoの重複防止(cache.jsのレコードidを使う)
+
+// 表示中のAshiatoをrecord.idで管理する。
+// { record, visual, hitArea } — visual/hitAreaはmap.jsのLeafletレイヤー参照で、
+// 状態(ロック中/開封可能/開封済み)が変わった際に見た目を更新するために保持する。
+const ashiatoEntries = new Map();
+
+const currentLocationLayer = createCurrentLocationLayer(map);
+let watchId = null;
+let gpsEnabled = false;
 
 function setStatus(t, e = false) {
   status.textContent = t;
@@ -150,31 +162,87 @@ initBoundaries();
 
 // --- Ashiatoのページング + ローカルキャッシュ ---------------------------
 
-function openAshiato(result) {
-  const { widthM, heightM } = geohashCellSizeMeters(result.model.geohash);
-  alert(
-    `このあしあとは、現地に行くと開封できます\n\n当たり判定エリアサイズ:\n(東西 ${Math.round(widthM)}m, 南北 ${Math.round(heightM)}m)`,
-  );
+// このAshiatoが今どの状態か。unlockedAt/openedAtは一度付いたら
+// (GPSが今どこにあるかとは無関係に)恒久的に残る前提。
+function stateOf(record) {
+  if (record.openedAt) return "opened";
+  if (record.unlockedAt) return "unlocked";
+  return "locked";
 }
 
 function renderRecord(record) {
-  if (renderedIds.has(record.id)) return;
-  renderedIds.add(record.id);
+  if (ashiatoEntries.has(record.id)) return;
 
-  const result = { model: { geohash: record.geohash }, canonical: record.canonical };
-  layers.push(addAshiato(map, result, openAshiato));
-
-  const li = document.createElement("li"),
-    b = document.createElement("button");
-
-  b.textContent = `${record.geohash} — ${record.canonical}`;
-  b.onclick = () => {
-    const { centerLat, centerLon } = decodeGeohash(record.geohash);
-    map.setView([centerLat, centerLon], 13);
+  const result = {
+    model: { geohash: record.geohash },
+    canonical: record.canonical,
   };
+  const { visual, hitArea } = addAshiato(map, result, () =>
+    handleAshiatoClick(record.id),
+  );
+  setAshiatoState({ visual, hitArea }, stateOf(record));
 
-  li.append(b);
-  list.append(li);
+  ashiatoEntries.set(record.id, { record, visual, hitArea });
+}
+
+// 「開封可能なAshiato」リストを、アンロック済みのものだけ・アンロックした順で再構築する。
+// ロック中(未発見)のものはここには載せない。
+function refreshUnlockedList() {
+  const unlocked = [...ashiatoEntries.values()]
+    .map((e) => e.record)
+    .filter((r) => r.unlockedAt)
+    .sort((a, b) => a.unlockedAt - b.unlockedAt);
+
+  list.replaceChildren();
+
+  for (const record of unlocked) {
+    const li = document.createElement("li"),
+      b = document.createElement("button");
+
+    b.textContent = record.openedAt
+      ? `${record.geohash} — ${record.canonical}(開封済み)`
+      : `${record.geohash} — ${record.canonical}`;
+    b.onclick = () => {
+      const { centerLat, centerLon } = decodeGeohash(record.geohash);
+      map.setView([centerLat, centerLon], 13);
+    };
+
+    if (record.openedAt) li.classList.add("opened");
+    li.append(b);
+    list.append(li);
+  }
+}
+
+// Ashiatoクリック時の分岐:
+// - 未アンロック: 判定エリアサイズを案内するだけ(今まで通り)
+// - アンロック済み: 開封確認 → OKならノートURLを別タブで開き、開封済みとして記録
+async function handleAshiatoClick(id) {
+  const entry = ashiatoEntries.get(id);
+  if (!entry) return;
+  const { record } = entry;
+
+  if (!record.unlockedAt) {
+    const { widthM, heightM } = geohashCellSizeMeters(record.geohash);
+    alert(
+      `このあしあとは、現地に行くと開封できます\n\n当たり判定エリアサイズ:\n(東西 ${Math.round(widthM)}m, 南北 ${Math.round(heightM)}m)`,
+    );
+    return;
+  }
+
+  const wantsToOpen = confirm(
+    `このあしあとを開封しますか？\n\n${record.canonical}`,
+  );
+  if (!wantsToOpen) return;
+
+  window.open(`${record.host}/notes/${record.noteId}`, "_blank", "noopener");
+
+  if (!record.openedAt) {
+    const openedAt = Date.now();
+    await markAshiatoOpened(record.id, openedAt);
+    record.openedAt = openedAt;
+    setAshiatoState(entry, "opened");
+    refreshUnlockedList();
+  }
 }
 
 function updateButtons() {
@@ -182,29 +250,87 @@ function updateButtons() {
   $("#loadNewer").hidden = !cursor;
 }
 
+// --- 現在地(GPS)によるAshiatoのアンロック判定 -----------------------------
+
+function setGpsEnabled(enabled) {
+  if (enabled && !("geolocation" in navigator)) {
+    setStatus("この端末では位置情報が使えません。", true);
+    return;
+  }
+
+  gpsEnabled = enabled;
+  $("#toggleGps").textContent = enabled ? "現在地をOFF" : "現在地をON";
+
+  if (!enabled) {
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+    currentLocationLayer.hide();
+    return;
+  }
+
+  watchId = navigator.geolocation.watchPosition(
+    handlePositionUpdate,
+    handlePositionError,
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
+  );
+}
+
+function handlePositionError(error) {
+  console.error(error);
+  const messages = {
+    1: "位置情報の利用が許可されていません。",
+    2: "現在地を取得できませんでした。",
+    3: "現在地の取得がタイムアウトしました。",
+  };
+  setStatus(messages[error.code] ?? "位置情報の取得に失敗しました。", true);
+}
+
+// 現在地が更新されるたびに呼ばれる。ロック中のAshiatoだけを対象に、
+// 現在地がそのセル内に入っていれば「発見」としてアンロックする。
+// 一度アンロックされたAshiatoは、現在地に関わらずそのまま(判定対象から外す)。
+async function handlePositionUpdate(position) {
+  const { latitude, longitude, accuracy } = position.coords;
+  currentLocationLayer.show(latitude, longitude, accuracy);
+
+  for (const entry of ashiatoEntries.values()) {
+    if (entry.record.unlockedAt) continue;
+    if (!isInsideGeohashCell(latitude, longitude, entry.record.geohash))
+      continue;
+
+    const unlockedAt = Date.now();
+    await markAshiatoUnlocked(entry.record.id, unlockedAt);
+    entry.record.unlockedAt = unlockedAt;
+    setAshiatoState(entry, "unlocked");
+    refreshUnlockedList();
+  }
+}
+
 // インスタンス欄が変わったら、表示中のAshiatoを一旦クリアして、
 // そのhost用のキャッシュ(あれば)を読み込み直す。
 async function switchHost(host) {
   currentHost = host;
 
-  layers.forEach((x) => map.removeLayer(x));
-  layers = [];
+  for (const entry of ashiatoEntries.values()) {
+    map.removeLayer(entry.visual);
+    map.removeLayer(entry.hitArea);
+  }
+  ashiatoEntries.clear();
   list.replaceChildren();
-  renderedIds.clear();
 
   await pruneCache(host, TAG); // 読み込み前に期限切れ・上限超過分を掃除
   const cached = await getAshiatoRecords(host, TAG);
   // 古い順に並べておくと、ページングで足された分と混ざっても違和感がない
   cached.sort((a, b) => a.cachedAt - b.cachedAt);
   for (const record of cached) renderRecord(record);
+  refreshUnlockedList();
 
   cursor = await getCursor(host, TAG);
   updateButtons();
 
   setStatus(
     cached.length > 0
-      ? `キャッシュから${cached.length}件のAshiatoを復元しました`
-      : "準備完了",
+      ? `キャッシュから${cached.length}件のAshiatoを復元しました。`
+      : "準備完了。",
   );
 }
 
@@ -231,7 +357,7 @@ async function ingestNotes(host, notes) {
   return records;
 }
 
-// 過去方向(untilId): 「探す」(初回) / 「さらに過去を探す」(2回目以降、同じボタン)
+// 過去方向(untilId): 「探す」(初回) / 「さらに探す」(2回目以降、同じボタン)
 async function fetchOlder() {
   const btn = $("#search");
   btn.disabled = true;
@@ -257,12 +383,12 @@ async function fetchOlder() {
     updateButtons();
     setStatus(
       notes.length > 0
-        ? `表示中 ${renderedIds.size}件`
-        : "これより古いAshiatoは見つかりませんでした",
+        ? `${notes.length}件のノートを確認。表示中 ${ashiatoEntries.size}件。`
+        : "これより古いAshiatoは見つかりませんでした。",
     );
   } catch (e) {
     console.error(e);
-    setStatus(e.message || "検索に失敗しました", true);
+    setStatus(e.message || "検索に失敗しました。", true);
   } finally {
     btn.disabled = false;
   }
@@ -304,8 +430,8 @@ async function fetchNewer() {
 
     setStatus(
       notes.length > 0
-        ? `表示中 ${renderedIds.size}件`
-        : "新しいAshiatoはありませんでした",
+        ? `新着${notes.length}件を確認。表示中 ${ashiatoEntries.size}件。`
+        : "新しいAshiatoはありませんでした。",
     );
   } catch (e) {
     console.error(e);
@@ -318,10 +444,12 @@ async function fetchNewer() {
 async function handleClearCache() {
   await clearAllCache();
 
-  layers.forEach((x) => map.removeLayer(x));
-  layers = [];
+  for (const entry of ashiatoEntries.values()) {
+    map.removeLayer(entry.visual);
+    map.removeLayer(entry.hitArea);
+  }
+  ashiatoEntries.clear();
   list.replaceChildren();
-  renderedIds.clear();
   cursor = null;
 
   updateButtons();
@@ -330,6 +458,7 @@ async function handleClearCache() {
 
 $("#search").onclick = fetchOlder;
 $("#loadNewer").onclick = fetchNewer;
+$("#toggleGps").onclick = () => setGpsEnabled(!gpsEnabled);
 $("#clearCache").onclick = handleClearCache;
 $("#instance").onkeydown = (e) => {
   if (e.key === "Enter") fetchOlder();
