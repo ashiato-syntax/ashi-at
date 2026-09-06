@@ -40,7 +40,7 @@ const MIN_ZOOM_FOR_MUNICIPALITY_LABELS = 11;
 
 // 固定タグ。将来複数タグに対応するなら cache.js のhostTagキーはそのまま使い回せる。
 const TAG = "Ashiato";
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 50;
 
 const $ = (s) => document.querySelector(s),
   map = createMap("map"),
@@ -181,6 +181,28 @@ function cellSizeText(geohash) {
   return `当たり判定エリアサイズ:\n(東西 ${Math.round(widthM)}m, 南北 ${Math.round(heightM)}m)`;
 }
 
+// ISO文字列 / epoch(ms) どちらも受け取れる日付フォーマッタ。値が無い/不正なら null。
+function formatDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+// Ashiato Syntax(canonical)の代わりに一覧・ポップアップに表示するテキスト。
+// 投稿日は常に、開封日はopenedAtがある場合だけ付け加える。
+function recordDatesText(record) {
+  const posted = formatDate(record.noteCreatedAt) ?? "不明";
+  const opened = formatDate(record.openedAt);
+  return opened
+    ? `投稿日: ${posted} / 開封日: ${opened}`
+    : `(未開封) 投稿日: ${posted}`;
+}
+
 // セルの見た目(円)を、現在のrecords件数・状態に合わせて作り直す。
 // 件数が変わる(同じセルに新規ノートが増える)たびに、単丸/二重丸の切り替えが
 // 必要になるため、既存レイヤーを消してから作り直す形にしている。
@@ -245,15 +267,14 @@ function refreshUnlockedList() {
       b = document.createElement("button");
 
     b.type = "button";
-    b.textContent = record.openedAt
-      ? `${record.geohash} — ${record.canonical}(開封済み)`
-      : `${record.geohash} — ${record.canonical}`;
+    b.textContent = `${recordDatesText(record)} - ${record.geohash}`;
     b.onclick = () => {
       unlockedListDialog.close();
-      const { centerLat, centerLon } = decodeGeohash(record.geohash);
-      map.setView([centerLat, centerLon], 13);
+      const cell = ashiatoCells.get(record.geohash);
+      handleAshiatoClick(record, cell);
     };
 
+    if (!record.openedAt) b.classList.add("unlocked-unopened");
     if (record.openedAt) li.classList.add("opened");
     li.append(b);
     unlockedList.append(li);
@@ -281,9 +302,16 @@ function handleCellClick(geohash) {
   for (const record of records) {
     const b = document.createElement("button");
     b.type = "button";
-    b.textContent = record.openedAt
-      ? `${record.canonical}(開封済み)`
-      : record.canonical;
+
+    if (!record.unlockedAt) {
+      // 未発見(ロック中): Ashiato Syntaxの中身は見せない
+      b.textContent = "あしあと(未開封)";
+    } else {
+      // 発見済み: Syntax文字列の代わりに投稿日/開封日を表示
+      b.textContent = recordDatesText(record);
+      if (!record.openedAt) b.classList.add("unlocked-unopened");
+    }
+
     b.onclick = () => {
       map.closePopup();
       handleAshiatoClick(record, cell);
@@ -315,7 +343,7 @@ async function handleAshiatoClick(record, cell) {
 
   const openedLabel = record.openedAt ? "(開封済み)" : "";
   const wantsToOpen = confirm(
-    `このあしあとを開封しますか？${openedLabel}\n\n${record.canonical}\n\n${sizeText}`,
+    `このあしあとを開封しますか？${openedLabel}\n\n投稿日: ${formatDate(record.noteCreatedAt) ?? "不明"}\n\n${sizeText}`,
   );
   if (!wantsToOpen) return;
 
@@ -497,7 +525,9 @@ async function ingestNotes(host, notes) {
     if (!note?.text) continue;
     let idx = 0;
     for (const r of parseText(note.text)) {
-      records.push(makeRecord(host, TAG, note.id, idx, r));
+      records.push(
+        makeRecord(host, TAG, note.id, idx, r, note.createdAt ?? null),
+      );
       idx++;
     }
   }
@@ -534,7 +564,7 @@ async function fetchOlder() {
     setStatus(
       notes.length > 0
         ? `${notes.length}件のノートを確認。表示中 ${ashiatoCells.size}箇所。`
-        : "これより古いAshiatoは見つかりませんでした。",
+        : "これより古いあしあとは見つかりませんでした。",
     );
   } catch (e) {
     console.error(e);
@@ -608,7 +638,12 @@ $("#loadNewer").onclick = fetchNewer;
 $("#toggleGps").onclick = () => setGpsEnabled(!gpsEnabled);
 $("#clearCache").onclick = async () => {
   closeMenu();
-  if (!confirm("本当にキャッシュを削除しますか？")) return;
+  if (
+    !confirm(
+      "本当にキャッシュを削除しますか？\n\n消えるもの:\n\n・開封実績\n・開封可能なあしあと一覧\n・Misskeyから検索したあしあとのキャッシュ",
+    )
+  )
+    return;
   await handleClearCache();
 };
 $("#instance").onkeydown = (e) => {

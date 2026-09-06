@@ -56,7 +56,6 @@ button.secondary {
     border-color: #ddd;
 }
 
-/* アイコン1文字だけのボタン(開封可能リストの入口など)。バッジの基準位置にする */
 .icon-button {
     position: relative;
     min-width: 42px;
@@ -83,7 +82,6 @@ button.secondary {
     color: #b00020;
 }
 
-/* --- ハンバーガーメニュー ------------------------------------------- */
 .menu {
     position: relative;
 }
@@ -114,7 +112,6 @@ button.secondary {
     background: #f5f5f5;
 }
 
-/* --- Ashi@についてダイアログ / 開封可能リストダイアログ共通 ----------- */
 dialog#aboutDialog,
 dialog#unlockedListDialog {
     border: none;
@@ -138,7 +135,6 @@ dialog#unlockedListDialog #unlockedListClose {
     margin-top: 12px;
 }
 
-/* --- 開封可能なAshiatoリスト(ダイアログ内) ---------------------------- */
 .unlocked-list {
     list-style: none;
     margin: 0;
@@ -161,7 +157,6 @@ dialog#unlockedListDialog #unlockedListClose {
     margin: 8px 0;
 }
 
-/* --- 地図 + 現在地トグル --------------------------------------------- */
 .map-wrap {
     position: relative;
 }
@@ -219,7 +214,6 @@ dialog#unlockedListDialog #unlockedListClose {
     cursor: not-allowed;
 }
 
-/* 同じgeohashセルに複数のAshiatoがある場合、地図クリックで出るポップアップ内の一覧 */
 .ashiato-popup-list {
     display: grid;
     gap: 6px;
@@ -229,6 +223,11 @@ dialog#unlockedListDialog #unlockedListClose {
     width: 100%;
     text-align: left;
     overflow-wrap: anywhere;
+}
+.ashiato-popup-list button.unlocked-unopened,
+.unlocked-list button.unlocked-unopened {
+    background: #eaf6d5;
+    border-color: #c3e6a0;
 }
 
 .graticule-label span {

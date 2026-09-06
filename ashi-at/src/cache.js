@@ -1,22 +1,9 @@
 // ローカルキャッシュ(IndexedDB)。
-//
-// 重要な設計方針(README_JP.md §7,8,9、およびレビューで確定した合意事項):
-// - Misskeyのノート本文・投稿者・添付ファイル等は一切保存しない。保存するのは
-//   パース済みのAshiato情報(geohash / canonical文字列など)だけ。
-// - これは「Ashi@というサービスが持つ恒久的なAshiatoインデックス」ではなく、
-//   「そのユーザーのブラウザに残る、そのユーザー自身の検索結果」という位置付け。
-//   なので定期実行のバックグラウンド処理(Service Worker等)は一切持たない。
-//   失効判定は「読み込まれたときにその場でフィルタする」形にとどめる。
-// - Misskey側での投稿削除・編集を能動的に追跡することはしない。時間経過による
-//   自動失効(CACHE_TTL_MS)だけで「古くなったキャッシュ」を扱う。
-// - unlockedAt/openedAt(現在地による発見/開封の記録)も、他のフィールドと同じ
-//   cachedAtベースのTTLでまとめて失効する。発見・開封状態だけを特別に延命する
-//   ロジックは持たない。
-
 const DB_NAME = "ashi-at";
 const DB_VERSION = 1;
 
-export const CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14日
+export const CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14日(通常のキャッシュ)
+export const UNLOCKED_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180日(発見済みAshiato)
 const MAX_RECORDS_PER_HOST_TAG = 1000;
 
 let dbPromise = null;
@@ -64,9 +51,10 @@ function hostTagKey(host, tag) {
  * @param {number} indexInNote 同じノート内に複数のAshiatoがあった場合の連番
  * @param {{ model: { geohash:string, contextId:string|null }, canonical:string }} parseResult
  *   parser.jsのparseCandidate()がok:trueで返すオブジェクトそのもの
+ * @param {string|null} noteCreatedAt Misskeyのnote.createdAt(ISO8601文字列)
  * @returns Ashiatoキャッシュ1レコード(ノート本文・投稿者などは含まない)
  */
-export function makeRecord(host, tag, noteId, indexInNote, parseResult) {
+export function makeRecord(host, tag, noteId, indexInNote, parseResult, noteCreatedAt = null) {
   return {
     id: `${host}::${noteId}::${indexInNote}`,
     hostTag: hostTagKey(host, tag),
@@ -77,6 +65,7 @@ export function makeRecord(host, tag, noteId, indexInNote, parseResult) {
     geohash: parseResult.model.geohash,
     contextId: parseResult.model.contextId,
     canonical: parseResult.canonical,
+    noteCreatedAt, // ノートの投稿日時(本文・投稿者は含まない、日時だけ)
     cachedAt: Date.now(),
     unlockedAt: null, // 現在地がこのAshiatoのセル内に入った時刻(初回のみ記録)
     openedAt: null, // 「開封する」でノートURLへ遷移した時刻(初回のみ記録)
@@ -135,14 +124,18 @@ export async function putAshiatoRecords(records) {
 }
 
 /**
- * @returns 期限内(cachedAt >= now - ttlMs)のレコードだけを返す。期限切れ分は
- * ここでは削除しない(削除はpruneCacheの役目) — 読み込みは読み込み、掃除は掃除。
+ * @returns 期限内のレコードだけを返す。unlockedAtがあるレコードはunlockedTtlMs、
+ * 無いレコードはttlMsで判定する(cachedAt起点は共通)。期限切れ分はここでは
+ * 削除しない(削除はpruneCacheの役目) — 読み込みは読み込み、掃除は掃除。
  */
-export async function getAshiatoRecords(host, tag, { ttlMs = CACHE_TTL_MS } = {}) {
+export async function getAshiatoRecords(
+  host,
+  tag,
+  { ttlMs = CACHE_TTL_MS, unlockedTtlMs = UNLOCKED_TTL_MS } = {},
+) {
   try {
     const db = await openDb();
     const key = hostTagKey(host, tag);
-    const cutoff = Date.now() - ttlMs;
 
     const all = await new Promise((resolve, reject) => {
       const t = db.transaction("ashiatoCache", "readonly");
@@ -152,7 +145,10 @@ export async function getAshiatoRecords(host, tag, { ttlMs = CACHE_TTL_MS } = {}
       req.onerror = () => reject(req.error);
     });
 
-    return all.filter((r) => r.cachedAt >= cutoff);
+    const now = Date.now();
+    return all.filter(
+      (r) => now - r.cachedAt < (r.unlockedAt ? unlockedTtlMs : ttlMs),
+    );
   } catch (error) {
     console.warn("cache: getAshiatoRecords failed — キャッシュなしとして続行します:", error);
     return [];
@@ -163,12 +159,18 @@ export async function getAshiatoRecords(host, tag, { ttlMs = CACHE_TTL_MS } = {}
  * 期限切れレコード、および件数上限を超えた古いレコードを削除する。
  * 定期実行のバックグラウンド処理としてではなく、host切り替え時など
  * 「読み込みが発生するタイミング」でだけ呼ぶ。
+ * unlockedAtがあるレコード(発見済みAshiato)は、件数上限による間引きの対象からも外す
+ * — 容量超過を理由に「達成の記録」が真っ先に消えるのは本末転倒なため。
  */
-export async function pruneCache(host, tag, { ttlMs = CACHE_TTL_MS, maxRecords = MAX_RECORDS_PER_HOST_TAG } = {}) {
+export async function pruneCache(
+  host,
+  tag,
+  { ttlMs = CACHE_TTL_MS, unlockedTtlMs = UNLOCKED_TTL_MS, maxRecords = MAX_RECORDS_PER_HOST_TAG } = {},
+) {
   try {
     const db = await openDb();
     const key = hostTagKey(host, tag);
-    const cutoff = Date.now() - ttlMs;
+    const now = Date.now();
 
     await new Promise((resolve, reject) => {
       const t = db.transaction("ashiatoCache", "readwrite");
@@ -177,12 +179,16 @@ export async function pruneCache(host, tag, { ttlMs = CACHE_TTL_MS, maxRecords =
 
       req.onsuccess = () => {
         const all = req.result ?? [];
-        const expired = all.filter((r) => r.cachedAt < cutoff);
+        const isFresh = (r) =>
+          now - r.cachedAt < (r.unlockedAt ? unlockedTtlMs : ttlMs);
 
-        const fresh = all
-          .filter((r) => r.cachedAt >= cutoff)
+        const expired = all.filter((r) => !isFresh(r));
+        const notExpired = all.filter(isFresh);
+
+        const otherRecords = notExpired
+          .filter((r) => !r.unlockedAt)
           .sort((a, b) => b.cachedAt - a.cachedAt);
-        const overflow = fresh.slice(maxRecords);
+        const overflow = otherRecords.slice(maxRecords);
 
         const store = t.objectStore("ashiatoCache");
         for (const r of [...expired, ...overflow]) store.delete(r.id);

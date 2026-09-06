@@ -17,7 +17,7 @@
         <main id="app">
             <header>
                 <h1>Ashi@</h1>
-                <p>すれ違い通信的な偶然のワクワクをもう一度。</p>
+                <p>どこにいた？</p>
             </header>
             <section class="controls">
                 <label
@@ -32,7 +32,7 @@
                     type="button"
                     class="secondary icon-button"
                     aria-haspopup="dialog"
-                    aria-label="開封可能な「あしあと」一覧"
+                    aria-label="開封可能なあしあと一覧"
                 >
                     🗺️
                     <span id="unlockedBadge" class="badge-dot" hidden></span>
@@ -75,17 +75,18 @@
             </div>
         </main>
         <dialog id="unlockedListDialog">
-            <h2>開封可能な「あしあと」</h2>
+            <h2>開封可能なあしあと</h2>
             <ul id="unlockedList" class="unlocked-list"></ul>
             <button id="unlockedListClose" type="button">閉じる</button>
         </dialog>
         <dialog id="aboutDialog">
             <h2>Ashi@について</h2>
             <p>
-                Ashi@は、Misskeyの「#Ashiato」投稿に埋め込まれた位置情報(Geohash)をもとに、実際にその場所へ行くと開封できる、すれ違い通信のようなワクワクを届けるクライアントです。
+                Ashi@は、Misskeyの「#Ashiato」投稿に埋め込まれた位置情報（Ashiato Syntax）をもとに、実際にその場所へ行くと開封できるクライアントです。
             </p>
             <p>
-                投稿本文や投稿者情報を保存することはなく、位置判定に必要な最小限の情報だけをブラウザ内に14日間だけキャッシュします。地図には商用タイルサーバーを使わず、都道府県・市区町村の境界線のみを表示しています。
+                投稿本文や投稿者情報を保存することはなく、位置判定に必要な最小限の情報だけをブラウザ内に14日間だけキャッシュします。
+                また、見つけたあしあとの実績は、ブラウザ内に半年間キャッシュします。
             </p>
             <button id="aboutClose" type="button">閉じる</button>
         </dialog>
