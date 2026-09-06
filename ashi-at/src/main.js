@@ -257,7 +257,7 @@ function refreshUnlockedList() {
   if (unlocked.length === 0) {
     const empty = document.createElement("p");
     empty.className = "unlocked-list-empty";
-    empty.textContent = "まだ発見したAshiatoはありません。";
+    empty.textContent = "まだ発見したあしあとはありません。";
     unlockedList.append(empty);
     return;
   }
@@ -640,7 +640,7 @@ $("#clearCache").onclick = async () => {
   closeMenu();
   if (
     !confirm(
-      "本当にキャッシュを削除しますか？\n\n消えるもの:\n\n・開封実績\n・開封可能なあしあと一覧\n・Misskeyから検索したあしあとのキャッシュ",
+      "本当にキャッシュを削除しますか？\n\n消えるもの:\n\n・開封実績\n・開封可能なあしあと一覧\n・検索したあしあとのキャッシュ",
     )
   )
     return;
