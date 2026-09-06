@@ -2,6 +2,8 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   server: {
+    port: 5173,
+    strictPort: true,
     proxy: {
       // Dev-only: forwards /api/* to misskey.io. Not present in `vite build`
       // output — the deployed app still talks to Misskey directly from the

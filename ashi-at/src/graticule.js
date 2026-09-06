@@ -15,7 +15,7 @@ import L from "leaflet";
  * @returns {L.LayerGroup}
  */
 export function addGraticule(map, opts = {}) {
-  const step = opts.stepDeg ?? 10;
+  const step = opts.stepDeg ?? 5;
   const group = L.layerGroup();
 
   const lineStyle = { color: "#9aa0a6", weight: 1, interactive: false };

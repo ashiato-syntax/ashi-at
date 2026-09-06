@@ -7,27 +7,29 @@ export function normalizeInstanceUrl(value) {
 
 export async function apiRequest(instance, endpoint, body = {}) {
   const origin = normalizeInstanceUrl(instance);
-  // Dev-only: for misskey.io specifically, go through the Vite proxy
-  // (see vite.config.js) as a same-origin relative path, so the browser
-  // never sends the `Origin: http://localhost:...` header that Cloudflare
-  // blocks. Production builds (import.meta.env.DEV === false) always use
-  // the real origin, matching README_JP.md's no-backend-proxy policy.
-  // Other instances aren't proxied yet, so they'll still hit the same
-  // localhost-CORS wall in dev until a matching proxy entry is added.
+  // 開発用: misskey.io向けには、Viteのプロキシ（vite.config.jsを参照）を介して
+  // 同一オリジンの相対パスとしてリクエストする。
+  // これにより、Cloudflareにブロックされる `Origin: http://localhost:...` ヘッダーが
+  // ブラウザから送信されなくなる。
+  // 本番ビルド（import.meta.env.DEV === false）では常に実際のオリジンが使用されるので、
+  // READMEに記載の「バックエンドプロキシを使用しない」という方針はクリアされる。
   const base =
     import.meta.env.DEV && origin === "https://misskey.io" ? "" : origin;
+
   const res = await fetch(`${base}/api/${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
     credentials: "omit",
   });
+
   if (!res.ok) throw new Error(`Misskey API error: HTTP ${res.status}`);
   return res.json();
 }
 
 export function searchNotesByTag(instance, tag, limit = 100) {
   const clean = tag.trim().replace(/^#/, "");
+
   if (!clean) throw new Error("ハッシュタグを指定してください。");
   return apiRequest(instance, "notes/search-by-tag", {
     tag: clean,
