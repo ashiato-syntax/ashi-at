@@ -28,6 +28,8 @@ import {
   clearAllCache,
   markAshiatoUnlocked,
   markAshiatoOpened,
+  getSetting,
+  putSetting,
 } from "./cache.js";
 import L from "leaflet";
 
@@ -44,8 +46,21 @@ const PAGE_SIZE = 30;
 
 const $ = (s) => document.querySelector(s),
   map = createMap("map"),
-  status = $("#status"),
+  statusToast = $("#statusToast"),
+  statusText = $("#statusText"),
+  statusCloseBtn = $("#statusClose"),
   unlockedList = $("#unlockedList");
+
+// 地図の表示位置(中心緯度経度・ズーム)をTTL無しで保存しておき、次回起動時に
+// 復元する(復元自体は起動処理の中でsetView()する形で行う。createMap()の
+// デフォルト位置で一瞬描画されてから復元位置へ飛ぶが、体感できるほどの
+// 遅延ではないため許容している)。
+// moveendは操作の区切り(ドラッグ終了・ズーム完了)でまとめて発火するので、
+// 追加のデバウンスなしでもIndexedDBへの書き込み頻度は十分少ない。
+map.on("moveend", () => {
+  const center = map.getCenter();
+  putSetting("mapView", { lat: center.lat, lon: center.lng, zoom: map.getZoom() });
+});
 
 let prefectureIndex = [];
 let prefectureLabelLayer = null;
@@ -69,10 +84,105 @@ const currentLocationLayer = createCurrentLocationLayer(map);
 let watchId = null;
 let gpsEnabled = false;
 
+const STATUS_AUTO_HIDE_MS = 3500;
+let statusHideTimer = null;
+
+// 通常メッセージは一定時間で自動的に消える(地図の面積を占有し続けないように)。
+// エラーは見落とし防止のため自動で消さず、×ボタンで明示的に閉じる。
 function setStatus(t, e = false) {
-  status.textContent = t;
-  status.className = e ? "status error" : "status";
+  clearTimeout(statusHideTimer);
+  statusText.textContent = t;
+  statusToast.classList.toggle("error", e);
+  statusToast.hidden = false;
+  statusCloseBtn.hidden = !e;
+
+  if (!e) {
+    statusHideTimer = setTimeout(() => {
+      statusToast.hidden = true;
+    }, STATUS_AUTO_HIDE_MS);
+  }
 }
+
+statusCloseBtn.onclick = () => {
+  clearTimeout(statusHideTimer);
+  statusToast.hidden = true;
+};
+
+// --- alert/confirmの代替ダイアログ -----------------------------------------
+// ネイティブのalert()/confirm()は他のUIと見た目が揃わないため、既存のdialog群と
+// 同じ見た目のダイアログで代替する。showConfirmはPromise<boolean>を返し、
+// OKボタンなら true、キャンセル/ESC/外側クリックならすべて false になる。
+
+const infoDialog = $("#infoDialog");
+const infoMessage = $("#infoMessage");
+const infoOkBtn = $("#infoOk");
+
+function showInfo(message) {
+  infoMessage.textContent = message;
+  infoDialog.showModal();
+}
+
+infoOkBtn.onclick = () => infoDialog.close();
+
+infoDialog.addEventListener("click", (e) => {
+  const rect = infoDialog.getBoundingClientRect();
+  const inside =
+    rect.top <= e.clientY &&
+    e.clientY <= rect.top + rect.height &&
+    rect.left <= e.clientX &&
+    e.clientX <= rect.left + rect.width;
+  if (!inside) infoDialog.close();
+});
+
+const confirmDialog = $("#confirmDialog");
+const confirmMessage = $("#confirmMessage");
+const confirmOkBtn = $("#confirmOk");
+const confirmCancelBtn = $("#confirmCancel");
+
+function showConfirm(message, { okLabel = "OK", cancelLabel = "キャンセル" } = {}) {
+  return new Promise((resolve) => {
+    confirmMessage.textContent = message;
+    confirmOkBtn.textContent = okLabel;
+    confirmCancelBtn.textContent = cancelLabel;
+
+    // resultは「OKが押されたか」を保持するだけの変数。close()の実行順に
+    // 依存しないよう、close()を呼ぶ前に必ずresultを確定させてから閉じる。
+    let result = false;
+
+    const handleOk = () => {
+      result = true;
+      confirmDialog.close();
+    };
+    const handleCancel = () => {
+      result = false;
+      confirmDialog.close();
+    };
+    // ESCキー/外側クリックによるネイティブcloseも含め、閉じたタイミングで
+    // 一度だけresultを読み取ってPromiseを解決する。
+    const handleClose = () => {
+      confirmOkBtn.removeEventListener("click", handleOk);
+      confirmCancelBtn.removeEventListener("click", handleCancel);
+      confirmDialog.removeEventListener("close", handleClose);
+      resolve(result);
+    };
+
+    confirmOkBtn.addEventListener("click", handleOk);
+    confirmCancelBtn.addEventListener("click", handleCancel);
+    confirmDialog.addEventListener("close", handleClose);
+
+    confirmDialog.showModal();
+  });
+}
+
+confirmDialog.addEventListener("click", (e) => {
+  const rect = confirmDialog.getBoundingClientRect();
+  const inside =
+    rect.top <= e.clientY &&
+    e.clientY <= rect.top + rect.height &&
+    rect.left <= e.clientX &&
+    e.clientX <= rect.left + rect.width;
+  if (!inside) confirmDialog.close(); // キャンセル扱い(resultはfalseのまま)
+});
 
 async function initBoundaries() {
   try {
@@ -234,14 +344,21 @@ function addRecordToCell(record) {
 
 // 「開封可能なAshiato」ダイアログの右上バッジ。未開封(unlockedAt はあるが
 // openedAt が無い)のものが1件でもあれば表示する。
+// ハンバーガーメニュー内に移動したので、メニューボタン自体にも同じ赤丸を出す。
 function updateUnlockedBadge(unlockedRecords) {
   const hasUnopened = unlockedRecords.some((r) => !r.openedAt);
   $("#unlockedBadge").hidden = !hasUnopened;
+  $("#menuBadge").hidden = !hasUnopened;
 }
+
+// 「あつめたあしあと」ダイアログの表示フィルター。true なら未開封のみ表示する。
+let showOnlyUnopened = false;
 
 // 「開封可能なAshiato」ダイアログの中身を、アンロック済みのものだけ・
 // アンロックした順で再構築する。ロック中(未発見)のものはここには載せない。
 // 開封済みかどうかはボタン文言とグレーアウトで示す。
+// showOnlyUnopenedがtrueのときは、さらに未開封のものだけに絞り込んで表示する
+// (バッジ・件数判定は絞り込み前の全件ベースのまま変えない)。
 function refreshUnlockedList() {
   const unlocked = [...ashiatoCells.values()]
     .flatMap((cell) => [...cell.records.values()])
@@ -250,17 +367,24 @@ function refreshUnlockedList() {
 
   updateUnlockedBadge(unlocked);
 
+  const visible = showOnlyUnopened
+    ? unlocked.filter((r) => !r.openedAt)
+    : unlocked;
+
   unlockedList.replaceChildren();
 
-  if (unlocked.length === 0) {
+  if (visible.length === 0) {
     const empty = document.createElement("p");
     empty.className = "unlocked-list-empty";
-    empty.textContent = "まだ発見したAshiatoはありません。";
+    empty.textContent =
+      unlocked.length === 0
+        ? "まだ発見したAshiatoはありません。"
+        : "未開封のAshiatoはありません。";
     unlockedList.append(empty);
     return;
   }
 
-  for (const record of unlocked) {
+  for (const record of visible) {
     const li = document.createElement("li"),
       b = document.createElement("button");
 
@@ -335,13 +459,14 @@ async function handleAshiatoClick(record, cell) {
   const sizeText = cellSizeText(record.geohash);
 
   if (!record.unlockedAt) {
-    alert(`このあしあとは、現地に行くと開封できます\n\n${sizeText}`);
+    showInfo(`このあしあとは、現地に行くと開封できます\n\n${sizeText}`);
     return;
   }
 
   const openedLabel = record.openedAt ? "(開封済み)" : "";
-  const wantsToOpen = confirm(
+  const wantsToOpen = await showConfirm(
     `このあしあとを開封しますか？${openedLabel}\n\n投稿日: ${formatDate(record.noteCreatedAt) ?? "不明"}\n\n${sizeText}`,
+    { okLabel: "開封する" },
   );
   if (!wantsToOpen) return;
 
@@ -432,9 +557,15 @@ async function handlePositionUpdate(position) {
 const unlockedListDialog = $("#unlockedListDialog");
 
 $("#unlockedListToggle").onclick = () => {
+  closeMenu();
   unlockedListDialog.showModal();
 };
 $("#unlockedListClose").onclick = () => unlockedListDialog.close();
+
+$("#unopenedOnlyFilter").onchange = (e) => {
+  showOnlyUnopened = e.target.checked;
+  refreshUnlockedList();
+};
 
 unlockedListDialog.addEventListener("click", (e) => {
   const rect = unlockedListDialog.getBoundingClientRect();
@@ -485,10 +616,38 @@ aboutDialog.addEventListener("click", (e) => {
   if (!inside) aboutDialog.close();
 });
 
+// --- インスタンス変更ダイアログ --------------------------------------------
+
+const instanceDialog = $("#instanceDialog");
+const currentHostLabel = $("#currentHostLabel");
+
+$("#changeInstance").onclick = () => {
+  closeMenu();
+  instanceDialog.showModal();
+};
+$("#instanceCancel").onclick = () => instanceDialog.close();
+
+instanceDialog.addEventListener("click", (e) => {
+  const rect = instanceDialog.getBoundingClientRect();
+  const inside =
+    rect.top <= e.clientY &&
+    e.clientY <= rect.top + rect.height &&
+    rect.left <= e.clientX &&
+    e.clientX <= rect.left + rect.width;
+  if (!inside) instanceDialog.close();
+});
+
+$("#instanceApply").onclick = () => {
+  instanceDialog.close();
+  fetchOlder();
+};
+
 // インスタンス欄が変わったら、表示中のAshiatoを一旦クリアして、
 // そのhost用のキャッシュ(あれば)を読み込み直す。
 async function switchHost(host) {
   currentHost = host;
+  currentHostLabel.textContent = `現在: ${host.replace(/^https?:\/\//, "")}`;
+  putSetting("instanceUrl", host); // TTL無し。次回起動時のデフォルト接続先にする
 
   for (const cell of ashiatoCells.values()) removeAshiatoGroup(map, cell);
   ashiatoCells.clear();
@@ -636,20 +795,62 @@ $("#loadNewer").onclick = fetchNewer;
 $("#toggleGps").onclick = () => setGpsEnabled(!gpsEnabled);
 $("#clearCache").onclick = async () => {
   closeMenu();
-  if (!confirm("本当にキャッシュを削除しますか？")) return;
+  const wantsToClear = await showConfirm("本当にキャッシュを削除しますか？", {
+    okLabel: "削除する",
+  });
+  if (!wantsToClear) return;
   await handleClearCache();
 };
 $("#instance").onkeydown = (e) => {
-  if (e.key === "Enter") fetchOlder();
+  if (e.key === "Enter") {
+    instanceDialog.close();
+    fetchOlder();
+  }
 };
 
-// 起動時: 今のインスタンス欄の値でキャッシュを復元し(ブラウザ再訪時の復元)、
-// 復元できたものが0件だった場合だけ、自動で「探す」を1回実行する。
-switchHost(normalizeInstanceUrl($("#instance").value))
-  .then((restoredCount) => {
+// --- スプラッシュ画面 -------------------------------------------------
+// ヘッダーから「Ashi@」「どこにいた？」を外した代わりに、起動直後だけ
+// 全画面でこれらを表示する。タップ、または一定時間経過で消える。
+// 表示中は#appにinertを付けてあり(index.html側)、背後のボタンにキーボード
+// フォーカスが移ったり、スクリーンリーダーから読み上げられたりしないように
+// している。スプラッシュを閉じるタイミングでinertを解除する。
+const splash = $("#splash");
+const appRoot = $("#app");
+if (splash) {
+  let splashHidden = false;
+  const hideSplash = () => {
+    if (splashHidden) return;
+    splashHidden = true;
+    splash.classList.add("hide");
+    appRoot.removeAttribute("inert");
+  };
+  splash.addEventListener("click", hideSplash);
+  setTimeout(hideSplash, 1600);
+}
+
+// 起動時:
+// 1. TTL無しで保存してあるインスタンスURL・地図の表示位置があれば復元する
+//    (どちらも無ければ、input要素のデフォルト値/createMap()のデフォルト位置のまま)
+// 2. その上で、今のインスタンス欄の値でAshiatoキャッシュを復元し(ブラウザ再訪時の復元)、
+//    復元できたものが0件だった場合だけ、自動で「探す」を1回実行する。
+(async () => {
+  try {
+    const savedInstance = await getSetting("instanceUrl");
+    if (savedInstance) $("#instance").value = savedInstance;
+
+    const savedMapView = await getSetting("mapView");
+    if (savedMapView) {
+      map.setView([savedMapView.lat, savedMapView.lon], savedMapView.zoom, {
+        animate: false,
+      });
+    }
+
+    const restoredCount = await switchHost(
+      normalizeInstanceUrl($("#instance").value),
+    );
     if (restoredCount === 0) fetchOlder();
-  })
-  .catch((error) => {
+  } catch (error) {
     console.error(error);
     setStatus("キャッシュの読み込みに失敗しました。", true);
-  });
+  }
+})();

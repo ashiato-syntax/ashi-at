@@ -47,6 +47,19 @@ export function createMap(el) {
   // 上に上書きするだけで良い(専用paneを新設する必要はない)。
   map.getPane("popupPane").style.zIndex = 900;
 
+  // Leafletはコンテナのサイズを初期化時に一度だけ測ってキャッシュし、
+  // 以後はwindowのresizeイベントくらいでしか再計測しない。
+  // 今回のようにコンテナの高さがCSSのflexレイアウトで決まる場合や、
+  // モバイルでアドレスバーの表示/非表示によって実質的な高さが変わる場合、
+  // windowのresizeだけでは追従しきれないことがある(横方向は問題なく
+  // 追従するのに縦方向だけずれる、という形で症状が出る)。
+  // コンテナ要素自体をResizeObserverで監視し、サイズ変化のたびに
+  // invalidateSize()でLeaflet側のキャッシュを強制的に更新する。
+  if ("ResizeObserver" in window) {
+    const resizeObserver = new ResizeObserver(() => map.invalidateSize());
+    resizeObserver.observe(map.getContainer());
+  }
+
   return map;
 }
 

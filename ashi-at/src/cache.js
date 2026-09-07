@@ -1,6 +1,6 @@
 // ローカルキャッシュ(IndexedDB)。
 const DB_NAME = "ashi-at";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14日(通常のキャッシュ)
 export const UNLOCKED_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180日(発見済みAshiato)
@@ -30,6 +30,12 @@ function openDb() {
 
       if (!db.objectStoreNames.contains("cursors")) {
         db.createObjectStore("cursors", { keyPath: "hostTag" });
+      }
+
+      // TTL無しで永続化したい設定値(インスタンスURL、地図の表示位置など)用。
+      // host/tagには紐付かないアプリ全体の設定なので、単純な key-value。
+      if (!db.objectStoreNames.contains("settings")) {
+        db.createObjectStore("settings", { keyPath: "key" });
       }
     };
 
@@ -250,5 +256,41 @@ export async function clearAllCache() {
     });
   } catch (error) {
     console.warn("cache: clearAllCache failed:", error);
+  }
+}
+
+// --- 設定値(インスタンスURL、地図の表示位置など) ---------------------------
+// ashiatoCache/cursorsと違い、TTLで期限切れにはしない。プライバシー上保持
+// したくない投稿由来の情報ではなく、単なるアプリの利用状況・好みの記録なため。
+// 「キャッシュを消す」(clearAllCache)の対象にも含めていない
+// (Ashiatoの記録を消したいだけのユーザーが、意図せずインスタンス設定や
+// 地図の表示位置まで失ってしまうのを避けるため)。
+
+export async function getSetting(key) {
+  try {
+    const db = await openDb();
+    return await new Promise((resolve, reject) => {
+      const t = db.transaction("settings", "readonly");
+      const req = t.objectStore("settings").get(key);
+      req.onsuccess = () => resolve(req.result?.value ?? null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (error) {
+    console.warn(`cache: getSetting(${key}) failed:`, error);
+    return null;
+  }
+}
+
+export async function putSetting(key, value) {
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const t = db.transaction("settings", "readwrite");
+      t.objectStore("settings").put({ key, value });
+      t.oncomplete = () => resolve();
+      t.onerror = () => reject(t.error);
+    });
+  } catch (error) {
+    console.warn(`cache: putSetting(${key}) failed:`, error);
   }
 }

@@ -11,34 +11,42 @@
             content="Ashi@ — Ashiatoを偶然見つけるためのMisskeyクライアント"
         />
         <title>Ashi@</title>
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="stylesheet" href="/style.css" />
     </head>
     <body>
-        <main id="app">
+        <div id="splash" class="splash" aria-hidden="true">
+            <h1>Ashi@</h1>
+            <p class="subtitle">どこにいた？</p>
+        </div>
+        <main id="app" inert>
             <header>
                 <div class="top-actions">
-                    <button
-                        id="unlockedListToggle"
-                        type="button"
-                        class="secondary icon-button"
-                        aria-haspopup="dialog"
-                        aria-label="開封可能な「あしあと」一覧"
-                    >
-                        👣
-                        <span id="unlockedBadge" class="badge-dot" hidden></span>
-                    </button>
                     <div class="menu">
                         <button
                             id="menuToggle"
                             type="button"
-                            class="secondary"
+                            class="secondary icon-button"
                             aria-haspopup="true"
                             aria-expanded="false"
                             aria-label="メニュー"
                         >
                             ☰
+                            <span id="menuBadge" class="badge-dot" hidden></span>
                         </button>
                         <div id="menuDropdown" class="menu-dropdown" hidden>
+                            <p id="currentHostLabel" class="menu-current-host"></p>
+                            <button
+                                id="unlockedListToggle"
+                                type="button"
+                                aria-haspopup="dialog"
+                            >
+                                👣あつめたあしあと
+                                <span id="unlockedBadge" class="badge-dot" hidden></span>
+                            </button>
+                            <button id="changeInstance" type="button">
+                                インスタンスを変更
+                            </button>
                             <button id="clearCache" type="button">
                                 キャッシュを消す
                             </button>
@@ -48,28 +56,27 @@
                         </div>
                     </div>
                 </div>
-                <div class="header-title">
-                    <h1>Ashi@</h1>
-                    <p>どこにいた？</p>
-                </div>
-            </header>
-            <section class="controls">
-                <label
-                    >Misskey instance<input
-                        id="instance"
-                        value="https://misskey.io"
-                        inputmode="url" /></label
-                >
                 <div class="search-buttons">
                     <button id="search" type="button">探す</button>
                     <button id="loadNewer" type="button" hidden>
                         最新を確認
                     </button>
                 </div>
-            </section>
-            <p id="status" role="status">準備中…</p>
+            </header>
             <div class="map-wrap">
                 <section id="map" aria-label="Ashiato map"></section>
+                <div id="statusToast" class="status-toast" role="status">
+                    <span id="statusText">準備中…</span>
+                    <button
+                        id="statusClose"
+                        type="button"
+                        class="status-close"
+                        aria-label="閉じる"
+                        hidden
+                    >
+                        ×
+                    </button>
+                </div>
                 <button
                     id="toggleGps"
                     type="button"
@@ -86,7 +93,28 @@
         <dialog id="unlockedListDialog">
             <h2>あつめたあしあと</h2>
             <ul id="unlockedList" class="unlocked-list"></ul>
-            <button id="unlockedListClose" type="button">閉じる</button>
+            <div class="unlocked-list-footer">
+                <label class="unlocked-list-filter">
+                    <input type="checkbox" id="unopenedOnlyFilter" />
+                    未開封のみ表示
+                </label>
+                <button id="unlockedListClose" type="button">閉じる</button>
+            </div>
+        </dialog>
+        <dialog id="instanceDialog">
+            <h2>Misskeyインスタンス</h2>
+            <label
+                >接続先URL<input
+                    id="instance"
+                    value="https://misskey.io"
+                    inputmode="url" /></label
+            >
+            <div class="dialog-actions">
+                <button id="instanceApply" type="button">適用</button>
+                <button id="instanceCancel" type="button" class="secondary">
+                    キャンセル
+                </button>
+            </div>
         </dialog>
         <dialog id="aboutDialog">
             <h2>Ashi@について</h2>
@@ -96,7 +124,23 @@
             <p>
                 投稿本文や投稿者情報を保存することはなく、位置判定に必要な最小限の情報だけをブラウザ内に14日間だけキャッシュします。
                 開封実績や、開封可能なあしあとは、ブラウザ内に180日間キャッシュします。
+            </p>
             <button id="aboutClose" type="button">閉じる</button>
+        </dialog>
+        <dialog id="infoDialog">
+            <p id="infoMessage" class="dialog-message"></p>
+            <div class="dialog-actions">
+                <button id="infoOk" type="button">閉じる</button>
+            </div>
+        </dialog>
+        <dialog id="confirmDialog">
+            <p id="confirmMessage" class="dialog-message"></p>
+            <div class="dialog-actions">
+                <button id="confirmCancel" type="button" class="secondary">
+                    キャンセル
+                </button>
+                <button id="confirmOk" type="button">OK</button>
+            </div>
         </dialog>
         <script type="module" src="/src/main.js"></script>
     </body>

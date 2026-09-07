@@ -45,7 +45,7 @@ function md(v) {
 
 
 function field(tok) {
-  const i = tok.indexOf(":");
+  const i = tok.indexOf(";");
 
   if (i <= 0) throw Error(`Invalid field: ${tok}`);
 
@@ -94,20 +94,20 @@ export function parseCandidate(c) {
     return { ok: false, error: "Invalid Candidate", candidate: c };
 
   const t = c.slice(1, -1).split(",");
-  if (t[0] !== "as:1")
-    return { ok: false, error: "Syntax must begin with as:1.", candidate: c };
+  if (t[0] !== "as;1")
+    return { ok: false, error: "Syntax must begin with as;1.", candidate: c };
 
   let i = 1;
   let ctxId = null;
 
-  if (t[i]?.startsWith("c:")) {
+  if (t[i]?.startsWith("c;")) {
     ctxId = t[i].slice(2);
     if (!/^[0-9a-z]{1,22}$/.test(ctxId))
       return { ok: false, error: "Invalid c.", candidate: c };
     i++;
   }
 
-  if (!t[i]?.startsWith("g:"))
+  if (!t[i]?.startsWith("g;"))
     return { ok: false, error: "g is required after as/c.", candidate: c };
 
   const g = t[i++].slice(2);
@@ -143,7 +143,7 @@ export function parseCandidate(c) {
 
     const tr = f.has("t") ? time(f.get("t")) : null;
     if (f.has("o") && (f.get("o") !== "1" || !tr || tr.s <= tr.e))
-      throw Error("Invalid o:1.");
+      throw Error("Invalid o;1.");
   } catch (e) {
     return { ok: false, error: e.message, candidate: c };
   }
@@ -166,29 +166,29 @@ export function parseCandidate(c) {
 
 
 function canonicalize(m) {
-  const p = ["as:1"];
-  if (m.contextId) p.push(`c:${m.contextId}`);
+  const p = ["as;1"];
+  if (m.contextId) p.push(`c;${m.contextId}`);
 
-  p.push(`g:${m.geohash}`);
+  p.push(`g;${m.geohash}`);
   if (m.utcOffsetMinutes) {
     const s = m.utcOffsetMinutes < 0 ? "-" : "+";
-    p.push(`z:${s}${enc(Math.abs(m.utcOffsetMinutes))}`);
+    p.push(`z;${s}${enc(Math.abs(m.utcOffsetMinutes))}`);
   }
 
-  if (m.timezoneIndex !== null) p.push(`tz:${enc(m.timezoneIndex)}`);
-  if (m.startUnixMinute !== null) p.push(`s:${enc(m.startUnixMinute)}`);
-  if (m.endUnixMinute !== null) p.push(`e:${enc(m.endUnixMinute)}`);
-  if (m.dates) p.push(`d:${[...new Set(m.dates)].sort().join(".")}`);
+  if (m.timezoneIndex !== null) p.push(`tz;${enc(m.timezoneIndex)}`);
+  if (m.startUnixMinute !== null) p.push(`s;${enc(m.startUnixMinute)}`);
+  if (m.endUnixMinute !== null) p.push(`e;${enc(m.endUnixMinute)}`);
+  if (m.dates) p.push(`d;${[...new Set(m.dates)].sort().join(".")}`);
   if (m.weekdays)
-    p.push(`w:${[...new Set(m.weekdays)].sort((a, b) => a - b).join("")}`);
+    p.push(`w;${[...new Set(m.weekdays)].sort((a, b) => a - b).join("")}`);
 
-  if (m.timeRange) p.push(`t:${enc(m.timeRange.s)}-${enc(m.timeRange.e)}`);
-  if (m.overnight) p.push("o:1");
+  if (m.timeRange) p.push(`t;${enc(m.timeRange.s)}-${enc(m.timeRange.e)}`);
+  if (m.overnight) p.push("o;1");
 
   for (const [k, v] of Object.entries(m.extensions).sort(([a], [b]) =>
     a.localeCompare(b),
   ))
-    p.push(`${k}:${v}`);
+    p.push(`${k};${v}`);
   return `⟦${p.join(",")}⟧`;
 }
 
