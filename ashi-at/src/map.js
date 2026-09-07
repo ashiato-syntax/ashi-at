@@ -9,13 +9,27 @@ import { addGraticule } from "./graticule.js";
 // https://github.com/smartnews-smri/japan-topography　の1%GeoJsonを使って描画してる
 const JAPAN_BOUNDS = L.latLngBounds([17, 122], [46, 154]);
 
-// Ashiatoの状態別の色。opened(灰)になるのは、同じセル内の全レコードが
-// 開封済みになったときだけ(main.js の computeCellState を参照)。
-const ASHIATO_COLORS = {
-  locked: "#9bc403",
-  unlocked: "#9bc403",
-  opened: "#888",
+// Geohashの桁数(精度)ごとの色。精度が細かい(=判定エリアが狭い)ほど暖色にして目立たせる。
+// 5桁=緑, 6桁=黄色, 7桁=赤。Ashi@が扱うのはこの3種類の桁数のみ。
+const ASHIATO_COLORS_BY_LENGTH = {
+  5: "#4caf50",
+  6: "#fbc02d",
+  7: "#e53935",
 };
+// セル内の全レコードが開封済みになったときだけ、桁数に関わらずグレーにする
+// (main.js の computeCellState を参照)。
+const OPENED_COLOR = "#888";
+
+function colorFor(state, geohashLength) {
+  if (state === "opened") return OPENED_COLOR;
+  return ASHIATO_COLORS_BY_LENGTH[geohashLength] ?? ASHIATO_COLORS_BY_LENGTH[7];
+}
+
+// main.js側(エリアオーバーレイ用にcell.colorを覚えておく処理など)からも
+// 同じ色計算を使えるようにエクスポートしたもの。
+export function ashiatoColor(state, geohashLength) {
+  return colorFor(state, geohashLength);
+}
 
 export function createMap(el) {
   const map = L.map(el, {
@@ -32,11 +46,27 @@ export function createMap(el) {
   map.createPane("prefecturePane");
   map.getPane("prefecturePane").style.zIndex = 420;
 
-  // Ashiatoは最前面に表示する
-  map.createPane("ashiatoPane");
-  map.getPane("ashiatoPane").style.zIndex = 700;
-  map.createPane("ashiatoHitPane");
-  map.getPane("ashiatoHitPane").style.zIndex = 710;
+  // 「エリア」トグルで表示するGeohashセルの範囲。境界線より前面、あしあと本体より背面。
+  map.createPane("areaOverlayPane");
+  map.getPane("areaOverlayPane").style.zIndex = 650;
+
+  // あしあとは、Geohashの桁数が細かい(=判定エリアが狭い)ほど前面に描画する。
+  // 前面から順に 7桁 > 6桁 > 5桁。
+  map.createPane("ashiatoPane5");
+  map.getPane("ashiatoPane5").style.zIndex = 680;
+  map.createPane("ashiatoPane6");
+  map.getPane("ashiatoPane6").style.zIndex = 690;
+  map.createPane("ashiatoPane7");
+  map.getPane("ashiatoPane7").style.zIndex = 700;
+
+  // タップ判定も、見た目の重なり順(7→6→5)と一致させるため桁数ごとに分ける。
+  // (どの桁数のペインよりも前面)
+  map.createPane("ashiatoHitPane5");
+  map.getPane("ashiatoHitPane5").style.zIndex = 710;
+  map.createPane("ashiatoHitPane6");
+  map.getPane("ashiatoHitPane6").style.zIndex = 720;
+  map.createPane("ashiatoHitPane7");
+  map.getPane("ashiatoHitPane7").style.zIndex = 730;
 
   // 現在地はAshiatoよりさらに手前
   map.createPane("currentLocationPane");
@@ -171,45 +201,51 @@ function ringCentroid(ring) {
 }
 
 // 1つのgeohashセルにつき1グループ(円1〜2個)を描画する。
-// count(そのセルに紐づくAshiatoレコード数)が2件以上のときは、外側の輪+内側の点
+// count(そのセルに紐づく「表示対象」Ashiatoレコード数)が2件以上のときは、外側の輪+内側の点
 // による二重丸にして、「同じ場所に複数のAshiatoがある」ことを視覚的に示す。
 // クリック判定(hitArea)は常に1つ(グループ全体で1つのタップ対象)。
+// 色・ペインはgeohashの桁数(5/6/7)に応じて決まる(呼び出し側でこの桁数のみに絞り込み済み)。
 export function addAshiatoGroup(map, geohash, count, onOpen) {
   const b = decodeGeohash(geohash);
   const centerLat = (b.minLat + b.maxLat) / 2;
   const centerLon = (b.minLon + b.maxLon) / 2;
   const latlng = [centerLat, centerLon];
+  const geohashLength = geohash.length;
+  const pane = `ashiatoPane${geohashLength}`;
+  const hitPane = `ashiatoHitPane${geohashLength}`;
+  // 初期色。addAshiatoGroup直後に呼び出し側がsetAshiatoStateで確定させる想定。
+  const color = colorFor("unlocked", geohashLength);
 
   const outer = L.circleMarker(latlng, {
-    color: ASHIATO_COLORS.locked,
+    color,
     radius: count > 1 ? 6 : 4,
     weight: count > 1 ? 2 : 3,
     fill: count === 1, // 複数件のときは外側は輪だけ(内側の点と区別するため塗りつぶさない)
     interactive: false,
-    pane: "ashiatoPane",
+    pane,
   });
 
   const visualLayers = [outer];
 
   if (count > 1) {
     const inner = L.circleMarker(latlng, {
-      color: ASHIATO_COLORS.locked,
+      color,
       radius: 2,
       interactive: false,
-      pane: "ashiatoPane",
+      pane,
     });
     visualLayers.push(inner);
   }
 
   // タップ判定用(見た目の円の数に関わらず1つ)
   const hitArea = L.circleMarker(latlng, {
-    color: ASHIATO_COLORS.locked,
+    color,
     radius: 8,
     stroke: false,
     fill: true,
-    fillOpacity: 0, // ロック中は不可視。setAshiatoStateで見た目を切り替える
+    fillOpacity: 0.5,
     interactive: true,
-    pane: "ashiatoHitPane",
+    pane: hitPane,
   });
 
   hitArea.on("click", () => onOpen());
@@ -217,7 +253,7 @@ export function addAshiatoGroup(map, geohash, count, onOpen) {
   for (const v of visualLayers) v.addTo(map);
   hitArea.addTo(map);
 
-  return { visualLayers, hitArea };
+  return { visualLayers, hitArea, geohashLength };
 }
 
 export function removeAshiatoGroup(map, { visualLayers, hitArea }) {
@@ -225,12 +261,59 @@ export function removeAshiatoGroup(map, { visualLayers, hitArea }) {
   map.removeLayer(hitArea);
 }
 
-// state: "locked" | "unlocked" | "opened"
-export function setAshiatoState({ visualLayers, hitArea }, state) {
-  const color = ASHIATO_COLORS[state];
-  const fillOpacity = state === "locked" ? 0 : 0.5;
+// state: "unlocked" | "opened"
+// (ロック中=未発見のセルは地図に一切表示しない方針のため、"locked"状態は存在しない)
+export function setAshiatoState({ visualLayers, hitArea, geohashLength }, state) {
+  const color = colorFor(state, geohashLength);
   for (const v of visualLayers) v.setStyle({ color });
-  hitArea.setStyle({ color, fillOpacity });
+  hitArea.setStyle({ color, fillOpacity: 0.5 });
+}
+
+// 「エリア」トグル用: あしあとのGeohashセルの範囲そのものを、あしあと本体と同じ色で描画する。
+// setEnabled/refreshどちらからでも再描画され、無効時は常に空(クリア)。
+export function createAreaOverlay(map) {
+  const group = L.layerGroup().addTo(map);
+  let enabled = false;
+  let currentCells = [];
+
+  function render() {
+    group.clearLayers();
+    if (!enabled) return;
+
+    for (const cell of currentCells) {
+      // 地図に円が出ていない(=発見済みが1件も無い)セルは対象外
+      if (!cell.visualLayers || !cell.color) continue;
+
+      const b = decodeGeohash(cell.geohash);
+      L.rectangle(
+        [
+          [b.minLat, b.minLon],
+          [b.maxLat, b.maxLon],
+        ],
+        {
+          pane: "areaOverlayPane",
+          color: cell.color,
+          weight: 1.5,
+          fillColor: cell.color,
+          fillOpacity: 0.15,
+          interactive: false,
+        },
+      ).addTo(group);
+    }
+  }
+
+  return {
+    setEnabled(value) {
+      enabled = value;
+      render();
+    },
+    // cellsは呼び出し側(main.js)のashiatoCellsの現在値のスナップショットを渡す想定。
+    // 各要素は { geohash, visualLayers, color } を持つこと。
+    refresh(cells) {
+      currentCells = cells;
+      render();
+    },
+  };
 }
 
 // 現在地マーカー+精度円。専用paneに乗せ、Ashiatoより手前に表示する

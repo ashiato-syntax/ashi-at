@@ -302,6 +302,10 @@ dialog#instanceDialog label {
     box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
     font-size: 0.8rem;
 }
+/* 「現在地」トグルのすぐ下に並べる(現在地トグルの高さ32px + 隙間10px) */
+.area-toggle {
+    top: 54px;
+}
 .gps-toggle-track {
     width: 34px;
     height: 20px;

@@ -47,8 +47,11 @@
                             <button id="changeInstance" type="button">
                                 インスタンスを変更
                             </button>
-                            <button id="clearCache" type="button">
-                                キャッシュを消す
+                            <button id="clearSearchCache" type="button">
+                                検索キャッシュを消す
+                            </button>
+                            <button id="clearCollected" type="button">
+                                あつめたあしあとを消す
                             </button>
                             <button id="aboutButton" type="button">
                                 Ashi@について
@@ -87,6 +90,17 @@
                         ><span class="gps-toggle-knob"></span
                     ></span>
                     <span class="gps-toggle-label">現在地</span>
+                </button>
+                <button
+                    id="toggleArea"
+                    type="button"
+                    class="gps-toggle area-toggle"
+                    aria-pressed="false"
+                >
+                    <span class="gps-toggle-track"
+                        ><span class="gps-toggle-knob"></span
+                    ></span>
+                    <span class="gps-toggle-label">エリア</span>
                 </button>
             </div>
         </main>

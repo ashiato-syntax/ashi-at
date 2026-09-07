@@ -58,9 +58,19 @@ function hostTagKey(host, tag) {
  * @param {{ model: { geohash:string, contextId:string|null }, canonical:string }} parseResult
  *   parser.jsのparseCandidate()がok:trueで返すオブジェクトそのもの
  * @param {string|null} noteCreatedAt Misskeyのnote.createdAt(ISO8601文字列)
- * @returns Ashiatoキャッシュ1レコード(ノート本文・投稿者などは含まない)
+ * @param {string|null} username Misskeyのnote.user.username。
+ *   「あつめたあしあと」で開封済みのものを表示する際に使う(本文・投稿者の他の情報は保存しない)。
+ * @returns Ashiatoキャッシュ1レコード(ノート本文は含まない)
  */
-export function makeRecord(host, tag, noteId, indexInNote, parseResult, noteCreatedAt = null) {
+export function makeRecord(
+  host,
+  tag,
+  noteId,
+  indexInNote,
+  parseResult,
+  noteCreatedAt = null,
+  username = null,
+) {
   return {
     id: `${host}::${noteId}::${indexInNote}`,
     hostTag: hostTagKey(host, tag),
@@ -71,7 +81,8 @@ export function makeRecord(host, tag, noteId, indexInNote, parseResult, noteCrea
     geohash: parseResult.model.geohash,
     contextId: parseResult.model.contextId,
     canonical: parseResult.canonical,
-    noteCreatedAt, // ノートの投稿日時(本文・投稿者は含まない、日時だけ)
+    noteCreatedAt, // ノートの投稿日時(本文は含まない、日時だけ)
+    username, // 投稿者のusername(開封済み表示用)
     cachedAt: Date.now(),
     unlockedAt: null, // 現在地がこのAshiatoのセル内に入った時刻(初回のみ記録)
     openedAt: null, // 「開封する」でノートURLへ遷移した時刻(初回のみ記録)
@@ -243,28 +254,62 @@ export function markAshiatoOpened(id, openedAt = Date.now()) {
   return updateAshiatoRecord(id, { openedAt });
 }
 
-/** ユーザーが明示的に「キャッシュを消す」を押したときだけ呼ぶ。全host・全tag対象。 */
-export async function clearAllCache() {
+/**
+ * 「検索キャッシュを消す」で呼ぶ。まだ発見していない(unlockedAtが無い)レコードと
+ * カーソル(検索位置)だけを消す。「あつめたあしあと」(unlockedAtがあるレコード)は
+ * ここでは一切消さない。全host・全tag対象。
+ */
+export async function clearSearchCache() {
   try {
     const db = await openDb();
     await new Promise((resolve, reject) => {
       const t = db.transaction(["ashiatoCache", "cursors"], "readwrite");
-      t.objectStore("ashiatoCache").clear();
+      const store = t.objectStore("ashiatoCache");
+      const req = store.getAll();
+      req.onsuccess = () => {
+        for (const r of req.result ?? []) {
+          if (!r.unlockedAt) store.delete(r.id);
+        }
+      };
       t.objectStore("cursors").clear();
       t.oncomplete = () => resolve();
       t.onerror = () => reject(t.error);
     });
   } catch (error) {
-    console.warn("cache: clearAllCache failed:", error);
+    console.warn("cache: clearSearchCache failed:", error);
+  }
+}
+
+/**
+ * 「あつめたあしあとを消す」で呼ぶ。発見済み(unlockedAtがある)レコードだけを消す。
+ * カーソル(検索位置)はそのまま変更しない。全host・全tag対象。
+ */
+export async function clearCollectedAshiato() {
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const t = db.transaction("ashiatoCache", "readwrite");
+      const store = t.objectStore("ashiatoCache");
+      const req = store.getAll();
+      req.onsuccess = () => {
+        for (const r of req.result ?? []) {
+          if (r.unlockedAt) store.delete(r.id);
+        }
+      };
+      t.oncomplete = () => resolve();
+      t.onerror = () => reject(t.error);
+    });
+  } catch (error) {
+    console.warn("cache: clearCollectedAshiato failed:", error);
   }
 }
 
 // --- 設定値(インスタンスURL、地図の表示位置など) ---------------------------
 // ashiatoCache/cursorsと違い、TTLで期限切れにはしない。プライバシー上保持
 // したくない投稿由来の情報ではなく、単なるアプリの利用状況・好みの記録なため。
-// 「キャッシュを消す」(clearAllCache)の対象にも含めていない
-// (Ashiatoの記録を消したいだけのユーザーが、意図せずインスタンス設定や
-// 地図の表示位置まで失ってしまうのを避けるため)。
+// 検索キャッシュ・あつめたあしあとのどちらの削除の対象にも含めていない
+// (削除したいだけのユーザーが、意図せずインスタンス設定や地図の表示位置まで
+// 失ってしまうのを避けるため)。
 
 export async function getSetting(key) {
   try {
