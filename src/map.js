@@ -103,7 +103,7 @@ export function createMap(el) {
 // ラベルは境界線と別レイヤー(labelLayer)にして、呼び出し側で
 // 境界線とは違うズーム閾値で表示/非表示を切り替えられるようにする。
 export async function loadPrefectureBoundaries(map) {
-  const res = await fetch("./data/maps/s0010/prefectures.json");
+  const res = await fetch("/data/maps/s0010/prefectures.json");
   if (!res.ok) throw new Error("都道府県境界GeoJSONの読み込みに失敗しました。");
   const data = await res.json();
 
@@ -127,7 +127,7 @@ export function fetchMunicipalityGeoJson(prefCode) {
   if (!municipalityGeoJsonCache.has(prefCode)) {
     municipalityGeoJsonCache.set(
       prefCode,
-      fetch(`./data/maps/s0010/N03-21_${prefCode}_210101.json`).then((res) => {
+      fetch(`/data/maps/s0010/N03-21_${prefCode}_210101.json`).then((res) => {
         if (!res.ok)
           throw new Error(`市区町村境界GeoJSONの読み込みに失敗しました(都道府県コード ${prefCode})。`);
         return res.json();
