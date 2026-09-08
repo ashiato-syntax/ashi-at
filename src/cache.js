@@ -288,7 +288,12 @@ export async function clearSearchCache() {
 }
 
 /**
- * 「あつめたあしあとを消す」で呼ぶ。発見済み(unlockedAtがある)レコードだけを消す。
+ * 「あつめたあしあとを消す」で呼ぶ。発見済み(unlockedAtがある)レコードを、
+ * 「まだ発見していない(ロック中)」状態に戻す(unlockedAt/openedAtをnullに戻す)。
+ * レコード自体は削除しない — 削除すると、そのノートのIDが既にカーソル
+ * (oldestSeenNoteId/newestSeenNoteId)の走査済み範囲に埋もれてしまい、
+ * 「探す」「さらに探す」「最新を確認」のいずれでも二度と再取得できなくなる
+ * (=現地に行っても二度と再発見できなくなる)ため。
  * カーソル(検索位置)はそのまま変更しない。全host・全tag対象。
  */
 export async function clearCollectedAshiato() {
@@ -300,7 +305,9 @@ export async function clearCollectedAshiato() {
       const req = store.getAll();
       req.onsuccess = () => {
         for (const r of req.result ?? []) {
-          if (r.unlockedAt) store.delete(r.id);
+          if (r.unlockedAt) {
+            store.put({ ...r, unlockedAt: null, openedAt: null });
+          }
         }
       };
       t.oncomplete = () => resolve();

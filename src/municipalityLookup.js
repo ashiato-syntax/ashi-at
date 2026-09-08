@@ -55,7 +55,12 @@ export async function lookupMunicipality(prefectureIndex, lat, lon) {
       const geojson = await fetchMunicipalityGeoJson(pref.code);
       for (const feature of geojson.features) {
         if (pointInGeometry(lon, lat, feature.geometry)) {
-          return feature.properties?.N03_004 || pref.name;
+          const city = feature.properties?.N03_003;
+          const ward = feature.properties?.N03_004;
+          if (city && ward) {
+            return `${city}${ward}`;
+          }
+          return city || ward || pref.name;
         }
       }
     } catch (error) {

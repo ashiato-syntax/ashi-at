@@ -360,13 +360,13 @@ function formatDate(value) {
 function recordDatesText(record) {
   const posted = formatDate(record.noteCreatedAt) ?? "不明";
   const opened = formatDate(record.openedAt);
-  return opened ? `投稿 ${posted}, 開封 ${opened}` : `投稿 ${posted}`;
+  return opened ? `投稿 ${posted}, 開封 ${opened}` : `投稿 ${posted},　未開封`;
 }
 
-// 「あつめたあしあと」一覧の見出しテキスト。開封済みのものは、Geohashの代わりに
+// 「あつめたあしあと」一覧の見出しテキスト。
 // 投稿者のusername(notes/search-by-tagのuser.username)を表示する。
 function unlockedListLabel(record) {
-  const label = record.openedAt ? (record.username ?? "(不明なユーザー)") : record.geohash;
+  const label = record.username ?? "(不明なユーザー)";
   return `@${label}\n${recordDatesText(record)}`;
 }
 
@@ -534,10 +534,12 @@ function handleCellClick(geohash) {
     const b = document.createElement("button");
     b.type = "button";
     // 開封済みのものはGeohashの代わりに投稿者のusernameを表示する
-    b.textContent = record.openedAt
-      ? `${record.username ?? "(不明なユーザー)"} — ${recordDatesText(record)}`
-      : recordDatesText(record);
-    if (!record.openedAt) b.classList.add("unlocked-unopened");
+    b.textContent = `${record.username ?? "(不明なユーザー)"} - ${recordDatesText(record)}`;
+    if (!record.openedAt) {
+      b.classList.add("unlocked-unopened");
+    } else {
+
+    }
 
     b.onclick = () => {
       map.closePopup();
@@ -967,26 +969,27 @@ async function handleClearSearchCache() {
   setStatus("検索キャッシュを消去しました。");
 }
 
-// 「あつめたあしあとを消す」。発見済み(unlockedAtがある)レコードだけを消す。
-// 検索キャッシュ・カーソルはそのまま(次の「探す」の続きはそのまま使える)。
+// 「あつめたあしあとを消す」。発見済み(unlockedAtがある)レコードを
+// ロック中の状態に戻す(レコード自体・セル自体は消さない=再フェッチ不要で
+// 現地に行けばそのまま再発見できる)。検索キャッシュ・カーソルは触らない。
 async function handleClearCollected() {
   await clearCollectedAshiato();
 
-  for (const [geohash, cell] of [...ashiatoCells]) {
-    for (const [id, record] of [...cell.records]) {
-      if (record.unlockedAt) cell.records.delete(id);
+  for (const cell of ashiatoCells.values()) {
+    let changed = false;
+    for (const record of cell.records.values()) {
+      if (record.unlockedAt) {
+        record.unlockedAt = null;
+        record.openedAt = null;
+        changed = true;
+      }
     }
-    if (cell.records.size === 0) {
-      if (cell.hitArea) removeAshiatoGroup(map, cell);
-      ashiatoCells.delete(geohash);
-    } else {
-      rebuildCellVisual(cell); // 残るのはロック中のみなので、円は消える
-    }
+    if (changed) rebuildCellVisual(cell); // ロック中に戻るので円は消える(セルは保持)
   }
   areaOverlay.refresh([...ashiatoCells.values()]);
 
   refreshUnlockedList();
-  setStatus("あつめたあしあとを消去しました。");
+  setStatus("あつめたあしあとを消去しました。(現地に行けば再度発見できます)");
 }
 
 $("#search").onclick = fetchOlder;
@@ -1004,7 +1007,7 @@ $("#clearSearchCache").onclick = async () => {
 $("#clearCollected").onclick = async () => {
   closeMenu();
   const wantsToClear = await showConfirm(
-    "あつめたあしあとをすべて削除しますか？この操作は取り消せません。",
+    "あつめたあしあとをすべて削除しますか？(発見履歴がリセットされます。現地に行けば再度発見できます)",
     { okLabel: "削除する" },
   );
   if (!wantsToClear) return;

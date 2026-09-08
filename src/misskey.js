@@ -51,7 +51,7 @@ export function buildShareUrl(text) {
  *   両方省略すれば「最新から」の初回検索になる。
  */
 export function searchNotesByTag(instance, tag, opts = {}) {
-  const { limit = 30, sinceId, untilId } = opts;
+  const { limit = 50, sinceId, untilId } = opts;
   const clean = tag.trim().replace(/^#/, "");
 
   if (!clean) throw new Error("ハッシュタグを指定してください。");
