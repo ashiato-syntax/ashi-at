@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  base: '/ashi-at/',
+
   server: {
     port: 5173,
     strictPort: true,
