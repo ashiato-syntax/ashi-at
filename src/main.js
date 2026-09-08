@@ -64,7 +64,7 @@ const MAX_GEOHASH_LENGTH = 7;
 // (セルにすら登録しないので、現在地判定も一切かからない)。
 // PENDING_PROMOTION_INTERVAL_MSごとに保留分を再チェックし、経過後は
 // 手動で「探す」し直さなくても自動的に対象へ昇格する。
-const MIN_NOTE_AGE_MS = 60 * 60 * 1000; // 1時間
+const MIN_NOTE_AGE_MS = 60 * 30 * 1000; // 30分
 const PENDING_PROMOTION_INTERVAL_MS = 60 * 1000; // 1分ごとに再チェック
 
 // 投稿機能: 精度「約150m」(Geohash7桁)の下書きは、プライバシー配慮のため
@@ -72,6 +72,10 @@ const PENDING_PROMOTION_INTERVAL_MS = 60 * 1000; // 1分ごとに再チェック
 const DRAFT_HIGH_PRECISION_DELAY_MS = 30 * 60 * 1000; // 30分
 
 const PRECISION_LABELS = { 5: "約4km", 6: "約1km", 7: "約150m" };
+
+// デバッグ用: trueにすると、未発見(ロック中)のAshiatoも地図に表示する。
+// GPSによる発見判定や「集めたあしあと」一覧の仕様は変えない。本番ではfalse。
+const SHOW_LOCKED_ASHIATO_FOR_DEBUG = false;
 
 function isSupportedGeohashLength(geohash) {
   return (
@@ -382,7 +386,10 @@ function rebuildCellVisual(cell) {
   cell.geohashLength = null;
   cell.color = null;
 
-  const visibleRecords = [...cell.records.values()].filter((r) => r.unlockedAt);
+  const visibleRecords = [...cell.records.values()].filter(
+    (r) => SHOW_LOCKED_ASHIATO_FOR_DEBUG || r.unlockedAt,
+  );
+
 
   if (visibleRecords.length > 0) {
     const { visualLayers, hitArea, geohashLength } = addAshiatoGroup(
