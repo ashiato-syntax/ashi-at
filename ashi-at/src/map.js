@@ -1,6 +1,6 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { decodeGeohash } from "./geohash.js";
+import { decodeGeohash, encodeGeohash } from "./geohash.js";
 import { addGraticule } from "./graticule.js";
 
 // NOTE: ここでは意図的に L.tileLayer(...) を追加していない
@@ -49,6 +49,11 @@ export function createMap(el) {
   // 「エリア」トグルで表示するGeohashセルの範囲。境界線より前面、あしあと本体より背面。
   map.createPane("areaOverlayPane");
   map.getPane("areaOverlayPane").style.zIndex = 650;
+
+  // 投稿UI表示中、選択中の精度でのGeohashセル範囲をプレビュー表示するペイン。
+  // areaOverlayPaneより前面、あしあと本体より背面。
+  map.createPane("precisionPreviewPane");
+  map.getPane("precisionPreviewPane").style.zIndex = 660;
 
   // あしあとは、Geohashの桁数が細かい(=判定エリアが狭い)ほど前面に描画する。
   // 前面から順に 7桁 > 6桁 > 5桁。
@@ -112,13 +117,31 @@ export async function loadPrefectureBoundaries(map) {
   return { data, labelLayer };
 }
 
-// 市区町村境界は都道府県別ファイル(N03-21_{code}_210101.json)を必要になった
-// ときだけ読み込む。全国版(10MB)は使わない。boundaryLayerとlabelLayerを別に
-// 返すので、呼び出し側でそれぞれ別のズーム閾値で表示/非表示を切り替えられる。
+// 都道府県別の市区町村GeoJson(N03-21_{code}_210101.json)を取得する。
+// 同じ都道府県コードへの呼び出しはPromiseをキャッシュして使い回すので、
+// 地図描画用(loadMunicipalityBoundaries)と、下書きの場所逆引き用
+// (municipalityLookup.js)の両方から呼んでも二重取得にならない。
+const municipalityGeoJsonCache = new Map(); // prefCode -> Promise<GeoJSON>
+
+export function fetchMunicipalityGeoJson(prefCode) {
+  if (!municipalityGeoJsonCache.has(prefCode)) {
+    municipalityGeoJsonCache.set(
+      prefCode,
+      fetch(`/data/maps/s0010/N03-21_${prefCode}_210101.json`).then((res) => {
+        if (!res.ok)
+          throw new Error(`市区町村境界GeoJSONの読み込みに失敗しました(都道府県コード ${prefCode})。`);
+        return res.json();
+      }),
+    );
+  }
+  return municipalityGeoJsonCache.get(prefCode);
+}
+
+// 市区町村境界は必要になったときだけ読み込む。全国版(10MB)は使わない。
+// boundaryLayerとlabelLayerを別に返すので、呼び出し側でそれぞれ別のズーム閾値で
+// 表示/非表示を切り替えられる。
 export async function loadMunicipalityBoundaries(map, prefCode) {
-  const res = await fetch(`/data/maps/s0010/N03-21_${prefCode}_210101.json`);
-  if (!res.ok) throw new Error(`市区町村境界GeoJSONの読み込みに失敗しました(都道府県コード ${prefCode})。`);
-  const data = await res.json();
+  const data = await fetchMunicipalityGeoJson(prefCode);
 
   const boundaryLayer = L.geoJSON(data, {
     pane: "municipalityPane",
@@ -312,6 +335,47 @@ export function createAreaOverlay(map) {
     refresh(cells) {
       currentCells = cells;
       render();
+    },
+  };
+}
+
+// 投稿UI表示中、選択中の精度でのGeohashセル範囲をプレビュー表示する。
+// areaOverlay(既存の「エリア」トグル)とは独立(投稿UI固有)。
+// あしあと本体の色(5桁=緑, 6桁=黄, 7桁=赤)と紛らわしくならないよう、
+// あしあとでは使っていない紫系で統一して表示する。
+// show()はプレビュー用に計算したgeohash文字列を返す(呼び出し側で投稿本文の
+// 組み立てに使い回せるように)。
+const PRECISION_PREVIEW_COLOR = "#8e24aa";
+
+export function createPrecisionPreviewLayer(map) {
+  const rect = L.rectangle(
+    [
+      [0, 0],
+      [0, 0],
+    ],
+    {
+      pane: "precisionPreviewPane",
+      color: PRECISION_PREVIEW_COLOR,
+      weight: 2,
+      fillColor: PRECISION_PREVIEW_COLOR,
+      fillOpacity: 0.15,
+      interactive: false,
+    },
+  );
+
+  return {
+    show(lat, lon, geohashLength) {
+      const hash = encodeGeohash(lat, lon, geohashLength);
+      const b = decodeGeohash(hash);
+      rect.setBounds([
+        [b.minLat, b.minLon],
+        [b.maxLat, b.maxLon],
+      ]);
+      if (!map.hasLayer(rect)) rect.addTo(map);
+      return hash;
+    },
+    hide() {
+      if (map.hasLayer(rect)) map.removeLayer(rect);
     },
   };
 }

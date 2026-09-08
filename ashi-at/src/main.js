@@ -1,5 +1,5 @@
-import { searchNotesByTag, normalizeInstanceUrl } from "./misskey.js";
-import { parseText } from "./parser.js";
+import { searchNotesByTag, normalizeInstanceUrl, buildShareUrl } from "./misskey.js";
+import { parseText, buildMinimalCandidate } from "./parser.js";
 import {
   createMap,
   addAshiatoGroup,
@@ -9,10 +9,12 @@ import {
   loadMunicipalityBoundaries,
   createCurrentLocationLayer,
   createAreaOverlay,
+  createPrecisionPreviewLayer,
   ashiatoColor,
 } from "./map.js";
 import {
   decodeGeohash,
+  encodeGeohash,
   geohashCellSizeMeters,
   isInsideGeohashCell,
 } from "./geohash.js";
@@ -20,6 +22,7 @@ import {
   buildPrefectureIndex,
   findPrefecturesInView,
 } from "./prefectureIndex.js";
+import { lookupMunicipality } from "./municipalityLookup.js";
 import {
   makeRecord,
   getCursor,
@@ -33,6 +36,11 @@ import {
   markAshiatoOpened,
   getSetting,
   putSetting,
+  makeDraft,
+  putDraft,
+  getDrafts,
+  deleteDraft,
+  updateDraftPrecision,
 } from "./cache.js";
 import L from "leaflet";
 
@@ -59,6 +67,12 @@ const MAX_GEOHASH_LENGTH = 7;
 const MIN_NOTE_AGE_MS = 60 * 60 * 1000; // 1時間
 const PENDING_PROMOTION_INTERVAL_MS = 60 * 1000; // 1分ごとに再チェック
 
+// 投稿機能: 精度「約150m」(Geohash7桁)の下書きは、プライバシー配慮のため
+// 作成からこの時間が経過するまで投稿できないようにする。
+const DRAFT_HIGH_PRECISION_DELAY_MS = 30 * 60 * 1000; // 30分
+
+const PRECISION_LABELS = { 5: "約4km", 6: "約1km", 7: "約150m" };
+
 function isSupportedGeohashLength(geohash) {
   return (
     geohash.length >= MIN_GEOHASH_LENGTH &&
@@ -77,6 +91,7 @@ function isOldEnough(noteCreatedAt) {
 const $ = (s) => document.querySelector(s),
   map = createMap("map"),
   areaOverlay = createAreaOverlay(map),
+  precisionPreview = createPrecisionPreviewLayer(map),
   statusToast = $("#statusToast"),
   statusText = $("#statusText"),
   statusCloseBtn = $("#statusClose"),
@@ -345,14 +360,14 @@ function formatDate(value) {
 function recordDatesText(record) {
   const posted = formatDate(record.noteCreatedAt) ?? "不明";
   const opened = formatDate(record.openedAt);
-  return opened ? `投稿日: ${posted} / 開封日: ${opened}` : `投稿日: ${posted}`;
+  return opened ? `投稿 ${posted}, 開封 ${opened}` : `投稿 ${posted}`;
 }
 
 // 「あつめたあしあと」一覧の見出しテキスト。開封済みのものは、Geohashの代わりに
 // 投稿者のusername(notes/search-by-tagのuser.username)を表示する。
 function unlockedListLabel(record) {
   const label = record.openedAt ? (record.username ?? "(不明なユーザー)") : record.geohash;
-  return `${label} — ${recordDatesText(record)}`;
+  return `@${label}\n${recordDatesText(record)}`;
 }
 
 // セルの見た目(円)を、現在のrecords件数・状態に合わせて作り直す。
@@ -420,12 +435,15 @@ function registerRecord(record) {
 // 自動的にセルへ昇格させる(ページを開きっぱなしでも、手動で「探す」し直す
 // 必要が無いように)。
 function promoteAgedRecords() {
+  let promoted = false;
   for (const [id, record] of pendingRecords) {
     if (isOldEnough(record.noteCreatedAt)) {
       pendingRecords.delete(id);
       addRecordToCell(record);
+      promoted = true;
     }
   }
+  if (promoted && gpsEnabled) checkCurrentPositionAgainstCells();
 }
 
 setInterval(promoteAgedRecords, PENDING_PROMOTION_INTERVAL_MS);
@@ -466,8 +484,8 @@ function refreshUnlockedList() {
     empty.className = "unlocked-list-empty";
     empty.textContent =
       unlocked.length === 0
-        ? "まだ発見したAshiatoはありません。"
-        : "未開封のAshiatoはありません。";
+        ? "まだ発見したあしあとありません。"
+        : "未開封のあしあとはありません。";
     unlockedList.append(empty);
     return;
   }
@@ -546,7 +564,7 @@ async function handleAshiatoClick(record, cell) {
   const openedLabel = record.openedAt ? "(開封済み)" : "";
 
   const wantsToOpen = await showConfirm(
-    `このあしあとを開封しますか？${openedLabel}\n\n投稿日: ${formatDate(record.noteCreatedAt) ?? "不明"}\n\n${sizeText}`,
+    `このあしあとを開封しますか？${openedLabel}\n\n投稿: ${formatDate(record.noteCreatedAt) ?? "不明"}\n\n${sizeText}`,
     { okLabel: "開封する" },
   );
   if (!wantsToOpen) return;
@@ -576,12 +594,20 @@ function updateButtons() {
 // --- 現在地(GPS)によるAshiatoのアンロック判定 -----------------------------
 
 const gpsToggleBtn = $("#toggleGps");
+const composeAshiatoBtn = $("#composeAshiato");
+
+// GPSトグルON中、直近で取得できた現在地。投稿UIを開くとき、既にこれが
+// あれば新たな位置情報取得を待たずに即座に投稿UIを表示できる。
+// GPSトグルOFFのときは常にnull(古い位置情報を使い回さないため)。
+let lastKnownPosition = null; // { lat, lon } | null
 
 // 起動時、そもそもGeolocation APIが無い端末なら見た目で分かるようにしておく
 if (!("geolocation" in navigator)) {
   gpsToggleBtn.classList.add("unavailable");
   gpsToggleBtn.title = "この端末では位置情報が使えません";
 }
+// GPSトグルは初期状態でOFFなので、投稿ボタンも初期状態は無効。
+composeAshiatoBtn.disabled = true;
 
 function setGpsEnabled(enabled) {
   if (enabled && !("geolocation" in navigator)) {
@@ -591,11 +617,14 @@ function setGpsEnabled(enabled) {
 
   gpsEnabled = enabled;
   gpsToggleBtn.setAttribute("aria-pressed", String(enabled));
+  // 投稿UIは現在地が前提の機能のため、GPSトグルOFF中は投稿ボタンも無効化する。
+  composeAshiatoBtn.disabled = !enabled;
 
   if (!enabled) {
     if (watchId !== null) navigator.geolocation.clearWatch(watchId);
     watchId = null;
     currentLocationLayer.hide();
+    lastKnownPosition = null; // OFFにしたら古い位置情報は使い回さない
     return;
   }
 
@@ -617,20 +646,18 @@ function handlePositionError(error) {
   if (error.code === 1) setGpsEnabled(false); // 権限拒否ならトグルもOFFに戻す
 }
 
-// 現在地が更新されるたびに呼ばれる。セルごとに1回だけ判定すればよい
-// (同じセル内のレコードはgeohashが同一なので判定結果も必ず同じ)。
-// 一度アンロックされたレコードは、現在地に関わらずそのまま(判定対象から外す)。
-// ashiatoCellsに載っているレコードは、そもそも投稿から1時間経過済み(または
-// 既に発見済み)のものだけなので、ここで改めて経過時間を見る必要はない
-// (1時間未満のものはpendingRecordsに留まり、ここには出てこない)。
-async function handlePositionUpdate(position) {
-  const { latitude, longitude, accuracy } = position.coords;
-  currentLocationLayer.show(latitude, longitude, accuracy);
+// 現在地(lastKnownPosition)と全セルを突き合わせて、未発見のものを判定する。
+// watchPositionのコールバック(位置そのものが変わった時)だけでなく、
+// GPS ON中に新しいAshiatoを読み込んだ(=セル自体が増減した)時にも呼ぶ必要がある
+// (「探す」「さらに探す」「最新を確認」、保留レコードの昇格など)。
+async function checkCurrentPositionAgainstCells() {
+  if (!lastKnownPosition) return;
+  const { lat, lon } = lastKnownPosition;
 
   for (const cell of ashiatoCells.values()) {
     const locked = [...cell.records.values()].filter((r) => !r.unlockedAt);
     if (locked.length === 0) continue;
-    if (!isInsideGeohashCell(latitude, longitude, cell.geohash)) continue;
+    if (!isInsideGeohashCell(lat, lon, cell.geohash)) continue;
 
     const unlockedAt = Date.now();
     for (const record of locked) {
@@ -642,6 +669,15 @@ async function handlePositionUpdate(position) {
   }
 }
 
+// 現在地が更新されるたびに呼ばれる。実際の判定はcheckCurrentPositionAgainstCellsに委譲する
+// (「探す」等でセル自体が増減したタイミングでも同じ判定を再利用できるようにするため)。
+async function handlePositionUpdate(position) {
+  const { latitude, longitude, accuracy } = position.coords;
+  lastKnownPosition = { lat: latitude, lon: longitude };
+  currentLocationLayer.show(latitude, longitude, accuracy);
+  await checkCurrentPositionAgainstCells();
+}
+
 // --- 開封可能なAshiatoリスト(ダイアログ) ----------------------------------
 
 const unlockedListDialog = $("#unlockedListDialog");
@@ -650,7 +686,7 @@ $("#unlockedListToggle").onclick = () => {
   closeMenu();
   unlockedListDialog.showModal();
 };
-$("#unlockedListClose").onclick = () => unlockedListDialog.close();
+$("#unlockedListCloseX").onclick = () => unlockedListDialog.close();
 
 $("#unopenedOnlyFilter").onchange = (e) => {
   showOnlyUnopened = e.target.checked;
@@ -813,6 +849,12 @@ async function ingestNotes(host, notes) {
 
   await putAshiatoRecords(records);
   for (const record of records) registerRecord(record);
+
+  // 「探す」「さらに探す」「最新を確認」でセルが新しく増えた場合、GPSが既にONで
+  // その場から動いていない(=watchPositionが発火しない)状況でも、現在地がその
+  // 新セル内に入っていれば即座に発見扱いにする。
+  if (gpsEnabled) await checkCurrentPositionAgainstCells();
+
   return records;
 }
 
@@ -974,6 +1016,290 @@ $("#instance").onkeydown = (e) => {
     fetchOlder();
   }
 };
+
+// --- 投稿機能(共有フォーム経由) ---------------------------------------
+// Ashi@自身は投稿APIを一切呼ばない(認証不要・静的Webページというコンセプト
+// のため)。Misskey Hubの共有フォーム中継(/share)を新規タブで開き、実際の
+// 投稿操作はユーザーが普段使っているMisskeyインスタンス側で行ってもらう。
+// そのためAshi@側では「投稿が実際に成功したか」を厳密には検知できないが、
+// 下書きについては「投稿する」ボタン押下(=確認ダイアログでOKして共有
+// フォームまで開いた)時点でその下書きを削除する(役目を終えたとみなす)。
+
+const composeDialog = $("#composeDialog");
+const composePrecisionNote = $("#composePrecisionNote");
+const draftListDialog = $("#draftListDialog");
+const draftList = $("#draftList");
+
+let composePosition = null; // { lat, lon } | null (投稿UI表示中のみ有効)
+
+function selectedPrecision() {
+  return Number(
+    document.querySelector('input[name="precision"]:checked').value,
+  );
+}
+
+// 精度「約150m」(7桁)は、作成から30分経つまで投稿不可
+// (下書きの精度をあとから変更しても、常にこの条件で都度再評価する)。
+function isDraftPostable(draft) {
+  if (draft.geohashLength !== 7) return true;
+  return Date.now() - draft.createdAt >= DRAFT_HIGH_PRECISION_DELAY_MS;
+}
+
+function updateComposeButtons() {
+  const isHighPrecision = selectedPrecision() === 7;
+  $("#composePost").disabled = isHighPrecision;
+  composePrecisionNote.hidden = !isHighPrecision;
+  if (isHighPrecision) {
+    composePrecisionNote.textContent =
+      "この精度はプライバシー保護のため直接投稿できません。いったん下書きに保存し、30分経過後に投稿してください。";
+  }
+}
+
+function updateComposePreview() {
+  if (!composePosition) return;
+  const hash = precisionPreview.show(
+    composePosition.lat,
+    composePosition.lon,
+    selectedPrecision(),
+  );
+  fitMapToComposeCell(hash);
+}
+
+// 投稿UI(下部シート)に隠れないよう、シートの高さぶんを下側の余白として
+// 確保した上で、選択中の精度のセル全体が見えるように地図をフィットさせる。
+// composeDialogがまだ開いていない(高さが取れない)場合は何もしない。
+function fitMapToComposeCell(hash) {
+  const sheetHeight = composeDialog.getBoundingClientRect().height;
+  if (sheetHeight === 0) return; // dialogがまだ表示されていない
+
+  const b = decodeGeohash(hash);
+  map.fitBounds(
+    [
+      [b.minLat, b.minLon],
+      [b.maxLat, b.maxLon],
+    ],
+    {
+      paddingTopLeft: [20, 20],
+      paddingBottomRight: [20, sheetHeight + 20],
+      maxZoom: 18,
+    },
+  );
+}
+
+document.querySelectorAll('input[name="precision"]').forEach((el) => {
+  el.onchange = () => {
+    updateComposePreview();
+    updateComposeButtons();
+  };
+});
+
+$("#composeAshiato").onclick = () => {
+  if (!gpsEnabled) return; // ボタン自体を無効化済みだが念のため
+
+  // GPSトグルが既にONで現在地が分かっていれば、新たに取得し直さず即座に開く。
+  if (lastKnownPosition) {
+    composePosition = { ...lastKnownPosition };
+    updateComposeButtons();
+    composeDialog.show(); // 非モーダル: マップ操作(ドラッグ/ズーム/エリアトグル等)を妨げない
+    updateComposePreview();
+    return;
+  }
+
+  // ONにした直後などでまだ現在地が届いていない場合だけ、改めて取得する。
+  setStatus("現在地を取得中…");
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      composePosition = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      updateComposeButtons();
+      // dialogを開いてから高さを測ってfitBoundsする必要があるため、
+      // show()を先に呼ぶ(まだ非表示の時点でupdateComposePreviewを
+      // 呼ぶとcomposeDialogの高さが0になりfitMapToComposeCellが動かない)。
+      composeDialog.show(); // 非モーダル
+      updateComposePreview();
+    },
+    handlePositionError,
+    { enableHighAccuracy: true, timeout: 15000 },
+  );
+};
+
+$("#composeCloseX").onclick = () => composeDialog.close();
+
+// 非モーダル(show())にしたことで、showModal()標準の「Escapeで閉じる」挙動が
+// 自動では効かなくなるため、他のダイアログとの一貫性のために手動で対応する。
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && composeDialog.open) composeDialog.close();
+});
+
+// 閉じ方(ボタン/Escapeいずれでも)に関わらず、プレビュー矩形は消す。
+composeDialog.addEventListener("close", () => precisionPreview.hide());
+
+// 投稿本文(Ashiato Syntax + #Ashiatoタグ)を組み立てる。
+// 自由記述コメントはAshi@側では持たない(共有フォーム側で書けるため)。
+function shareTextFor(lat, lon, geohashLength) {
+  const geohash = encodeGeohash(lat, lon, geohashLength);
+  return `${buildMinimalCandidate(geohash)} #Ashiato`;
+}
+
+$("#composePost").onclick = async () => {
+  if (!composePosition) return;
+
+  const wantsToPost = await showConfirm(
+    "現在地の情報を含んだ投稿フォームを開きます。内容は共有フォーム上で確認・編集できます。",
+    { okLabel: "共有フォームを開く" },
+  );
+  if (!wantsToPost) return;
+
+  const text = shareTextFor(composePosition.lat, composePosition.lon, selectedPrecision());
+  window.open(buildShareUrl(text), "_blank", "noopener");
+  composeDialog.close();
+};
+
+$("#composeSaveDraft").onclick = async () => {
+  if (!composePosition) return;
+
+  const { lat, lon } = composePosition;
+  const geohashLength = selectedPrecision();
+  // Nominatim等の外部APIは使わず、既存の市区町村境界GeoJsonから逆引きする。
+  // 見つからなければnull(下書きリスト側で「@緯度, 経度」表示にフォールバック)。
+  const municipalityLabel = await lookupMunicipality(prefectureIndex, lat, lon).catch(
+    () => null,
+  );
+
+  await putDraft(makeDraft(lat, lon, geohashLength, municipalityLabel));
+  composeDialog.close();
+  setStatus("下書きに保存しました。");
+};
+
+// --- 下書きリスト(ダイアログ) ------------------------------------------
+
+function formatDateTime(value) {
+  return new Date(value).toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+async function refreshDraftList() {
+  const drafts = await getDrafts();
+  draftList.replaceChildren();
+
+  if (drafts.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "unlocked-list-empty";
+    empty.textContent = "下書きはありません。";
+    draftList.append(empty);
+    return;
+  }
+
+  for (const draft of drafts) {
+    const li = document.createElement("li");
+
+    const meta = document.createElement("p");
+    meta.className = "draft-meta";
+    const place =
+      draft.municipalityLabel ?? `@${draft.lat.toFixed(4)}, ${draft.lon.toFixed(4)}`;
+    meta.textContent = `${formatDateTime(draft.createdAt)} — ${place}`;
+
+    // 精度はあとから変更できる(位置・作成時刻はそのまま)。
+    const precisionSelect = document.createElement("select");
+    for (const [value, label] of Object.entries(PRECISION_LABELS)) {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = label;
+      opt.selected = String(draft.geohashLength) === value;
+      precisionSelect.append(opt);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "draft-actions";
+
+    const postBtn = document.createElement("button");
+    postBtn.type = "button";
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "secondary";
+    deleteBtn.textContent = "削除";
+
+    // 残り時間は「下書きリストを開いた(=このリストを描画した)タイミング」で
+    // 計算する。ダイアログを開いたままの秒単位カウントダウンはしない
+    // (open中は既存のsetIntervalで1分ごとに再描画されるので、その都度更新される)。
+    function renderPostButton() {
+      const postable = isDraftPostable(draft);
+      postBtn.disabled = !postable;
+      if (postable) {
+        postBtn.textContent = "投稿する";
+      } else {
+        const remainingMs =
+          DRAFT_HIGH_PRECISION_DELAY_MS - (Date.now() - draft.createdAt);
+        const remainingMin = Math.max(1, Math.ceil(remainingMs / 60000));
+        postBtn.textContent = `投稿できません(あと${remainingMin}分)`;
+      }
+    }
+    renderPostButton();
+
+    precisionSelect.onchange = async () => {
+      draft.geohashLength = Number(precisionSelect.value);
+      await updateDraftPrecision(draft.id, draft.geohashLength);
+      renderPostButton();
+    };
+
+    // 投稿本体と同じ確認ダイアログを経由する。OKで共有フォームを開いたら、
+    // この下書きは役目を終えたものとして削除する(投稿ボタンを押した=
+    // 少なくとも共有フォームまでは進んだ、という前提。投稿が実際に成功
+    // したかどうかまではAshi@側では検知できない)。
+    postBtn.onclick = async () => {
+      const wantsToPost = await showConfirm(
+        "現在地の情報を含んだ投稿フォームを開きます。内容は共有フォーム上で確認・編集できます。",
+        { okLabel: "共有フォームを開く" },
+      );
+      if (!wantsToPost) return;
+
+      const text = shareTextFor(draft.lat, draft.lon, draft.geohashLength);
+      window.open(buildShareUrl(text), "_blank", "noopener");
+
+      await deleteDraft(draft.id);
+      refreshDraftList();
+    };
+
+    deleteBtn.onclick = async () => {
+      const wantsToDelete = await showConfirm("この下書きを削除しますか？", {
+        okLabel: "削除する",
+      });
+      if (!wantsToDelete) return;
+      await deleteDraft(draft.id);
+      refreshDraftList();
+    };
+
+    actions.append(postBtn, deleteBtn);
+    li.append(meta, precisionSelect, actions);
+    draftList.append(li);
+  }
+}
+
+// 30分経過による投稿可否の変化を、リストを開いたまま待っていても反映されるように
+setInterval(() => {
+  if (draftListDialog.open) refreshDraftList();
+}, 60 * 1000);
+
+$("#draftListToggle").onclick = () => {
+  closeMenu();
+  refreshDraftList();
+  draftListDialog.showModal();
+};
+$("#draftListCloseX").onclick = () => draftListDialog.close();
+
+draftListDialog.addEventListener("click", (e) => {
+  const rect = draftListDialog.getBoundingClientRect();
+  const inside =
+    rect.top <= e.clientY &&
+    e.clientY <= rect.top + rect.height &&
+    rect.left <= e.clientX &&
+    e.clientX <= rect.left + rect.width;
+  if (!inside) draftListDialog.close();
+});
 
 // --- スプラッシュ画面 -------------------------------------------------
 // ヘッダーから「Ashi@」「どこにいた？」を外した代わりに、起動直後だけ

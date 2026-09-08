@@ -193,6 +193,26 @@ function canonicalize(m) {
 }
 
 
+// 投稿機能用: geohash1つだけを持つ最小限のAshiato Syntax文字列を組み立てる。
+// 時間条件フィールド(d/w/t/o/tz/z)は「まずは最低限から」の方針でまだ未対応。
+export function buildMinimalCandidate(geohash) {
+  return canonicalize({
+    version: 1,
+    contextId: null,
+    geohash,
+    utcOffsetMinutes: 0,
+    timezoneIndex: null,
+    startUnixMinute: null,
+    endUnixMinute: null,
+    dates: null,
+    weekdays: null,
+    timeRange: null,
+    overnight: false,
+    extensions: {},
+  });
+}
+
+
 export function parseText(text) {
   return extractCandidates(text)
     .map(parseCandidate)

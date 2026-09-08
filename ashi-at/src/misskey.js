@@ -27,6 +27,21 @@ export async function apiRequest(instance, endpoint, body = {}) {
   return res.json();
 }
 
+const SHARE_HUB_ORIGIN = "https://misskey-hub.net";
+
+// Misskey Hubの共有フォーム中継(/share)へのURLを組み立てる。
+// これを使うことで、Ashi@自身は投稿先インスタンス・認証トークンを一切
+// 意識しなくてよい(ユーザーが既にログイン済みの自分のインスタンスへ、
+// Misskey Hub側が誘導してくれる)。
+export function buildShareUrl(text) {
+  const params = new URLSearchParams({
+    text,
+    visibility: "public",
+    localOnly: "0",
+  });
+  return `${SHARE_HUB_ORIGIN}/share/?${params.toString()}`;
+}
+
 /**
  * @param {string} instance
  * @param {string} tag

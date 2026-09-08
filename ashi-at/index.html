@@ -44,6 +44,13 @@
                                 👣あつめたあしあと
                                 <span id="unlockedBadge" class="badge-dot" hidden></span>
                             </button>
+                            <button
+                                id="draftListToggle"
+                                type="button"
+                                aria-haspopup="dialog"
+                            >
+                                📝下書き
+                            </button>
                             <button id="changeInstance" type="button">
                                 インスタンスを変更
                             </button>
@@ -102,9 +109,25 @@
                     ></span>
                     <span class="gps-toggle-label">エリア</span>
                 </button>
+                <button
+                    id="composeAshiato"
+                    type="button"
+                    class="compose-fab"
+                    aria-label="あしあとを投稿"
+                >
+                    👣
+                </button>
             </div>
         </main>
         <dialog id="unlockedListDialog">
+            <button
+                type="button"
+                class="dialog-close-x"
+                id="unlockedListCloseX"
+                aria-label="閉じる"
+            >
+                ×
+            </button>
             <h2>あつめたあしあと</h2>
             <ul id="unlockedList" class="unlocked-list"></ul>
             <div class="unlocked-list-footer">
@@ -112,8 +135,57 @@
                     <input type="checkbox" id="unopenedOnlyFilter" />
                     未開封のみ表示
                 </label>
-                <button id="unlockedListClose" type="button">閉じる</button>
             </div>
+        </dialog>
+        <dialog id="composeDialog">
+            <button
+                type="button"
+                class="dialog-close-x"
+                id="composeCloseX"
+                aria-label="閉じる"
+            >
+                ×
+            </button>
+            <h2>あしあとを投稿</h2>
+            <fieldset class="precision-fieldset">
+                <legend>判定エリアの広さ</legend>
+                <label
+                    ><input
+                        type="radio"
+                        name="precision"
+                        value="5"
+                        checked
+                    />
+                    約4km</label
+                >
+                <label
+                    ><input type="radio" name="precision" value="6" />
+                    約1km</label
+                >
+                <label
+                    ><input type="radio" name="precision" value="7" />
+                    約150m</label
+                >
+            </fieldset>
+            <p id="composePrecisionNote" class="dialog-message" hidden></p>
+            <div class="dialog-actions">
+                <button id="composeSaveDraft" type="button" class="secondary">
+                    下書きに保存
+                </button>
+                <button id="composePost" type="button">投稿する</button>
+            </div>
+        </dialog>
+        <dialog id="draftListDialog">
+            <button
+                type="button"
+                class="dialog-close-x"
+                id="draftListCloseX"
+                aria-label="閉じる"
+            >
+                ×
+            </button>
+            <h2>下書き</h2>
+            <ul id="draftList" class="draft-list"></ul>
         </dialog>
         <dialog id="instanceDialog">
             <h2>Misskeyインスタンス</h2>
@@ -136,8 +208,7 @@
                 Ashi@は、Misskeyの「#Ashiato」投稿に埋め込まれた位置・時間情報(Ashiato Syntax)をもとに、実際にその場所へ行くと開封できるクライアントです。
             </p>
             <p>
-                投稿本文や投稿者情報を保存することはなく、位置判定に必要な最小限の情報だけをブラウザ内に14日間だけキャッシュします。
-                開封実績や、開封可能なあしあとは、ブラウザ内に180日間キャッシュします。
+                ここの文章は公開直前に考える
             </p>
             <button id="aboutClose" type="button">閉じる</button>
         </dialog>

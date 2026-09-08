@@ -1,5 +1,39 @@
 const ALPHABET = "0123456789bcdefghjkmnpqrstuvwxyz";
 
+// 緯度経度からGeohashを生成する。decodeGeohashの逆演算。
+// precision桁のGeohash文字列を返す(Ashi@で使うのは5/6/7のいずれか)。
+export function encodeGeohash(lat, lon, precision) {
+  let latRange = [-90, 90],
+    lonRange = [-180, 180],
+    even = true,
+    bit = 0,
+    ch = 0,
+    hash = "";
+
+  while (hash.length < precision) {
+    const range = even ? lonRange : latRange;
+    const value = even ? lon : lat;
+    const mid = (range[0] + range[1]) / 2;
+
+    if (value >= mid) {
+      ch |= 1 << (4 - bit);
+      range[0] = mid;
+    } else {
+      range[1] = mid;
+    }
+
+    even = !even;
+    if (bit < 4) {
+      bit++;
+    } else {
+      hash += ALPHABET[ch];
+      bit = 0;
+      ch = 0;
+    }
+  }
+  return hash;
+}
+
 export function decodeGeohash(hash) {
   if (!/^[0-9bcdefghjkmnpqrstuvwxyz]{1,12}$/.test(hash))
     throw new Error(`Invalid Geohash: ${hash}`);

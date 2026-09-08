@@ -182,7 +182,6 @@ button.secondary {
 }
 
 dialog#aboutDialog,
-dialog#unlockedListDialog,
 dialog#instanceDialog,
 dialog#infoDialog,
 dialog#confirmDialog {
@@ -192,14 +191,12 @@ dialog#confirmDialog {
     width: min(90vw, 420px);
 }
 dialog#aboutDialog::backdrop,
-dialog#unlockedListDialog::backdrop,
 dialog#instanceDialog::backdrop,
 dialog#infoDialog::backdrop,
 dialog#confirmDialog::backdrop {
     background: rgba(0, 0, 0, 0.4);
 }
 dialog#aboutDialog h2,
-dialog#unlockedListDialog h2,
 dialog#instanceDialog h2 {
     margin-top: 0;
 }
@@ -231,7 +228,7 @@ dialog#instanceDialog label {
 .unlocked-list-footer {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start; /* 元は flex-end(閉じるボタンとの並び用だった) */
     gap: 16px;
     margin-top: 12px;
 }
@@ -258,13 +255,14 @@ dialog#instanceDialog label {
     padding: 0;
     display: grid;
     gap: 8px;
-    max-height: 50vh;
+    max-height: 65vh; /* 元は50vh。下部シート化に合わせて表示件数を増やす */
     overflow-y: auto;
 }
 .unlocked-list button {
     width: 100%;
     text-align: left;
     overflow-wrap: anywhere;
+    white-space: pre-line;
 }
 .unlocked-list li.opened button {
     color: #888;
@@ -375,6 +373,158 @@ dialog#instanceDialog label {
 .splash.hide {
     opacity: 0;
     pointer-events: none;
+}
+
+.compose-fab {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 20;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    font-size: 1.4rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+.compose-fab:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.precision-fieldset {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin: 0 0 12px;
+    padding: 10px 12px;
+}
+.precision-fieldset legend {
+    font-size: 0.8rem;
+    color: #666;
+    padding: 0 4px;
+}
+.precision-fieldset label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+}
+
+/* 投稿UI・下書き一覧・あつめたあしあと一覧は、画面下部に貼り付く「下部シート」形式にする。
+   地図の大部分が投稿UI等の裏に隠れてしまわないようにするため。
+   unlockedList/draftListは投稿UIより表示件数を増やしたいので、投稿UIより高さの上限を上げている。 */
+dialog#composeDialog,
+dialog#unlockedListDialog,
+dialog#draftListDialog {
+    position: fixed; /* 子要素の.dialog-close-xの基準にもなる */
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow-y: auto;
+    border: none;
+    border-radius: 16px 16px 0 0;
+    padding: 20px;
+    box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.2);
+}
+dialog#unlockedListDialog::backdrop,
+dialog#draftListDialog::backdrop {
+    background: rgba(0, 0, 0, 0.4);
+}
+dialog#composeDialog h2,
+dialog#unlockedListDialog h2,
+dialog#draftListDialog h2 {
+    margin-top: 0;
+    padding-right: 36px; /* 右上の.dialog-close-xと重ならないように */
+}
+
+/* あしあとを投稿UIは、マップ操作(ドラッグ・ズーム・「エリア」トグル等)を
+   ブロックしないよう非モーダル(show())で開く方針のため、
+   showModal()専用のトップレイヤーには乗らない。通常のスタッキング文脈で
+   マップより確実に前面へ来るよう明示的にz-indexを指定する。 */
+dialog#composeDialog {
+    z-index: 500;
+    max-height: 70vh;
+}
+dialog#unlockedListDialog,
+dialog#draftListDialog {
+    max-height: 88vh;
+}
+
+/* PCなど広い画面では、画面幅いっぱいに伸びる下部シートは間延びして見えるため、
+   幅を制限してモーダル的に中央へ寄せる(下部に貼り付いたままなのは維持)。 */
+@media (min-width: 700px) {
+    dialog#composeDialog,
+    dialog#unlockedListDialog,
+    dialog#draftListDialog {
+        left: 50%;
+        right: auto;
+        width: 90%;
+        max-width: 480px;
+        transform: translateX(-50%);
+        border-radius: 16px 16px 0 0;
+    }
+}
+
+/* 下部シート(投稿UI/あつめたあしあと/下書き)共通の右上×閉じるボタン。
+   以前あった大きな「閉じる」「キャンセル」ボタンの代わり。 */
+.dialog-close-x {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    min-height: auto;
+    min-width: auto;
+    width: 32px;
+    height: 32px;
+    padding: 0 0 2px; /* ×の字形が視覚的にやや下寄りに見えるための微調整 */
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.06);
+    box-shadow: none;
+    font-size: 1.2rem;
+    line-height: 1;
+    color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.dialog-close-x:hover {
+    background: rgba(0, 0, 0, 0.12);
+}
+
+.draft-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+    max-height: 68vh; /* 元は55vh。下部シート化に合わせて表示件数を増やす */
+    overflow-y: auto;
+}
+.draft-list li {
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+}
+.draft-meta {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #555;
+}
+.draft-actions {
+    display: flex;
+    gap: 8px;
+}
+.draft-actions button {
+    flex: 1;
 }
 
 .graticule-label span {

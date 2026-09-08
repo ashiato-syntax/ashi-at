@@ -1,6 +1,6 @@
 // ローカルキャッシュ(IndexedDB)。
 const DB_NAME = "ashi-at";
-const DB_VERSION = 2;
+const DB_VERSION = 3; // 3: draftsストア追加(投稿機能の下書き保存用)
 
 export const CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14日(通常のキャッシュ)
 export const UNLOCKED_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180日(発見済みAshiato)
@@ -36,6 +36,13 @@ function openDb() {
       // host/tagには紐付かないアプリ全体の設定なので、単純な key-value。
       if (!db.objectStoreNames.contains("settings")) {
         db.createObjectStore("settings", { keyPath: "key" });
+      }
+
+      // 投稿機能の下書き。まだ投稿していないAshiatoの位置・精度をここに置く。
+      // ashiatoCache(受信したAshiatoのキャッシュ)とは別物であり、TTLでは
+      // 消えない(ユーザーが明示的に削除するまで残る)。
+      if (!db.objectStoreNames.contains("drafts")) {
+        db.createObjectStore("drafts", { keyPath: "id" });
       }
     };
 
@@ -301,6 +308,100 @@ export async function clearCollectedAshiato() {
     });
   } catch (error) {
     console.warn("cache: clearCollectedAshiato failed:", error);
+  }
+}
+
+// --- 投稿機能の下書き ---------------------------------------------------
+// 「認証不要・共有フォーム経由で投稿」という方針のため、下書きはあくまで
+// 「あとで共有フォームを開くための材料(緯度経度・精度)」を保持するだけで、
+// 投稿が実際に成功したかどうかはAshi@側では検知できない
+// (削除はユーザーが手動で行う想定)。
+
+/**
+ * @param {number} lat
+ * @param {number} lon
+ * @param {5|6|7} geohashLength 精度(あとから変更可能)
+ * @param {string|null} municipalityLabel 下書き作成時に1回だけ確定させる場所ラベル
+ *   (municipalityLookup.jsで取得。見つからなければnull=呼び出し側で
+ *   「@緯度, 経度」表示にフォールバックする)
+ */
+export function makeDraft(lat, lon, geohashLength, municipalityLabel) {
+  return {
+    id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: Date.now(), // 精度をあとから変更しても更新しない(30分ルールの起点)
+    lat,
+    lon,
+    geohashLength,
+    municipalityLabel,
+  };
+}
+
+export async function putDraft(draft) {
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const t = db.transaction("drafts", "readwrite");
+      t.objectStore("drafts").put(draft);
+      t.oncomplete = () => resolve();
+      t.onerror = () => reject(t.error);
+    });
+  } catch (error) {
+    console.warn("cache: putDraft failed:", error);
+  }
+}
+
+/** 新しい順(作成が新しいものが先)で下書き一覧を返す。 */
+export async function getDrafts() {
+  try {
+    const db = await openDb();
+    const all = await new Promise((resolve, reject) => {
+      const t = db.transaction("drafts", "readonly");
+      const req = t.objectStore("drafts").getAll();
+      req.onsuccess = () => resolve(req.result ?? []);
+      req.onerror = () => reject(req.error);
+    });
+    return all.sort((a, b) => b.createdAt - a.createdAt);
+  } catch (error) {
+    console.warn("cache: getDrafts failed:", error);
+    return [];
+  }
+}
+
+export async function deleteDraft(id) {
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const t = db.transaction("drafts", "readwrite");
+      t.objectStore("drafts").delete(id);
+      t.oncomplete = () => resolve();
+      t.onerror = () => reject(t.error);
+    });
+  } catch (error) {
+    console.warn(`cache: deleteDraft(${id}) failed:`, error);
+  }
+}
+
+/**
+ * 下書きの精度だけを後から変更する(get→マージ→put)。
+ * createdAtは変更しない(30分ルールの起点を精度変更で動かさないため)。
+ */
+export async function updateDraftPrecision(id, geohashLength) {
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const t = db.transaction("drafts", "readwrite");
+      const store = t.objectStore("drafts");
+      const getReq = store.get(id);
+      getReq.onsuccess = () => {
+        const existing = getReq.result;
+        if (!existing) return; // 削除済み等。黙って無視する
+        store.put({ ...existing, geohashLength });
+      };
+      t.oncomplete = () => resolve();
+      t.onerror = () => reject(t.error);
+    });
+  } catch (error) {
+    console.warn(`cache: updateDraftPrecision(${id}) failed:`, error);
   }
 }
 
