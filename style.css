@@ -27,7 +27,8 @@ body {
     overflow-y: auto; /* controlsが極端に高くなった場合の保険 */
 }
 input,
-button {
+button,
+select {
     min-height: 42px;
     border: 1px solid #bbb;
     border-radius: 8px;
@@ -38,15 +39,49 @@ button {
 button {
     cursor: pointer;
 }
-button.secondary {
-    background: #fff;
-    color: #666;
-    border-color: #ddd;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
+/* ネイティブの<select>の見た目(ブラウザデフォルトの矢印等)を、他の入力欄と
+   揃った見た目にする。矢印はブラウザ組み込みのものを消し、シェブロンをCSSで描画する。 */
+select {
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    padding-right: 30px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 16px;
 }
-button.secondary:disabled {
+select:focus-visible {
+    outline: 2px solid #1a73e8;
+    outline-offset: 1px;
+}
+button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+}
+button.secondary {
+    background: #fff;
+    color: #333;
+    border-color: #999;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
+}
+/* 「する」系の主操作(投稿する/適用 等)。塗りつぶさず枠線+文字色だけで強調する。 */
+button.btn-primary {
+    background: #fff;
+    color: #1a73e8;
+    border-color: #1a73e8;
+}
+button.btn-primary:hover {
+    background: #eaf1fd;
+}
+/* 削除等、破壊的な操作の決定ボタン。 */
+button.btn-danger {
+    background: #fff;
+    color: #b00020;
+    border-color: #b00020;
+}
+button.btn-danger:hover {
+    background: #fdecea;
 }
 
 .status-toast {
@@ -80,10 +115,15 @@ button.secondary:disabled {
     border: none;
     background: none;
     padding: 0 4px;
-    font-size: 1rem;
-    line-height: 1;
     color: inherit;
     box-shadow: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.status-close .icon {
+    width: 16px;
+    height: 16px;
 }
 
 /* GPS ON中、位置精度が低い(半径100m超=直径200m超)ときに画面中央へ帯状に出す警告。
@@ -150,24 +190,28 @@ button.secondary:disabled {
     flex: none;
 }
 .menu-fab {
-    position: relative; /* badge-dotの基準 */
+    position: relative;
     flex: none;
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    font-size: 1.4rem;
-    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
-.badge-dot {
-    position: absolute;
-    top: -1px;
-    right: -1px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #e0472c;
-    border: 1.5px solid #f5f5f5;
+.menu-fab-icon .icon {
+    width: 26px;
+    height: 26px;
+}
+
+/* アイコン(lucide-static由来のインラインSVG)共通。stroke="currentColor"のため
+   ボタンのcolorプロパティで色が決まる。width/height属性はicons.ts側で除去済み。 */
+.icon {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    display: block;
 }
 /* menu-fabがボタン下部にあるため、ドロップダウンは上向きに開く */
 .menu-dropdown {
@@ -188,28 +232,31 @@ button.secondary:disabled {
     display: none;
 }
 .menu-dropdown button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     min-height: 44px;
     border: none;
     border-radius: 0;
     text-align: left;
     background: #fff;
+    color: #333; /* .iconのstroke=currentColorに使う */
 }
 .menu-dropdown button:hover {
     background: #f5f5f5;
 }
-.menu-dropdown button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+.menu-dropdown button.danger {
+    color: #b00020; /* .iconのstroke=currentColorにも効く */
 }
-.menu-dropdown button .badge-dot {
-    position: static;
-    display: inline-block;
-    margin-left: 6px;
-    vertical-align: middle;
-    border: none;
+.menu-dropdown button.danger:hover {
+    background: #fdecea;
 }
-.menu-dropdown button .badge-dot[hidden] {
-    display: none;
+.menu-item-icon {
+    display: inline-flex;
+    flex: none;
+}
+.menu-item-label {
+    flex: 1;
 }
 .menu-current-host {
     margin: 0;
@@ -222,7 +269,8 @@ button.secondary:disabled {
 dialog#aboutDialog,
 dialog#instanceDialog,
 dialog#infoDialog,
-dialog#confirmDialog {
+dialog#confirmDialog,
+dialog#ashiatoActionDialog {
     border: none;
     border-radius: 12px;
     padding: 20px;
@@ -231,12 +279,82 @@ dialog#confirmDialog {
 dialog#aboutDialog::backdrop,
 dialog#instanceDialog::backdrop,
 dialog#infoDialog::backdrop,
-dialog#confirmDialog::backdrop {
+dialog#confirmDialog::backdrop,
+dialog#ashiatoActionDialog::backdrop {
     background: rgba(0, 0, 0, 0.4);
 }
 dialog#aboutDialog h2,
 dialog#instanceDialog h2 {
     margin-top: 0;
+}
+/* 「情報」ダイアログ(ashiatoActionDialog)。見出しの代わりに、情報行+詳細+
+   アクション一覧(マップで表示する/SNSを開く/削除する)を1つのアクションシートに
+   まとめる。区切り線で仕切った縦積み形式で、各行の右端にアイコンを揃える。 */
+.action-sheet {
+    display: grid;
+}
+.action-sheet > *:not(:first-child) {
+    border-top: 1px solid #eee;
+}
+.action-sheet-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 4px;
+}
+button.action-sheet-row {
+    width: 100%;
+    border: none;
+    border-radius: 0;
+    background: #fff;
+    text-align: left;
+    font: inherit;
+}
+button.action-sheet-row:hover {
+    background: #f5f5f5;
+}
+.action-sheet-row.danger {
+    color: #b00020;
+}
+button.action-sheet-row.danger:hover {
+    background: #fdecea;
+}
+.action-sheet-heading {
+    font-weight: 600;
+    color: #333;
+    padding-right: 36px; /* 右上の.dialog-close-xと重ならないように */
+}
+.action-sheet-icon {
+    flex: none;
+    display: inline-flex;
+}
+.action-sheet-icon .icon {
+    width: 18px;
+    height: 18px;
+}
+.action-sheet-info {
+    padding-bottom: 6px;
+}
+/* 「投稿者/投稿/発見/当たり判定エリア」の詳細。ラベル列+値列の2カラムで、
+   コロン(：)なしでも読み取りやすいように揃える。 */
+.ashiato-info-details {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 12px;
+    row-gap: 6px;
+    margin: 0;
+    padding: 2px 4px 0;
+    font-size: 0.85rem;
+}
+.ashiato-info-details dt {
+    color: #888;
+    white-space: nowrap;
+}
+.ashiato-info-details dd {
+    margin: 0;
+    color: #222;
+    overflow-wrap: anywhere;
 }
 dialog#aboutDialog p {
     line-height: 1.6;
@@ -277,61 +395,29 @@ dialog#instanceDialog label {
 }
 .unlocked-list-sort select {
     min-height: 32px;
-    padding: 4px 8px;
+    padding: 4px 26px 4px 8px;
+    background-position: right 6px center;
+    background-size: 14px;
     font-size: 0.85rem;
 }
 
-.unlocked-list-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between; /* 左に未開封フィルター、右に削除ボタン */
-    gap: 16px;
-    margin-top: 12px;
-}
-.unlocked-list-filter {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin: 0;
-    font-size: 0.85rem;
-    color: #444;
-    cursor: pointer;
-    white-space: nowrap;
-}
-.unlocked-list-filter input {
-    min-height: auto;
-    width: 16px;
-    height: 16px;
-    padding: 0;
-    margin: 0;
-}
-#deleteSelectedUnlocked {
-    flex: none;
-    font-size: 0.85rem;
-    padding: 6px 10px;
-    min-height: 36px;
-}
 .unlocked-list {
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 8px;
     max-height: 65vh; /* 元は50vh。下部シート化に合わせて表示件数を増やす */
     overflow-y: auto;
 }
+/* 投稿と投稿の境目が分かりづらかったため、行ごとに区切り線+余白を入れる
+   (SNSのタイムライン表示に近い見た目)。最後の行だけ区切り線を省く。 */
 .unlocked-list li {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
 }
-.unlocked-list-checkbox {
-    min-height: auto;
-    width: 18px;
-    height: 18px;
-    padding: 0;
-    margin: 0;
-    flex: none;
+.unlocked-list li:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
 }
 .unlocked-list-empty {
     color: #666;
@@ -339,50 +425,67 @@ dialog#instanceDialog label {
 }
 
 /* あしあと1件分の行(あつめたあしあと一覧・マップ同一位置ポップアップ共通)。
-   内容表示(非ボタン)+「開封」ボタン(+一覧のみ「詳細」ボタン)+未開封バッジで構成する。
-   開封状態による色分けは行わず、未開封のものだけ右上に「未開封」バッジを出す。 */
+   ヘッダー(投稿者+投稿日時)→本文プレビュー→フッター(発見日時+詳細/開封ボタン)の
+   3段構成(SNSのタイムライン表示に近いレイアウト)。
+   「開封/未開封」の概念は廃止したため、色分け・バッジ等の状態表示は一切行わない。 */
 .ashiato-row {
-    position: relative;
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    width: 100%;
-    padding-right: 44px; /* 右上の未開封バッジと重ならないように */
-}
-.ashiato-row-content {
-    flex: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-    white-space: pre-line;
-    text-align: left;
-}
-.ashiato-row-actions {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    flex: none;
+    width: 100%;
+    overflow-wrap: anywhere;
+    text-align: left;
 }
-.ashiato-open-btn,
-.ashiato-info-btn {
-    min-height: 34px;
-    padding: 4px 10px;
-    font-size: 0.85rem;
+.ashiato-row-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 8px;
+    row-gap: 2px;
 }
-.ashiato-info-btn {
-    min-width: 34px;
-    padding: 4px;
-    text-align: center;
-}
-.ashiato-unopened-badge {
-    position: absolute;
-    top: 0;
-    right: 0;
-    font-size: 0.7rem;
+.ashiato-display-name {
     font-weight: 600;
-    color: #e07b00;
 }
-.ashiato-unopened-badge[hidden] {
-    display: none;
+/* 「@アカウント名@インスタンス」部分。表示名より一回り小さく薄い色にする(要望対応)。 */
+.ashiato-handle {
+    font-size: 0.8rem;
+    color: #888;
+}
+.ashiato-posted-at {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: #888;
+    white-space: nowrap;
+}
+.ashiato-row-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.ashiato-discovered {
+    font-size: 0.8rem;
+    color: #666;
+}
+.ashiato-more-btn {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    min-width: 36px;
+    padding: 3px;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    color: #666;
+}
+.ashiato-more-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+.ashiato-more-btn .icon {
+    width: 16px;
+    height: 16px;
 }
 
 .map-wrap {
@@ -450,8 +553,19 @@ dialog#instanceDialog label {
 
 .ashiato-popup-list {
     display: grid;
-    gap: 6px;
     max-width: 300px; /* 元は220px。あしあとリストの横幅が狭すぎたため拡大 */
+}
+/* あつめたあしあと一覧(.unlocked-list li)と同様、行の境目に区切り線を入れる。 */
+.ashiato-popup-list > .ashiato-row {
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+.ashiato-popup-list > .ashiato-row:first-child {
+    padding-top: 0;
+}
+.ashiato-popup-list > .ashiato-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
 }
 
 /* あつめたあしあと一覧・ポップアップの本文プレビュー内に表示するカスタム絵文字。
@@ -472,6 +586,7 @@ dialog#instanceDialog label {
     max-height: 4.5em; /* 約3行分(line-height 1.5 × 3) */
     overflow: hidden;
     line-height: 1.5;
+    white-space: pre-line; /* 投稿本文中の改行を保持する */
 }
 .mfm-preview-hint {
     display: block;
@@ -597,17 +712,19 @@ dialog#draftListDialog {
     min-width: auto;
     width: 32px;
     height: 32px;
-    padding: 0 0 2px; /* ×の字形が視覚的にやや下寄りに見えるための微調整 */
+    padding: 0;
     border: none;
     border-radius: 50%;
     background: rgba(0, 0, 0, 0.06);
     box-shadow: none;
-    font-size: 1.2rem;
-    line-height: 1;
     color: #666;
     display: flex;
     align-items: center;
     justify-content: center;
+}
+.dialog-close-x .icon {
+    width: 18px;
+    height: 18px;
 }
 .dialog-close-x:hover {
     background: rgba(0, 0, 0, 0.12);

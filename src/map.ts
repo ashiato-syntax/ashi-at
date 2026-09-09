@@ -1,7 +1,7 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { decodeGeohash, encodeGeohash } from "./geohash.js";
-import type { AshiatoCell, AshiatoGroupHandle, AshiatoCellState } from "./types.js";
+import type { AshiatoCell, AshiatoGroupHandle } from "./types.js";
 import type { FeatureCollection, Geometry } from "geojson";
 
 // NOTE: ここでは意図的に L.tileLayer(...) を追加していない
@@ -21,19 +21,14 @@ const ASHIATO_COLORS_BY_LENGTH: Record<number, string> = {
   6: "#fbc02d",
   7: "#e53935",
 };
-// セル内の全レコードが開封済みになったときだけ、桁数に関わらずグレーにする
-// (main.js の computeCellState を参照)。
-const OPENED_COLOR = "#888";
-
-function colorFor(state: AshiatoCellState, geohashLength: number): string {
-  if (state === "opened") return OPENED_COLOR;
+function colorFor(geohashLength: number): string {
   return ASHIATO_COLORS_BY_LENGTH[geohashLength] ?? ASHIATO_COLORS_BY_LENGTH[7];
 }
 
 // main.js側(エリアオーバーレイ用にcell.colorを覚えておく処理など)からも
 // 同じ色計算を使えるようにエクスポートしたもの。
-export function ashiatoColor(state: AshiatoCellState, geohashLength: number): string {
-  return colorFor(state, geohashLength);
+export function ashiatoColor(geohashLength: number): string {
+  return colorFor(geohashLength);
 }
 
 export function createMap(el: string | HTMLElement): L.Map {
@@ -297,8 +292,7 @@ export function addAshiatoGroup(
   const geohashLength = geohash.length;
   const pane = `ashiatoPane${geohashLength}`;
   const hitPane = `ashiatoHitPane${geohashLength}`;
-  // 初期色。addAshiatoGroup直後に呼び出し側がsetAshiatoStateで確定させる想定。
-  const color = colorFor("unlocked", geohashLength);
+  const color = colorFor(geohashLength);
 
   const outer = L.circleMarker(latlng, {
     color,
@@ -348,16 +342,6 @@ export function removeAshiatoGroup(
   map.removeLayer(hitArea);
 }
 
-// state: "unlocked" | "opened"
-// (ロック中=未発見のセルは地図に一切表示しない方針のため、"locked"状態は存在しない)
-export function setAshiatoState(
-  { visualLayers, hitArea, geohashLength }: AshiatoGroupHandle,
-  state: AshiatoCellState,
-): void {
-  const color = colorFor(state, geohashLength);
-  for (const v of visualLayers) v.setStyle({ color });
-  hitArea.setStyle({ color, fillOpacity: 0.5 });
-}
 
 export interface AreaOverlay {
   setEnabled(value: boolean): void;

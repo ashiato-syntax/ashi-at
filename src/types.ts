@@ -17,7 +17,6 @@ export interface AshiatoRecord {
   emojiHost: string | null;
   cachedAt: number;
   unlockedAt: number | null;
-  openedAt: number | null;
 }
 
 export interface Cursor {
@@ -57,5 +56,3 @@ export interface AshiatoCell {
   geohashLength: number | null;
   color: string | null;
 }
-
-export type AshiatoCellState = "unlocked" | "opened";

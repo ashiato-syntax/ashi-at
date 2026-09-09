@@ -125,7 +125,6 @@ export function makeRecord(
     emojiHost, // textPreview中のカスタム絵文字解決 / acct表示用のホスト
     cachedAt: Date.now(),
     unlockedAt: null, // 現在地がこのAshiatoのセル内に入った時刻(初回のみ記録)
-    openedAt: null, // 「開封する」でノートURLへ遷移した時刻(初回のみ記録)
   };
 }
 
@@ -306,11 +305,6 @@ export function markAshiatoUnlocked(id: string, unlockedAt: number = Date.now())
   return updateAshiatoRecord(id, { unlockedAt });
 }
 
-/** 「開封する」でノートURLへ遷移したことを記録する。 */
-export function markAshiatoOpened(id: string, openedAt: number = Date.now()): Promise<void> {
-  return updateAshiatoRecord(id, { openedAt });
-}
-
 /**
  * 「検索キャッシュを消す」で呼ぶ。まだ発見していない(unlockedAtが無い)レコードと
  * カーソル(検索位置)だけを消す。「あつめたあしあと」(unlockedAtがあるレコード)は
@@ -338,8 +332,8 @@ export async function clearSearchCache(): Promise<void> {
 }
 
 /**
- * 「あつめたあしあと」一覧でチェックして選んだレコードだけを、
- * 「まだ発見していない(ロック中)」状態に戻す(unlockedAt/openedAtをnullに戻す)。
+ * 「あつめたあしあと」一覧で選んだレコードを、
+ * 「まだ発見していない(ロック中)」状態に戻す(unlockedAtをnullに戻す)。
  * レコード自体は削除しない — 削除すると、そのノートのIDが既にカーソル
  * (oldestSeenNoteId/newestSeenNoteId)の走査済み範囲に埋もれてしまい、
  * 「過去を探す」「最新を確認」のいずれでも二度と再取得できなくなる
@@ -347,7 +341,7 @@ export async function clearSearchCache(): Promise<void> {
  * unlockedAtが無い(まだ発見していない)idが混ざっていても無視する。
  * カーソル(検索位置)はそのまま変更しない。全host・全tag対象。
  *
- * @param ids 「あつめたあしあと」一覧でチェックされたレコードidの配列
+ * @param ids 削除対象のレコードidの配列(通常は1件)
  */
 export async function clearCollectedAshiatoByIds(ids: string[]): Promise<void> {
   if (!ids || ids.length === 0) return;
@@ -364,7 +358,7 @@ export async function clearCollectedAshiatoByIds(ids: string[]): Promise<void> {
         getReq.onsuccess = () => {
           const existing: AshiatoRecord | undefined = getReq.result;
           if (existing && existing.unlockedAt) {
-            store.put({ ...existing, unlockedAt: null, openedAt: null });
+            store.put({ ...existing, unlockedAt: null });
           }
         };
       }
@@ -542,4 +536,29 @@ export async function putSetting(key: string, value: unknown): Promise<void> {
   } catch (error) {
     console.warn(`cache: putSetting(${key}) failed:`, error);
   }
+}
+
+// --- 全リセット ---------------------------------------------------------
+// メニューの「リセット」から呼ばれる。ストアを個別に消すのではなく
+// IndexedDBのデータベースごと削除することで、あつめたあしあと・検索キャッシュ・
+// カーソル・下書き・設定(インスタンスURL・地図表示位置など)・絵文字画像キャッシュを
+// まとめて確実に消去する。呼び出し側でページをリロードし、まっさらな状態
+// (デフォルト設定)で再初期化させる想定。
+export async function resetAllCache(): Promise<void> {
+  if (dbPromise) {
+    try {
+      const db = await dbPromise;
+      db.close();
+    } catch {
+      // 接続の取得自体に失敗していても、削除は試みる
+    }
+    dbPromise = null;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const req = indexedDB.deleteDatabase(DB_NAME);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+    req.onblocked = () => resolve(); // 他タブ等が開いていてもベストエフォートで進める
+  });
 }

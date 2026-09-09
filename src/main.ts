@@ -11,7 +11,6 @@ import {
   createMap,
   addAshiatoGroup,
   removeAshiatoGroup,
-  setAshiatoState,
   loadPrefectureBoundaries,
   loadMunicipalityBoundaries,
   createCurrentLocationLayer,
@@ -42,7 +41,6 @@ import {
   clearSearchCache,
   clearCollectedAshiatoByIds,
   markAshiatoUnlocked,
-  markAshiatoOpened,
   getSetting,
   putSetting,
   makeDraft,
@@ -52,9 +50,11 @@ import {
   updateDraftPrecision,
   getEmojiImageBlob,
   putEmojiImageBlob,
+  resetAllCache,
 } from "./cache.js";
 import L from "leaflet";
 import type { AshiatoRecord, AshiatoCell, Draft, Cursor, GeohashLength } from "./types.js";
+import { createIcon } from "./icons.js";
 
 // これよりズームしたら、都道府県名ラベルを表示
 const MIN_ZOOM_FOR_PREFECTURE_LABELS = 7;
@@ -77,7 +77,7 @@ const MAX_GEOHASH_LENGTH = 7;
 // PENDING_PROMOTION_INTERVAL_MSごとに保留分を再チェックし、経過後は
 // 手動で「探す」し直さなくても自動的に対象へ昇格する。
 // NOTE: デバッグ用に一時的に0にしている(本来は30分)。本番前に戻すこと。
-const MIN_NOTE_AGE_MS = 60 * 30 * 1000; // 30分
+const MIN_NOTE_AGE_MS = 60 * 0 * 1000; // 30分
 const PENDING_PROMOTION_INTERVAL_MS = 60 * 1000; // 1分ごとに再チェック
 
 // 投稿機能: 精度「約150m」(Geohash7桁)の下書きは、プライバシー配慮のため
@@ -95,7 +95,7 @@ const TEXT_PREVIEW_SAFETY_CAP_LENGTH = 3000;
 
 // デバッグ用: trueにすると、未発見(ロック中)のAshiatoも地図に表示する。
 // GPSによる発見判定や「集めたあしあと」一覧の仕様は変えない。本番ではfalse。
-const SHOW_LOCKED_ASHIATO_FOR_DEBUG = false;
+const SHOW_LOCKED_ASHIATO_FOR_DEBUG = true;
 
 function isSupportedGeohashLength(geohash: string): boolean {
   return (
@@ -122,6 +122,27 @@ const $ = <T extends Element = HTMLElement>(s: string): T => document.querySelec
   precisionWarning = $("#precisionWarning"),
   unlockedList = $("#unlockedList"),
   unlockedSortModeSelect = $<HTMLSelectElement>("#unlockedSortMode");
+
+// メニューFAB・ハンバーガーメニュー各項目のアイコン(絵文字は端末フォント依存で
+// 意図した絵文字が無い環境だと崩れるため、lucide-staticのインラインSVGに置き換える)。
+$(".menu-fab-icon").append(createIcon("footprints"));
+$("#composeAshiatoMenuItem .menu-item-icon").append(createIcon("footprints"));
+$("#unlockedListToggle .menu-item-icon").append(createIcon("map-pinned"));
+$("#draftListToggle .menu-item-icon").append(createIcon("notebook-pen"));
+$("#changeInstance .menu-item-icon").append(createIcon("server"));
+$("#clearSearchCache .menu-item-icon").append(createIcon("trash-2"));
+$("#resetAll .menu-item-icon").append(createIcon("rotate-ccw"));
+$("#aboutButton .menu-item-icon").append(createIcon("info"));
+$("#ashiatoActionShowOnMapIcon").append(createIcon("map-pin"));
+$("#ashiatoActionOpenPostIcon").append(createIcon("external-link"));
+$("#ashiatoActionDeleteIcon").append(createIcon("trash-2"));
+
+// ×(閉じる)ボタンも絵文字ではないが文字グリフのため、他アイコンとの見た目統一のためSVGに置き換える。
+$("#statusClose").append(createIcon("x"));
+$("#unlockedListCloseX").append(createIcon("x"));
+$("#ashiatoActionCloseX").append(createIcon("x"));
+$("#composeCloseX").append(createIcon("x"));
+$("#draftListCloseX").append(createIcon("x"));
 
 // 地図の表示位置(中心緯度経度・ズーム)をTTL無しで保存しておき、次回起動時に
 // 復元する(復元自体は起動処理の中でsetView()する形で行う。createMap()の
@@ -223,11 +244,16 @@ const confirmCancelBtn = $<HTMLButtonElement>("#confirmCancel");
 
 function showConfirm(
   message: string,
-  { okLabel = "OK", cancelLabel = "キャンセル" }: { okLabel?: string; cancelLabel?: string } = {},
+  {
+    okLabel = "OK",
+    cancelLabel = "キャンセル",
+    danger = false,
+  }: { okLabel?: string; cancelLabel?: string; danger?: boolean } = {},
 ): Promise<boolean> {
   return new Promise((resolve) => {
     confirmMessage.textContent = message;
     confirmOkBtn.textContent = okLabel;
+    confirmOkBtn.className = danger ? "btn-danger" : "btn-primary";
     confirmCancelBtn.textContent = cancelLabel;
 
     // resultは「OKが押されたか」を保持するだけの変数。close()の実行順に
@@ -360,32 +386,10 @@ initBoundaries();
 
 // --- Ashiatoのページング + ローカルキャッシュ ---------------------------
 
-// セル内の「表示対象(発見済み)」レコードから、セル全体としての表示状態を決める。
-// 「全部openedにならない限りグレーにしない」という方針のため、1件でも
-// 未開封が残っていればunlocked(緑/黄/赤)のまま。呼び出し側は発見済みレコードの
-// 配列だけを渡すこと(ロック中のレコードはそもそも表示対象ではないため考慮不要)。
-function computeCellState(visibleRecords: AshiatoRecord[]): "opened" | "unlocked" {
-  return visibleRecords.length > 0 && visibleRecords.every((r) => r.openedAt)
-    ? "opened"
-    : "unlocked";
-}
-
 // geohash1件分の判定エリアサイズを、案内文の断片として作る
 function cellSizeText(geohash: string): string {
   const { widthM, heightM } = geohashCellSizeMeters(geohash);
-  return `当たり判定エリアサイズ:\n(東西 ${Math.round(widthM)}m, 南北 ${Math.round(heightM)}m)`;
-}
-
-// ISO文字列 / epoch(ms) どちらも受け取れる日付フォーマッタ。値が無い/不正なら null。
-function formatDate(value: string | number | null): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("ja-JP", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
+  return `東西 ${Math.round(widthM)}m, 南北 ${Math.round(heightM)}m`;
 }
 
 // 日付+時刻(分単位)まで含むフォーマッタ。「過去を探す」の到達地点表示や
@@ -401,15 +405,6 @@ function formatDateTime(value: string | number | null): string | null {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-// Ashiato Syntax(canonical)の代わりに一覧・ポップアップに表示するテキスト。
-// 投稿日・発見日(当たり判定になった日 = unlockedAt)を表示する。
-// ここに載るレコードは一覧・ポップアップいずれも発見済み(unlockedAtあり)のみが対象。
-function recordDatesText(record: AshiatoRecord): string {
-  const posted = formatDate(record.noteCreatedAt) ?? "不明";
-  const discovered = formatDate(record.unlockedAt) ?? "不明";
-  return `投稿 ${posted}, 発見 ${discovered}`;
 }
 
 // 投稿者のラベルを「{表示名} @{アカウント名}@{投稿元インスタンス}」の形式で組み立てる。
@@ -530,19 +525,57 @@ function applyPreviewOverflowChecks(root: ParentNode): void {
   }
 }
 
-// あしあと1件分の「内容表示」部分(ユーザーラベル→本文プレビュー→日付)を組み立てる。
-// あつめたあしあと一覧・マップ同一位置ポップアップで共通利用する。
+// 投稿者名部分(ヘッダー行の先頭)を組み立てる。表示名は太字、
+// 「@アカウント名@インスタンス」のハンドル部分は一回り小さく薄い色にする
+// (SNSのタイムライン表示に近づけるため。色・サイズ自体は.ashiato-handle参照)。
+function buildUserNameNode(record: AshiatoRecord): HTMLElement {
+  const wrap = document.createElement("span");
+  wrap.className = "ashiato-user";
+
+  if (!record.username) {
+    wrap.textContent = "(不明なユーザー)";
+    return wrap;
+  }
+
+  if (record.displayName) {
+    const name = document.createElement("span");
+    name.className = "ashiato-display-name";
+    name.textContent = record.displayName;
+    wrap.append(name, document.createTextNode(" "));
+  }
+
+  const host = (record.emojiHost ?? record.host).replace(/^https?:\/\//, "");
+  const handle = document.createElement("span");
+  handle.className = "ashiato-handle";
+  handle.textContent = `@${record.username}@${host}`;
+  wrap.append(handle);
+
+  return wrap;
+}
+
+// あしあと1件分の行を組み立てる(あつめたあしあと一覧・マップ同一位置ポップアップ共通)。
+// SNSのタイムライン表示に近い3段構成:
+//   ヘッダー(投稿者名+ハンドル+投稿日時) → 本文プレビュー → フッター(発見日時+詳細/開封ボタン)
+// 行タップ自体では何も起きず、各ボタンだけがそれぞれのアクションを起動する。
 // overflowRootは「続きを表示」ヒントの再計算対象(applyPreviewOverflowChecks)に渡すルート要素。
-function renderAshiatoContent(
-  container: HTMLElement,
+function renderAshiatoRow(
   record: AshiatoRecord,
   overflowRoot: ParentNode,
-): void {
-  container.replaceChildren();
-  container.append(document.createTextNode(formatUserLabel(record)));
+  { onMore }: { onMore: () => void },
+): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "ashiato-row";
+
+  const header = document.createElement("div");
+  header.className = "ashiato-row-header";
+  header.append(buildUserNameNode(record));
+  const postedAt = document.createElement("span");
+  postedAt.className = "ashiato-posted-at";
+  postedAt.textContent = formatDateTime(record.noteCreatedAt) ?? "不明";
+  header.append(postedAt);
+  row.append(header);
 
   if (record.textPreview) {
-    container.append(document.createTextNode("\n"));
     const preview = document.createElement("span");
     preview.className = "mfm-preview";
     const hint = document.createElement("span");
@@ -555,57 +588,27 @@ function renderAshiatoContent(
       record.emojiHost ?? record.host,
       () => applyPreviewOverflowChecks(overflowRoot),
     );
-    container.append(preview, hint);
+    row.append(preview, hint);
   }
 
-  container.append(document.createTextNode(`\n${recordDatesText(record)}`));
-}
+  const footer = document.createElement("div");
+  footer.className = "ashiato-row-footer";
 
-// あしあと1件分の行を組み立てる(あつめたあしあと一覧・マップ同一位置ポップアップ共通)。
-// 内容表示(非ボタン)+「開封」ボタン(+showInfoButton時は「詳細」ボタン)+未開封バッジで構成する。
-// 行タップ自体では何も起きず、各ボタンだけがそれぞれのアクションを起動する。
-function renderAshiatoRow(
-  record: AshiatoRecord,
-  overflowRoot: ParentNode,
-  {
-    showInfoButton,
-    onOpen,
-    onInfo,
-  }: { showInfoButton: boolean; onOpen: () => void; onInfo?: () => void },
-): HTMLElement {
-  const row = document.createElement("div");
-  row.className = "ashiato-row";
+  const discovered = document.createElement("span");
+  discovered.className = "ashiato-discovered";
+  discovered.textContent = `発見: ${formatDateTime(record.unlockedAt) ?? "不明"}`;
+  footer.append(discovered);
 
-  const content = document.createElement("div");
-  content.className = "ashiato-row-content";
-  renderAshiatoContent(content, record, overflowRoot);
+  const moreBtn = document.createElement("button");
+  moreBtn.type = "button";
+  moreBtn.className = "ashiato-more-btn";
+  moreBtn.setAttribute("aria-label", "その他の操作");
+  moreBtn.append(createIcon("ellipsis"));
+  moreBtn.onclick = onMore;
+  footer.append(moreBtn);
 
-  const actions = document.createElement("div");
-  actions.className = "ashiato-row-actions";
+  row.append(footer);
 
-  const openBtn = document.createElement("button");
-  openBtn.type = "button";
-  openBtn.className = "ashiato-open-btn";
-  openBtn.textContent = "開封";
-  openBtn.onclick = onOpen;
-  actions.append(openBtn);
-
-  if (showInfoButton) {
-    const infoBtn = document.createElement("button");
-    infoBtn.type = "button";
-    infoBtn.className = "ashiato-info-btn secondary";
-    infoBtn.setAttribute("aria-label", "詳細情報");
-    infoBtn.textContent = "ℹ";
-    infoBtn.onclick = onInfo!;
-    actions.append(infoBtn);
-  }
-
-  const badge = document.createElement("span");
-  badge.className = "ashiato-unopened-badge";
-  badge.textContent = "未開封";
-  badge.hidden = !!record.openedAt;
-
-  row.append(content, actions, badge);
   return row;
 }
 
@@ -636,10 +639,7 @@ function rebuildCellVisual(cell: AshiatoCell): void {
     cell.visualLayers = visualLayers;
     cell.hitArea = hitArea;
     cell.geohashLength = geohashLength;
-
-    const state = computeCellState(visibleRecords);
-    setAshiatoState({ visualLayers, hitArea, geohashLength }, state);
-    cell.color = ashiatoColor(state, geohashLength);
+    cell.color = ashiatoColor(geohashLength);
   }
 
   areaOverlay.refresh([...ashiatoCells.values()]);
@@ -690,18 +690,6 @@ function promoteAgedRecords(): void {
 
 setInterval(promoteAgedRecords, PENDING_PROMOTION_INTERVAL_MS);
 
-// 「開封可能なAshiato」ダイアログの右上バッジ。未開封(unlockedAt はあるが
-// openedAt が無い)のものが1件でもあれば表示する。
-// ハンバーガーメニュー内に移動したので、メニューボタン自体にも同じ赤丸を出す。
-function updateUnlockedBadge(unlockedRecords: AshiatoRecord[]): void {
-  const hasUnopened = unlockedRecords.some((r) => !r.openedAt);
-  $("#unlockedBadge").hidden = !hasUnopened;
-  $("#menuBadge").hidden = !hasUnopened;
-}
-
-// 「あつめたあしあと」ダイアログの表示フィルター。true なら未開封のみ表示する。
-let showOnlyUnopened = false;
-
 // 「あつめたあしあと」一覧の並び順。"unlocked"=発見日順、"posted"=投稿日順。
 // いずれも新しい方が上(降順固定)。起動時にsettingsから復元する(initSortMode参照)。
 type UnlockedSortMode = "unlocked" | "posted";
@@ -715,78 +703,32 @@ function sortKeyFor(record: AshiatoRecord, mode: UnlockedSortMode): number {
   return record.unlockedAt ?? 0;
 }
 
-// 「あつめたあしあと」一覧でチェックボックスにより選択されているレコードid。
-// 一覧を再構築するたびに、表示から消えたid(フィルタで隠れた/削除済み等)は
-// 自動的に選択解除する。
-const selectedUnlockedIds = new Set<string>();
-
-function updateDeleteButtonState(): void {
-  $<HTMLButtonElement>("#deleteSelectedUnlocked").disabled = selectedUnlockedIds.size === 0;
-}
-
-// 「開封可能なAshiato」ダイアログの中身を、アンロック済みのものだけ・
-// アンロックした順で再構築する。ロック中(未発見)のものはここには載せない。
-// 開封済みかどうかはボタン文言とグレーアウトで示す。
-// showOnlyUnopenedがtrueのときは、さらに未開封のものだけに絞り込んで表示する
-// (バッジ・件数判定は絞り込み前の全件ベースのまま変えない)。
-// 各行には削除対象選択用のチェックボックスも並べる(選択状態はselectedUnlockedIdsで管理)。
+// 「あつめたあしあと」ダイアログの中身を、アンロック済みのものだけ・
+// 選択中の並び順で再構築する。ロック中(未発見)のものはここには載せない。
+// 各行の「…」ボタンから、詳細確認・地図表示・SNSを開く・削除をまとめた
+// アクションシート(openAshiatoActions)を開く。
 function refreshUnlockedList(): void {
   const unlocked = [...ashiatoCells.values()]
     .flatMap((cell) => [...cell.records.values()])
     .filter((r) => r.unlockedAt)
     .sort((a, b) => sortKeyFor(b, unlockedSortMode) - sortKeyFor(a, unlockedSortMode));
 
-  updateUnlockedBadge(unlocked);
-
-  const visible = showOnlyUnopened
-    ? unlocked.filter((r) => !r.openedAt)
-    : unlocked;
-
-  // 表示から消えたレコードの選択は残さない
-  const visibleIds = new Set(visible.map((r) => r.id));
-  for (const id of [...selectedUnlockedIds]) {
-    if (!visibleIds.has(id)) selectedUnlockedIds.delete(id);
-  }
-  updateDeleteButtonState();
-
   unlockedList.replaceChildren();
 
-  if (visible.length === 0) {
+  if (unlocked.length === 0) {
     const empty = document.createElement("p");
     empty.className = "unlocked-list-empty";
-    empty.textContent =
-      unlocked.length === 0
-        ? "まだ発見したあしあとありません。"
-        : "未開封のあしあとはありません。";
+    empty.textContent = "まだ発見したあしあとありません。";
     unlockedList.append(empty);
     return;
   }
 
-  for (const record of visible) {
-    const li = document.createElement("li"),
-      checkbox = document.createElement("input");
-
-    checkbox.type = "checkbox";
-    checkbox.className = "unlocked-list-checkbox";
-    checkbox.setAttribute("aria-label", "削除対象として選択");
-    checkbox.checked = selectedUnlockedIds.has(record.id);
-    checkbox.onchange = () => {
-      if (checkbox.checked) selectedUnlockedIds.add(record.id);
-      else selectedUnlockedIds.delete(record.id);
-      updateDeleteButtonState();
-    };
-
+  for (const record of unlocked) {
+    const li = document.createElement("li");
     const row = renderAshiatoRow(record, unlockedList, {
-      showInfoButton: true,
-      onOpen: () => {
-        unlockedListDialog.close();
-        const cell = ashiatoCells.get(record.geohash);
-        if (cell) handleAshiatoClick(record, cell);
-      },
-      onInfo: () => showAshiatoInfoPopup(record),
+      onMore: () => openAshiatoActions(record),
     });
-
-    li.append(checkbox, row);
+    li.append(row);
     unlockedList.append(li);
   }
 
@@ -801,16 +743,18 @@ function refreshUnlockedList(): void {
 // レコードが1件なら直接開封フローへ、複数件ならポップアップで一覧を出し、
 // 選んだものだけ開封フローへ進む。
 function handleCellClick(geohash: string): void {
+  showAshiatoCellPopup(geohash);
+}
+
+// geohash1セル分のあしあとを、地図上に吹き出し(ポップアップ)で表示する。
+// 件数が1件でも複数件でも表示形式は統一する(件数によって挙動を分けない)。
+// アクションシートの「マップで表示する」からも同じ表示を再利用する。
+function showAshiatoCellPopup(geohash: string): void {
   const cell = ashiatoCells.get(geohash);
   if (!cell) return;
 
   const records = [...cell.records.values()].filter((r) => r.unlockedAt);
   if (records.length === 0) return; // 通常は来ないはずだが念のため
-
-  if (records.length === 1) {
-    handleAshiatoClick(records[0], cell);
-    return;
-  }
 
   const { centerLat, centerLon } = decodeGeohash(geohash);
   const container = document.createElement("div");
@@ -818,10 +762,9 @@ function handleCellClick(geohash: string): void {
 
   for (const record of records) {
     const row = renderAshiatoRow(record, container, {
-      showInfoButton: false,
-      onOpen: () => {
+      onMore: () => {
         map.closePopup();
-        handleAshiatoClick(record, cell);
+        openAshiatoActions(record);
       },
     });
     container.append(row);
@@ -844,66 +787,69 @@ function handleCellClick(geohash: string): void {
   applyPreviewOverflowChecks(container);
 }
 
-// 個別のAshiato1件に対する開封フロー。
-// 地図/ポップアップ/一覧のいずれから呼ばれる場合も、対象は常に発見済み
-// (unlockedAtがある)レコードのみ。開封済みでも再度リンクへ飛べるように、
-// 常に確認ダイアログを出す。判定エリアサイズは案内文に含める。
-async function handleAshiatoClick(record: AshiatoRecord, cell: AshiatoCell): Promise<void> {
-  const sizeText = cellSizeText(record.geohash);
-  const openedLabel = record.openedAt ? "(開封済み)" : "";
+// あしあと1件分の「…」ボタンから呼ばれるアクションシート。地図/一覧いずれの行から
+// 呼ばれた場合も対象は常に発見済み(unlockedAtがある)レコードのみ。
+// 情報(投稿者・投稿日時・発見日時・当たり判定エリア)を表示した上で、
+// マップ表示・SNSを開く・「あつめたあしあと」からの削除の3アクションを提供する。
+function openAshiatoActions(record: AshiatoRecord): void {
+  ashiatoActionInfo.replaceChildren();
+  const infoRows: [string, string][] = [
+    ["投稿者", formatUserLabel(record)],
+    ["投稿", formatDateTime(record.noteCreatedAt) ?? "不明"],
+    ["発見", formatDateTime(record.unlockedAt) ?? "不明"],
+    ["当たり判定エリア", cellSizeText(record.geohash)],
+  ];
+  for (const [label, value] of infoRows) {
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    ashiatoActionInfo.append(dt, dd);
+  }
 
-  const wantsToOpen = await showConfirm(
-    `このあしあとを開封しますか？（投稿先のSNSを開きます）${openedLabel}\n\n投稿: ${formatDate(record.noteCreatedAt) ?? "不明"}\n\n${sizeText}`,
-    { okLabel: "開封する" },
-  );
-  if (!wantsToOpen) return;
-
-  window.open(`${record.host}/notes/${record.noteId}`, "_blank", "noopener");
-
-  if (!record.openedAt) {
-    const openedAt = Date.now();
-    await markAshiatoOpened(record.id, openedAt);
-    record.openedAt = openedAt;
-
-    const visibleRecords = [...cell.records.values()].filter((r) => r.unlockedAt);
-    const state = computeCellState(visibleRecords);
-    setAshiatoState(
-      { visualLayers: cell.visualLayers!, hitArea: cell.hitArea!, geohashLength: cell.geohashLength! },
-      state,
+  ashiatoActionShowOnMapBtn.onclick = () => {
+    ashiatoActionDialog.close();
+    unlockedListDialog.close();
+    map.closePopup();
+    const { minLat, maxLat, minLon, maxLon } = decodeGeohash(record.geohash);
+    map.fitBounds(
+      [
+        [minLat, minLon],
+        [maxLat, maxLon],
+      ],
+      { maxZoom: 18, padding: [40, 40] },
     );
-    cell.color = ashiatoColor(state, cell.geohashLength!);
-    areaOverlay.refresh([...ashiatoCells.values()]);
+    showAshiatoCellPopup(record.geohash);
+  };
+
+  ashiatoActionOpenPostBtn.onclick = () => {
+    ashiatoActionDialog.close();
+    window.open(`${record.host}/notes/${record.noteId}`, "_blank", "noopener");
+  };
+
+  ashiatoActionDeleteBtn.onclick = async () => {
+    ashiatoActionDialog.close();
+    const wantsToDelete = await showConfirm(
+      "このあしあとを「あつめたあしあと」から削除しますか？(現地に行けば再度発見できます)",
+      { okLabel: "削除する", danger: true },
+    );
+    if (!wantsToDelete) return;
+
+    await clearCollectedAshiatoByIds([record.id]);
+
+    const cell = ashiatoCells.get(record.geohash);
+    if (cell) {
+      const target = cell.records.get(record.id);
+      if (target) target.unlockedAt = null;
+      rebuildCellVisual(cell); // ロック中に戻るので円は消える(セルは保持)
+      areaOverlay.refresh([...ashiatoCells.values()]);
+    }
 
     refreshUnlockedList();
-  }
-}
+    setStatus("あしあとを削除しました。(現地に行けば再度発見できます)");
+  };
 
-// 「あつめたあしあと」一覧の「詳細」ボタンから呼ばれる。一覧ダイアログを閉じて
-// 該当セルの位置へ地図を移動し、投稿者・投稿日・発見日・当たり判定サイズを
-// 吹き出し(ポップアップ)で表示する。本文プレビューはここには出さない
-// (一覧側で既に確認できるため)。
-function showAshiatoInfoPopup(record: AshiatoRecord): void {
-  unlockedListDialog.close();
-
-  const { minLat, maxLat, minLon, maxLon, centerLat, centerLon } = decodeGeohash(record.geohash);
-  map.fitBounds(
-    [
-      [minLat, minLon],
-      [maxLat, maxLon],
-    ],
-    { maxZoom: 18, padding: [40, 40] },
-  );
-
-  const content = document.createElement("div");
-  content.className = "dialog-message";
-  content.textContent = [
-    `投稿者: ${formatUserLabel(record)}`,
-    `投稿日: ${formatDate(record.noteCreatedAt) ?? "不明"}`,
-    `発見日: ${formatDate(record.unlockedAt) ?? "不明"}`,
-    cellSizeText(record.geohash),
-  ].join("\n");
-
-  L.popup({ maxWidth: 260 }).setLatLng([centerLat, centerLon]).setContent(content).openOn(map);
+  ashiatoActionDialog.showModal();
 }
 
 // --- 現在地(GPS)によるAshiatoのアンロック判定 -----------------------------
@@ -921,7 +867,7 @@ let lastKnownAccuracy: number | null = null;
 // 位置精度がこの半径(メートル)を超えたら「精度が悪い」とみなす(直径200mより悪い = 半径100m超)。
 // この状態では、あしあとの発見(当たり判定)・新規投稿・新規下書きを行わない
 // (下書き済みのあしあとの投稿はisDraftPostableのルールのみに従い、ここでは制限しない)。
-const BAD_ACCURACY_RADIUS_M = 100;
+const BAD_ACCURACY_RADIUS_M = 1000;
 
 function isPrecisionBad(): boolean {
   return gpsEnabled && lastKnownAccuracy !== null && lastKnownAccuracy > BAD_ACCURACY_RADIUS_M;
@@ -1038,50 +984,10 @@ $<HTMLButtonElement>("#unlockedListToggle").onclick = () => {
 };
 $<HTMLButtonElement>("#unlockedListCloseX").onclick = () => unlockedListDialog.close();
 
-$<HTMLInputElement>("#unopenedOnlyFilter").onchange = (e) => {
-  showOnlyUnopened = (e.target as HTMLInputElement).checked;
-  refreshUnlockedList();
-};
-
 unlockedSortModeSelect.onchange = () => {
   unlockedSortMode = unlockedSortModeSelect.value as UnlockedSortMode;
   putSetting("unlockedSortMode", unlockedSortMode);
   refreshUnlockedList();
-};
-
-// 「あつめたあしあと」一覧でチェックした分だけを選んで削除する
-// (削除 = ロック中の状態に戻す。現地に行けば再度発見できる)。
-// 廃止した「あつめたあしあとを消す」(全件対象)の代わりに、こちらは
-// チェックボックスで選んだレコードだけを対象にする。
-$<HTMLButtonElement>("#deleteSelectedUnlocked").onclick = async () => {
-  if (selectedUnlockedIds.size === 0) return;
-
-  const ids = [...selectedUnlockedIds];
-  const wantsToDelete = await showConfirm(
-    `選択した${ids.length}件のあしあとを削除しますか？(現地に行けば再度発見できます)`,
-    { okLabel: "削除する" },
-  );
-  if (!wantsToDelete) return;
-
-  await clearCollectedAshiatoByIds(ids);
-
-  const idSet = new Set(ids);
-  for (const cell of ashiatoCells.values()) {
-    let changed = false;
-    for (const record of cell.records.values()) {
-      if (idSet.has(record.id) && record.unlockedAt) {
-        record.unlockedAt = null;
-        record.openedAt = null;
-        changed = true;
-      }
-    }
-    if (changed) rebuildCellVisual(cell); // ロック中に戻るので円は消える(セルは保持)
-  }
-  areaOverlay.refresh([...ashiatoCells.values()]);
-
-  selectedUnlockedIds.clear();
-  refreshUnlockedList();
-  setStatus("選択したあしあとを削除しました。(現地に行けば再度発見できます)");
 };
 
 unlockedListDialog.addEventListener("click", (e) => {
@@ -1092,6 +998,26 @@ unlockedListDialog.addEventListener("click", (e) => {
     rect.left <= e.clientX &&
     e.clientX <= rect.left + rect.width;
   if (!inside) unlockedListDialog.close();
+});
+
+// --- あしあと1件のアクションシート(「…」ボタン) ----------------------------
+
+const ashiatoActionDialog = $<HTMLDialogElement>("#ashiatoActionDialog");
+const ashiatoActionInfo = $("#ashiatoActionInfo");
+const ashiatoActionShowOnMapBtn = $<HTMLButtonElement>("#ashiatoActionShowOnMap");
+const ashiatoActionOpenPostBtn = $<HTMLButtonElement>("#ashiatoActionOpenPost");
+const ashiatoActionDeleteBtn = $<HTMLButtonElement>("#ashiatoActionDelete");
+
+$<HTMLButtonElement>("#ashiatoActionCloseX").onclick = () => ashiatoActionDialog.close();
+
+ashiatoActionDialog.addEventListener("click", (e) => {
+  const rect = ashiatoActionDialog.getBoundingClientRect();
+  const inside =
+    rect.top <= e.clientY &&
+    e.clientY <= rect.top + rect.height &&
+    rect.left <= e.clientX &&
+    e.clientX <= rect.left + rect.width;
+  if (!inside) ashiatoActionDialog.close();
 });
 
 // --- 「エリア」トグル(Geohashセルの範囲描画) ------------------------------
@@ -1370,7 +1296,7 @@ async function fetchOlder(): Promise<void> {
       const oldestLabel = formatDateTime(oldestCreatedAt);
 
       setStatus(
-        `${notes.length}件のノートを確認。表示中 ${ashiatoCells.size}箇所。` +
+        `${ashiatoCells.size}件のあしあとがどこかにあります。` +
           (oldestLabel ? `${oldestLabel}まで探しました。` : ""),
       );
     } else {
@@ -1420,7 +1346,7 @@ async function fetchNewer(): Promise<void> {
 
     setStatus(
       notes.length > 0
-        ? `新着${notes.length}件を確認。表示中 ${ashiatoCells.size}箇所。`
+        ? `${ashiatoCells.size}件のあしあとがどこかにあります。`
         : "新しいAshiatoはありませんでした。",
     );
   } catch (e) {
@@ -1462,10 +1388,26 @@ $<HTMLButtonElement>("#clearSearchCache").onclick = async () => {
   closeMenu();
   const wantsToClear = await showConfirm(
     "検索キャッシュを削除しますか？(あつめたあしあとは残ります)",
-    { okLabel: "削除する" },
+    { okLabel: "削除する", danger: true },
   );
   if (!wantsToClear) return;
   await handleClearSearchCache();
+};
+
+// 「リセット」: あつめたあしあと・検索キャッシュ・下書き・設定(インスタンスURL等)を
+// 含む全キャッシュを削除する(cache.jsのresetAllCacheがIndexedDBごと削除する)。
+// 削除後はアプリの状態(ashiatoCells等の変数)も含めて丸ごと作り直すのが確実なため、
+// 個別に状態をクリアするのではなくページをリロードする。
+$<HTMLButtonElement>("#resetAll").onclick = async () => {
+  closeMenu();
+  const wantsToReset = await showConfirm(
+    "すべてのキャッシュを削除しますか？\n\nあつめたあしあと・下書き・インスタンス設定など、保存されているデータがすべて消えます。この操作は取り消せません。",
+    { okLabel: "削除する", danger: true },
+  );
+  if (!wantsToReset) return;
+
+  await resetAllCache();
+  location.reload();
 };
 $<HTMLInputElement>("#instance").onkeydown = (e) => {
   if (e.key === "Enter") {
@@ -1673,9 +1615,10 @@ async function refreshDraftList(): Promise<void> {
 
     const postBtn = document.createElement("button");
     postBtn.type = "button";
+    postBtn.className = "btn-primary";
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
-    deleteBtn.className = "secondary";
+    deleteBtn.className = "btn-danger";
     deleteBtn.textContent = "削除";
 
     // 残り時間は「下書きリストを開いた(=このリストを描画した)タイミング」で
@@ -1722,6 +1665,7 @@ async function refreshDraftList(): Promise<void> {
     deleteBtn.onclick = async () => {
       const wantsToDelete = await showConfirm("この下書きを削除しますか？", {
         okLabel: "削除する",
+        danger: true,
       });
       if (!wantsToDelete) return;
       await deleteDraft(draft.id);

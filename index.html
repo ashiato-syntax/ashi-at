@@ -30,9 +30,7 @@
                         class="status-close"
                         aria-label="閉じる"
                         hidden
-                    >
-                        ×
-                    </button>
+                    ></button>
                 </div>
                 <div id="precisionWarning" class="precision-warning" hidden>
                     現在地の精度が低いです
@@ -75,51 +73,61 @@
                             aria-expanded="false"
                             aria-label="メニュー"
                         >
-                            👣
-                            <span
-                                id="menuBadge"
-                                class="badge-dot"
-                                hidden
-                            ></span>
+                            <span class="menu-fab-icon"></span>
                         </button>
                         <div id="menuDropdown" class="menu-dropdown" hidden>
                             <p
                                 id="currentHostLabel"
                                 class="menu-current-host"
                             ></p>
-                            <button
-                                id="composeAshiatoMenuItem"
-                                type="button"
-                            >
-                                👣あしあとを投稿
+                            <button id="aboutButton" type="button">
+                                <span class="menu-item-icon"></span>
+                                <span class="menu-item-label"
+                                    >Ashi@について</span
+                                >
                             </button>
-                            <button
-                                id="unlockedListToggle"
-                                type="button"
-                                aria-haspopup="dialog"
-                            >
-                                👣あつめたあしあと
-                                <span
-                                    id="unlockedBadge"
-                                    class="badge-dot"
-                                    hidden
-                                ></span>
+                            <button id="resetAll" type="button" class="danger">
+                                <span class="menu-item-icon"></span>
+                                <span class="menu-item-label">リセット</span>
+                            </button>
+                            <button id="clearSearchCache" type="button">
+                                <span class="menu-item-icon"></span>
+                                <span class="menu-item-label"
+                                    >検索キャッシュを消す</span
+                                >
+                            </button>
+                            <button id="changeInstance" type="button">
+                                <span class="menu-item-icon"></span>
+                                <span class="menu-item-label"
+                                    >インスタンスを変更</span
+                                >
                             </button>
                             <button
                                 id="draftListToggle"
                                 type="button"
                                 aria-haspopup="dialog"
                             >
-                                📝下書き
+                                <span class="menu-item-icon"></span>
+                                <span class="menu-item-label">下書き</span>
                             </button>
-                            <button id="changeInstance" type="button">
-                                インスタンスを変更
+                            <button
+                                id="unlockedListToggle"
+                                type="button"
+                                aria-haspopup="dialog"
+                            >
+                                <span class="menu-item-icon"></span>
+                                <span class="menu-item-label"
+                                    >あつめたあしあと</span
+                                >
                             </button>
-                            <button id="clearSearchCache" type="button">
-                                検索キャッシュを消す
-                            </button>
-                            <button id="aboutButton" type="button">
-                                Ashi@について
+                            <button
+                                id="composeAshiatoMenuItem"
+                                type="button"
+                            >
+                                <span class="menu-item-icon"></span>
+                                <span class="menu-item-label"
+                                    >あしあとを投稿</span
+                                >
                             </button>
                         </div>
                     </div>
@@ -132,9 +140,7 @@
                 class="dialog-close-x"
                 id="unlockedListCloseX"
                 aria-label="閉じる"
-            >
-                ×
-            </button>
+            ></button>
             <h2>あつめたあしあと</h2>
             <div class="unlocked-list-controls">
                 <label class="unlocked-list-sort">
@@ -146,18 +152,53 @@
                 </label>
             </div>
             <ul id="unlockedList" class="unlocked-list"></ul>
-            <div class="unlocked-list-footer">
-                <label class="unlocked-list-filter">
-                    <input type="checkbox" id="unopenedOnlyFilter" />
-                    未開封のみ表示
-                </label>
+        </dialog>
+        <dialog id="ashiatoActionDialog" aria-label="あしあとの情報">
+            <button
+                type="button"
+                class="dialog-close-x"
+                id="ashiatoActionCloseX"
+                aria-label="閉じる"
+            ></button>
+            <div class="action-sheet">
+                <div class="action-sheet-info">
+                    <div class="action-sheet-row action-sheet-heading">
+                        <span>情報</span>
+                    </div>
+                    <dl id="ashiatoActionInfo" class="ashiato-info-details"></dl>
+                </div>
                 <button
-                    id="deleteSelectedUnlocked"
+                    id="ashiatoActionShowOnMap"
                     type="button"
-                    class="secondary"
-                    disabled
+                    class="action-sheet-row"
                 >
-                    選択したものを削除
+                    <span>マップで表示する</span>
+                    <span
+                        class="action-sheet-icon"
+                        id="ashiatoActionShowOnMapIcon"
+                    ></span>
+                </button>
+                <button
+                    id="ashiatoActionOpenPost"
+                    type="button"
+                    class="action-sheet-row"
+                >
+                    <span>投稿先のSNSで開く（外部サイトが開きます）</span>
+                    <span
+                        class="action-sheet-icon"
+                        id="ashiatoActionOpenPostIcon"
+                    ></span>
+                </button>
+                <button
+                    id="ashiatoActionDelete"
+                    type="button"
+                    class="action-sheet-row danger"
+                >
+                    <span>「あつめたあしあと」から削除する</span>
+                    <span
+                        class="action-sheet-icon"
+                        id="ashiatoActionDeleteIcon"
+                    ></span>
                 </button>
             </div>
         </dialog>
@@ -167,9 +208,7 @@
                 class="dialog-close-x"
                 id="composeCloseX"
                 aria-label="閉じる"
-            >
-                ×
-            </button>
+            ></button>
             <h2>あしあとを投稿</h2>
             <fieldset class="precision-fieldset">
                 <legend>判定エリアの広さ</legend>
@@ -196,7 +235,9 @@
                 <button id="composeSaveDraft" type="button" class="secondary">
                     下書きに保存
                 </button>
-                <button id="composePost" type="button">投稿する</button>
+                <button id="composePost" type="button" class="btn-primary">
+                    投稿する
+                </button>
             </div>
         </dialog>
         <dialog id="draftListDialog">
@@ -205,9 +246,7 @@
                 class="dialog-close-x"
                 id="draftListCloseX"
                 aria-label="閉じる"
-            >
-                ×
-            </button>
+            ></button>
             <h2>下書き</h2>
             <ul id="draftList" class="draft-list"></ul>
         </dialog>
@@ -220,9 +259,11 @@
                     inputmode="url" /></label
             >
             <div class="dialog-actions">
-                <button id="instanceApply" type="button">適用</button>
                 <button id="instanceCancel" type="button" class="secondary">
                     キャンセル
+                </button>
+                <button id="instanceApply" type="button" class="btn-primary">
+                    適用
                 </button>
             </div>
         </dialog>
