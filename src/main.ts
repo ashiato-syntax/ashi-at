@@ -76,8 +76,8 @@ const MAX_GEOHASH_LENGTH = 7;
 // (セルにすら登録しないので、現在地判定も一切かからない)。
 // PENDING_PROMOTION_INTERVAL_MSごとに保留分を再チェックし、経過後は
 // 手動で「探す」し直さなくても自動的に対象へ昇格する。
-// NOTE: デバッグ用に一時的に0にしている(本来は30分)。本番前に戻すこと。
-const MIN_NOTE_AGE_MS = 60 * 0 * 1000; // 30分
+// NOTE: デバッグ用に一時的に0にしている(本来は30分)場合は、本番前に戻すこと。
+const MIN_NOTE_AGE_MS = 60 * 30 * 1000; // 30分
 const PENDING_PROMOTION_INTERVAL_MS = 60 * 1000; // 1分ごとに再チェック
 
 // 投稿機能: 精度「約150m」(Geohash7桁)の下書きは、プライバシー配慮のため
@@ -95,7 +95,7 @@ const TEXT_PREVIEW_SAFETY_CAP_LENGTH = 3000;
 
 // デバッグ用: trueにすると、未発見(ロック中)のAshiatoも地図に表示する。
 // GPSによる発見判定や「集めたあしあと」一覧の仕様は変えない。本番ではfalse。
-const SHOW_LOCKED_ASHIATO_FOR_DEBUG = true;
+const SHOW_LOCKED_ASHIATO_FOR_DEBUG = false;
 
 function isSupportedGeohashLength(geohash: string): boolean {
   return (
