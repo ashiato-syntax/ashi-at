@@ -5,13 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "leaflet": "^1.9.4"
+    "leaflet": "^1.9.4",
+    "mfm-js": "^0.26.0"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.22",
+    "typescript": "^7.0.2",
     "vite": "^8.2.2"
   }
 }

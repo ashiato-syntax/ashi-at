@@ -24,40 +24,7 @@ body {
     height: 100dvh; /* 動的ビューポート対応ブラウザではこちらが優先される */
     display: flex;
     flex-direction: column;
-    overflow-y: auto; /* header+controlsが極端に高くなった場合の保険 */
-}
-header {
-    position: relative;
-    margin-bottom: 16px;
-    flex: none;
-}
-.subtitle {
-    color: #666;
-    font-size: 0.8rem;
-}
-.top-actions {
-    position: absolute;
-    top: 0;
-    right: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.search-buttons {
-    display: flex;
-    gap: 10px;
-    padding-right: 56px; /* .top-actions(☰ボタン)と重ならない余白 */
-}
-.search-buttons button {
-    flex: 1;
-    white-space: nowrap;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
-}
-@media (min-width: 700px) {
-    .search-buttons button {
-        flex: none;
-        min-width: 160px;
-    }
+    overflow-y: auto; /* controlsが極端に高くなった場合の保険 */
 }
 input,
 button {
@@ -77,29 +44,14 @@ button.secondary {
     border-color: #ddd;
     box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
 }
-
-.icon-button {
-    position: relative;
-    min-width: 42px;
-    padding: 8px;
-    text-align: center;
-    font-size: 1.1rem;
-    line-height: 1;
-}
-.badge-dot {
-    position: absolute;
-    top: -1px;
-    right: -1px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #e0472c;
-    border: 1.5px solid #f5f5f5;
+button.secondary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 .status-toast {
     position: absolute;
-    bottom: 12px;
+    top: 96px; /* GPS/エリアトグル(右上、top:12px/54px, 各高さ32px)の下に来るように */
     left: 12px;
     right: 12px;
     z-index: 20;
@@ -134,12 +86,94 @@ button.secondary {
     box-shadow: none;
 }
 
+/* GPS ON中、位置精度が低い(半径100m超=直径200m超)ときに画面中央へ帯状に出す警告。
+   常時点滅させると煩わしいため、opacityをゆっくり往復させる程度の穏やかな明滅にする。 */
+.precision-warning {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    transform: translateY(-50%);
+    z-index: 25;
+    padding: 10px 16px;
+    text-align: center;
+    background: rgba(230, 126, 0, 0.85);
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    pointer-events: none;
+    animation: precision-warning-blink 2.2s ease-in-out infinite;
+}
+.precision-warning[hidden] {
+    display: none;
+}
+@keyframes precision-warning-blink {
+    0%,
+    100% {
+        opacity: 0.55;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+/* 画面下部に貼り付く操作列。左に検索系ボタン、右端に投稿/メニュー統合ボタン(menu-fab)。 */
+.bottom-toolbar {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.bottom-toolbar .search-buttons {
+    display: flex;
+    flex: 1;
+    gap: 10px;
+}
+.bottom-toolbar .search-buttons button {
+    flex: 1;
+    white-space: nowrap;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
+}
+@media (min-width: 700px) {
+    .bottom-toolbar .search-buttons button {
+        flex: none;
+        min-width: 160px;
+    }
+}
+
 .menu {
     position: relative;
+    flex: none;
 }
+.menu-fab {
+    position: relative; /* badge-dotの基準 */
+    flex: none;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    font-size: 1.4rem;
+    line-height: 1;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+.badge-dot {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #e0472c;
+    border: 1.5px solid #f5f5f5;
+}
+/* menu-fabがボタン下部にあるため、ドロップダウンは上向きに開く */
 .menu-dropdown {
     position: absolute;
-    top: calc(100% + 6px);
+    bottom: calc(100% + 6px);
+    top: auto;
     right: 0;
     background: #fff;
     border: 1px solid #ddd;
@@ -162,6 +196,10 @@ button.secondary {
 }
 .menu-dropdown button:hover {
     background: #f5f5f5;
+}
+.menu-dropdown button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 .menu-dropdown button .badge-dot {
     position: static;
@@ -225,10 +263,28 @@ dialog#instanceDialog label {
     flex: 1;
 }
 
+.unlocked-list-controls {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 8px;
+}
+.unlocked-list-sort {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: #444;
+}
+.unlocked-list-sort select {
+    min-height: 32px;
+    padding: 4px 8px;
+    font-size: 0.85rem;
+}
+
 .unlocked-list-footer {
     display: flex;
     align-items: center;
-    justify-content: flex-start; /* 元は flex-end(閉じるボタンとの並び用だった) */
+    justify-content: space-between; /* 左に未開封フィルター、右に削除ボタン */
     gap: 16px;
     margin-top: 12px;
 }
@@ -249,6 +305,12 @@ dialog#instanceDialog label {
     padding: 0;
     margin: 0;
 }
+#deleteSelectedUnlocked {
+    flex: none;
+    font-size: 0.85rem;
+    padding: 6px 10px;
+    min-height: 36px;
+}
 .unlocked-list {
     list-style: none;
     margin: 0;
@@ -258,18 +320,69 @@ dialog#instanceDialog label {
     max-height: 65vh; /* 元は50vh。下部シート化に合わせて表示件数を増やす */
     overflow-y: auto;
 }
-.unlocked-list button {
-    width: 100%;
-    text-align: left;
-    overflow-wrap: anywhere;
-    white-space: pre-line;
+.unlocked-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
-.unlocked-list li.opened button {
-    color: #888;
+.unlocked-list-checkbox {
+    min-height: auto;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    margin: 0;
+    flex: none;
 }
 .unlocked-list-empty {
     color: #666;
     margin: 8px 0;
+}
+
+/* あしあと1件分の行(あつめたあしあと一覧・マップ同一位置ポップアップ共通)。
+   内容表示(非ボタン)+「開封」ボタン(+一覧のみ「詳細」ボタン)+未開封バッジで構成する。
+   開封状態による色分けは行わず、未開封のものだけ右上に「未開封」バッジを出す。 */
+.ashiato-row {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+    padding-right: 44px; /* 右上の未開封バッジと重ならないように */
+}
+.ashiato-row-content {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+    text-align: left;
+}
+.ashiato-row-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: none;
+}
+.ashiato-open-btn,
+.ashiato-info-btn {
+    min-height: 34px;
+    padding: 4px 10px;
+    font-size: 0.85rem;
+}
+.ashiato-info-btn {
+    min-width: 34px;
+    padding: 4px;
+    text-align: center;
+}
+.ashiato-unopened-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #e07b00;
+}
+.ashiato-unopened-badge[hidden] {
+    display: none;
 }
 
 .map-wrap {
@@ -282,7 +395,7 @@ dialog#instanceDialog label {
     min-height: 280px; /* 極端に狭い画面での下限 */
     border-radius: 12px;
     overflow: hidden;
-    background: #fff;
+    background: #97e7ff; /* 海の色。陸地はmap.jsの都道府県ポリゴン塗りつぶし(#F7F2EC)で表現する */
     position: relative;
     z-index: 0;
 }
@@ -338,17 +451,36 @@ dialog#instanceDialog label {
 .ashiato-popup-list {
     display: grid;
     gap: 6px;
-    max-width: 220px;
+    max-width: 300px; /* 元は220px。あしあとリストの横幅が狭すぎたため拡大 */
 }
-.ashiato-popup-list button {
-    width: 100%;
-    text-align: left;
-    overflow-wrap: anywhere;
+
+/* あつめたあしあと一覧・ポップアップの本文プレビュー内に表示するカスタム絵文字。
+   下書き一覧は本文入力欄が無いため対象外(main.js参照)。 */
+.mfm-emoji-inline {
+    height: 1.2em;
+    width: auto;
+    vertical-align: text-bottom;
+    display: inline-block;
 }
-.ashiato-popup-list button.unlocked-unopened,
-.unlocked-list button.unlocked-unopened {
-    background: #eaf6d5;
-    border-color: #c3e6a0;
+
+/* 本文プレビュー(MFMは全文パース、見た目だけ一定の高さでクリップする)。
+   文字数で切り詰めるとMFM記法(カスタム絵文字の:name:等)の途中で
+   千切れて表示が壊れる恐れがあるため、main.js側では文字数切り詰めをせず、
+   ここで高さだけを制限し、超過時は直後の.mfm-preview-hintで示す。 */
+.mfm-preview {
+    display: block;
+    max-height: 4.5em; /* 約3行分(line-height 1.5 × 3) */
+    overflow: hidden;
+    line-height: 1.5;
+}
+.mfm-preview-hint {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.75rem;
+    color: #4285f4;
+}
+.mfm-preview-hint[hidden] {
+    display: none;
 }
 
 .splash {
@@ -373,23 +505,6 @@ dialog#instanceDialog label {
 .splash.hide {
     opacity: 0;
     pointer-events: none;
-}
-
-.compose-fab {
-    position: absolute;
-    right: 12px;
-    bottom: 12px;
-    z-index: 20;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    font-size: 1.4rem;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-}
-.compose-fab:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    box-shadow: none;
 }
 
 .precision-fieldset {

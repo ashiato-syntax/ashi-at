@@ -1,6 +1,14 @@
+import type {
+  FeatureCollection,
+  Geometry,
+  Polygon,
+  MultiPolygon,
+  Position,
+} from "geojson";
+
 // 都道府県名（N03_001の表記）を2桁のJIS行政コード（例：「東京都」→「13」）にマッピング
 // 都道府県ごとの市区町村GeoJson（N03-21_{code}_210101.json）を読み込む用
-const PREF_CODE_BY_NAME = {
+const PREF_CODE_BY_NAME: Record<string, string> = {
   "北海道": "01", "青森県": "02", "岩手県": "03", "宮城県": "04", "秋田県": "05",
   "山形県": "06", "福島県": "07", "茨城県": "08", "栃木県": "09", "群馬県": "10",
   "埼玉県": "11", "千葉県": "12", "東京都": "13", "神奈川県": "14", "新潟県": "15",
@@ -13,21 +21,37 @@ const PREF_CODE_BY_NAME = {
   "鹿児島県": "46", "沖縄県": "47",
 };
 
+export interface BoundingBox {
+  minLat: number;
+  maxLat: number;
+  minLon: number;
+  maxLon: number;
+}
+
+export interface PrefectureIndexEntry {
+  name: string;
+  code: string;
+  parts: BoundingBox[];
+}
+
+interface PrefectureProperties {
+  N03_001?: string;
+}
+
 /**
 * 都道府県のGeoJSONからインデックス作成
 * 各都道府県につき1エントリとするが、バウンディングボックス（bbox）は「ポリゴンの各パーツ」ごとに設定する
 * →都道府県全体を囲む単一のボックスではない
 * →都道府県全体を囲むボックスにしちゃうと、離島（小笠原、奄美、等）がある都道府県で遅延読み込みの意味がなくなる
-*
-* @param {GeoJSON.FeatureCollection} prefectureGeoJSON
-* @returns {Array<{ name: string, code: string, parts: Array<{minLat:number,maxLat:number,minLon:number,maxLon:number}> }>}
 */
-export function buildPrefectureIndex(prefectureGeoJSON) {
-  const index = [];
+export function buildPrefectureIndex(
+  prefectureGeoJSON: FeatureCollection<Geometry, PrefectureProperties>,
+): PrefectureIndexEntry[] {
+  const index: PrefectureIndexEntry[] = [];
   for (const feature of prefectureGeoJSON.features) {
     const name = feature.properties?.N03_001;
-    const code = PREF_CODE_BY_NAME[name];
-    if (!code) {
+    const code = name ? PREF_CODE_BY_NAME[name] : undefined;
+    if (!name || !code) {
       console.warn(`prefectureIndex: 未知の都道府県名 "${name}" — スキップします`);
       continue;
     }
@@ -36,17 +60,17 @@ export function buildPrefectureIndex(prefectureGeoJSON) {
   return index;
 }
 
-function boundingBoxesOf(geometry) {
-  const polygons =
-    geometry.type === "Polygon" ? [geometry.coordinates] :
-    geometry.type === "MultiPolygon" ? geometry.coordinates :
+function boundingBoxesOf(geometry: Geometry): BoundingBox[] {
+  const polygons: Position[][][] =
+    geometry.type === "Polygon" ? [(geometry as Polygon).coordinates] :
+    geometry.type === "MultiPolygon" ? (geometry as MultiPolygon).coordinates :
     [];
 
   // 琵琶湖対策
   return polygons.map((polygon) => boundingBoxOfRing(polygon[0]));
 }
 
-function boundingBoxOfRing(ring) {
+function boundingBoxOfRing(ring: Position[]): BoundingBox {
   let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
   for (const [lon, lat] of ring) {
     if (lat < minLat) minLat = lat;
@@ -57,15 +81,17 @@ function boundingBoxOfRing(ring) {
   return { minLat, maxLat, minLon, maxLon };
 }
 
-function rectsIntersect(a, b) {
+function rectsIntersect(a: BoundingBox, b: BoundingBox): boolean {
   return a.minLon <= b.maxLon && a.maxLon >= b.minLon && a.minLat <= b.maxLat && a.maxLat >= b.minLat;
 }
 
 /**
- * @param {ReturnType<typeof buildPrefectureIndex>} index
- * @param {{minLat:number,maxLat:number,minLon:number,maxLon:number}} viewRect 現在の map viewport
+ * @param viewRect 現在の map viewport
  * @returns バウンディングボックス（のいずれかの部分）がビューポートと交差するエントリ
  */
-export function findPrefecturesInView(index, viewRect) {
+export function findPrefecturesInView(
+  index: PrefectureIndexEntry[],
+  viewRect: BoundingBox,
+): PrefectureIndexEntry[] {
   return index.filter((pref) => pref.parts.some((part) => rectsIntersect(part, viewRect)));
 }

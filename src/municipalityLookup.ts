@@ -1,8 +1,9 @@
-import { findPrefecturesInView } from "./prefectureIndex.js";
+import type { Geometry, Position } from "geojson";
+import { findPrefecturesInView, type PrefectureIndexEntry } from "./prefectureIndex.js";
 import { fetchMunicipalityGeoJson } from "./map.js";
 
 // 点(lon, lat)がリング(GeoJSON座標配列)の内側にあるかをray castingで判定
-function pointInRing(lon, lat, ring) {
+function pointInRing(lon: number, lat: number, ring: Position[]): boolean {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const [xi, yi] = ring[i];
@@ -16,7 +17,7 @@ function pointInRing(lon, lat, ring) {
 }
 
 // 外環の内側 かつ 穴の外側、を満たすかどうか
-function pointInPolygon(lon, lat, polygon) {
+function pointInPolygon(lon: number, lat: number, polygon: Position[][]): boolean {
   if (!pointInRing(lon, lat, polygon[0])) return false;
   for (let i = 1; i < polygon.length; i++) {
     if (pointInRing(lon, lat, polygon[i])) return false; // 穴の中
@@ -24,8 +25,8 @@ function pointInPolygon(lon, lat, polygon) {
   return true;
 }
 
-function pointInGeometry(lon, lat, geometry) {
-  const polygons =
+function pointInGeometry(lon: number, lat: number, geometry: Geometry): boolean {
+  const polygons: Position[][][] =
     geometry.type === "Polygon" ? [geometry.coordinates] :
     geometry.type === "MultiPolygon" ? geometry.coordinates :
     [];
@@ -40,13 +41,12 @@ function pointInGeometry(lon, lat, geometry) {
  * (呼び出し側で「@緯度, 経度」表示にフォールバックする想定)。
  *
  * Nominatim等の外部APIは使わない方針(サードパーティ依存を増やさないため)。
- *
- * @param {ReturnType<typeof import("./prefectureIndex.js").buildPrefectureIndex>} prefectureIndex
- * @param {number} lat
- * @param {number} lon
- * @returns {Promise<string|null>}
  */
-export async function lookupMunicipality(prefectureIndex, lat, lon) {
+export async function lookupMunicipality(
+  prefectureIndex: PrefectureIndexEntry[],
+  lat: number,
+  lon: number,
+): Promise<string | null> {
   const point = { minLat: lat, maxLat: lat, minLon: lon, maxLon: lon };
   const candidates = findPrefecturesInView(prefectureIndex, point);
 

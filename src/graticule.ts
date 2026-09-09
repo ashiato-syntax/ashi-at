@@ -10,17 +10,15 @@ import L from "leaflet";
  * visually checked against (roughly the right latitude band / hemisphere /
  * side of the date line) — it is not meant to look like a real map.
  *
- * @param {L.Map} map
- * @param {{ stepDeg?: number }} [opts] stepDeg: grid spacing in degrees (default 10)
- * @returns {L.LayerGroup}
+ * @param stepDeg grid spacing in degrees (default 5)
  */
-export function addGraticule(map, opts = {}) {
+export function addGraticule(map: L.Map, opts: { stepDeg?: number } = {}): L.LayerGroup {
   const step = opts.stepDeg ?? 5;
   const group = L.layerGroup();
 
   const lineStyle = { color: "#9aa0a6", weight: 1, interactive: false };
   const axisStyle = { color: "#5f6368", weight: 1.5, interactive: false };
-  const label = (text) =>
+  const label = (text: string) =>
     L.divIcon({
       className: "graticule-label",
       html: `<span>${text}</span>`,

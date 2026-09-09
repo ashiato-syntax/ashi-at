@@ -20,59 +20,6 @@
             <p class="subtitle">どこにいた？</p>
         </div>
         <main id="app" inert>
-            <header>
-                <div class="top-actions">
-                    <div class="menu">
-                        <button
-                            id="menuToggle"
-                            type="button"
-                            class="secondary icon-button"
-                            aria-haspopup="true"
-                            aria-expanded="false"
-                            aria-label="メニュー"
-                        >
-                            ☰
-                            <span id="menuBadge" class="badge-dot" hidden></span>
-                        </button>
-                        <div id="menuDropdown" class="menu-dropdown" hidden>
-                            <p id="currentHostLabel" class="menu-current-host"></p>
-                            <button
-                                id="unlockedListToggle"
-                                type="button"
-                                aria-haspopup="dialog"
-                            >
-                                👣あつめたあしあと
-                                <span id="unlockedBadge" class="badge-dot" hidden></span>
-                            </button>
-                            <button
-                                id="draftListToggle"
-                                type="button"
-                                aria-haspopup="dialog"
-                            >
-                                📝下書き
-                            </button>
-                            <button id="changeInstance" type="button">
-                                インスタンスを変更
-                            </button>
-                            <button id="clearSearchCache" type="button">
-                                検索キャッシュを消す
-                            </button>
-                            <button id="clearCollected" type="button">
-                                あつめたあしあとを消す
-                            </button>
-                            <button id="aboutButton" type="button">
-                                Ashi@について
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div class="search-buttons">
-                    <button id="search" type="button">探す</button>
-                    <button id="loadNewer" type="button" hidden>
-                        最新を確認
-                    </button>
-                </div>
-            </header>
             <div class="map-wrap">
                 <section id="map" aria-label="Ashiato map"></section>
                 <div id="statusToast" class="status-toast" role="status">
@@ -86,6 +33,9 @@
                     >
                         ×
                     </button>
+                </div>
+                <div id="precisionWarning" class="precision-warning" hidden>
+                    現在地の精度が低いです
                 </div>
                 <button
                     id="toggleGps"
@@ -109,14 +59,71 @@
                     ></span>
                     <span class="gps-toggle-label">エリア</span>
                 </button>
-                <button
-                    id="composeAshiato"
-                    type="button"
-                    class="compose-fab"
-                    aria-label="あしあとを投稿"
-                >
-                    👣
-                </button>
+                <div class="bottom-toolbar">
+                    <div class="search-buttons">
+                        <button id="loadNewer" type="button">
+                            最新を確認
+                        </button>
+                        <button id="search" type="button">過去を探す</button>
+                    </div>
+                    <div class="menu">
+                        <button
+                            id="menuToggle"
+                            type="button"
+                            class="menu-fab"
+                            aria-haspopup="true"
+                            aria-expanded="false"
+                            aria-label="メニュー"
+                        >
+                            👣
+                            <span
+                                id="menuBadge"
+                                class="badge-dot"
+                                hidden
+                            ></span>
+                        </button>
+                        <div id="menuDropdown" class="menu-dropdown" hidden>
+                            <p
+                                id="currentHostLabel"
+                                class="menu-current-host"
+                            ></p>
+                            <button
+                                id="composeAshiatoMenuItem"
+                                type="button"
+                            >
+                                👣あしあとを投稿
+                            </button>
+                            <button
+                                id="unlockedListToggle"
+                                type="button"
+                                aria-haspopup="dialog"
+                            >
+                                👣あつめたあしあと
+                                <span
+                                    id="unlockedBadge"
+                                    class="badge-dot"
+                                    hidden
+                                ></span>
+                            </button>
+                            <button
+                                id="draftListToggle"
+                                type="button"
+                                aria-haspopup="dialog"
+                            >
+                                📝下書き
+                            </button>
+                            <button id="changeInstance" type="button">
+                                インスタンスを変更
+                            </button>
+                            <button id="clearSearchCache" type="button">
+                                検索キャッシュを消す
+                            </button>
+                            <button id="aboutButton" type="button">
+                                Ashi@について
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
         <dialog id="unlockedListDialog">
@@ -129,12 +136,29 @@
                 ×
             </button>
             <h2>あつめたあしあと</h2>
+            <div class="unlocked-list-controls">
+                <label class="unlocked-list-sort">
+                    並び順
+                    <select id="unlockedSortMode">
+                        <option value="unlocked">発見日順</option>
+                        <option value="posted">投稿日順</option>
+                    </select>
+                </label>
+            </div>
             <ul id="unlockedList" class="unlocked-list"></ul>
             <div class="unlocked-list-footer">
                 <label class="unlocked-list-filter">
                     <input type="checkbox" id="unopenedOnlyFilter" />
                     未開封のみ表示
                 </label>
+                <button
+                    id="deleteSelectedUnlocked"
+                    type="button"
+                    class="secondary"
+                    disabled
+                >
+                    選択したものを削除
+                </button>
             </div>
         </dialog>
         <dialog id="composeDialog">
@@ -227,6 +251,6 @@
                 <button id="confirmOk" type="button">OK</button>
             </div>
         </dialog>
-        <script type="module" src="/src/main.js"></script>
+        <script type="module" src="/src/main.ts"></script>
     </body>
 </html>

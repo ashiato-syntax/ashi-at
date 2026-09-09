@@ -5,21 +5,24 @@ const OPEN = "⟦",
 
 const b36 = /^[0-9a-z]+$/;
 
-const dec = (v) => {
+const dec = (v: string): number => {
   if (!b36.test(v)) throw Error(`Invalid Base36: ${v}`);
   return Number.parseInt(v, 36);
 };
 
-const enc = (v) => v.toString(36);
+const enc = (v: number): string => v.toString(36);
 
-
-function signed(v) {
+function signed(v: string): number {
   if (!/^[+-]?[0-9a-z]+$/.test(v)) throw Error(`Invalid signed Base36: ${v}`);
   return (v[0] == "-" ? -1 : 1) * dec(v.replace(/^[+-]/, ""));
 }
 
+interface TimeRange {
+  s: number;
+  e: number;
+}
 
-function time(v) {
+function time(v: string): TimeRange {
   const m = /^([0-9a-z]+)-([0-9a-z]+)$/.exec(v);
   if (!m) throw Error(`Invalid t value: ${v}`);
 
@@ -30,8 +33,7 @@ function time(v) {
   return { s, e };
 }
 
-
-function md(v) {
+function md(v: string): void {
   if (!/^\d{4}$/.test(v)) throw Error(`Invalid month-day: ${v}`);
 
   const m = +v.slice(0, 2),
@@ -43,8 +45,13 @@ function md(v) {
     throw Error(`Invalid calendar date: ${v}`);
 }
 
+interface Field {
+  key: string;
+  value: string;
+  ext: boolean;
+}
 
-function field(tok) {
+function field(tok: string): Field {
   const i = tok.indexOf(";");
 
   if (i <= 0) throw Error(`Invalid field: ${tok}`);
@@ -66,9 +73,8 @@ function field(tok) {
   return { key, value, ext: false };
 }
 
-
-export function extractCandidates(text) {
-  const out = [];
+export function extractCandidates(text: string): string[] {
+  const out: string[] = [];
   let p = 0;
 
   while ((p = text.indexOf(OPEN, p)) !== -1) {
@@ -83,8 +89,26 @@ export function extractCandidates(text) {
   return out;
 }
 
+export interface AshiatoModel {
+  version: 1;
+  contextId: string | null;
+  geohash: string;
+  utcOffsetMinutes: number;
+  timezoneIndex: number | null;
+  startUnixMinute: number | null;
+  endUnixMinute: number | null;
+  dates: string[] | null;
+  weekdays: number[] | null;
+  timeRange: TimeRange | null;
+  overnight: boolean;
+  extensions: Record<string, string>;
+}
 
-export function parseCandidate(c) {
+export type ParseResult =
+  | { ok: true; candidate: string; model: AshiatoModel; canonical: string }
+  | { ok: false; error: string; candidate: string };
+
+export function parseCandidate(c: string): ParseResult {
   if (
     [...c].length > MAX ||
     !c.startsWith(OPEN) ||
@@ -98,7 +122,7 @@ export function parseCandidate(c) {
     return { ok: false, error: "Syntax must begin with as;1.", candidate: c };
 
   let i = 1;
-  let ctxId = null;
+  let ctxId: string | null = null;
 
   if (t[i]?.startsWith("c;")) {
     ctxId = t[i].slice(2);
@@ -114,8 +138,8 @@ export function parseCandidate(c) {
   if (!/^[0-9bcdefghjkmnpqrstuvwxyz]{1,12}$/.test(g))
     return { ok: false, error: "Invalid g.", candidate: c };
 
-  const f = new Map(),
-    x = new Map();
+  const f = new Map<string, string>(),
+    x = new Map<string, string>();
 
   try {
     for (; i < t.length; i++) {
@@ -129,43 +153,42 @@ export function parseCandidate(c) {
       throw Error("z and tz are mutually exclusive.");
 
     if (f.has("z")) {
-      const z = signed(f.get("z"));
+      const z = signed(f.get("z")!);
       if (z < -1440 || z > 1440) throw Error("z out of range.");
     }
 
-    if (f.has("s")) dec(f.get("s"));
-    if (f.has("e")) dec(f.get("e"));
-    if (f.has("s") && f.has("e") && dec(f.get("s")) >= dec(f.get("e")))
+    if (f.has("s")) dec(f.get("s")!);
+    if (f.has("e")) dec(f.get("e")!);
+    if (f.has("s") && f.has("e") && dec(f.get("s")!) >= dec(f.get("e")!))
       throw Error("s must be less than e.");
 
-    if (f.has("d")) f.get("d").split(".").forEach(md);
-    if (f.has("w") && !/^[1-7]+$/.test(f.get("w"))) throw Error("Invalid w.");
+    if (f.has("d")) f.get("d")!.split(".").forEach(md);
+    if (f.has("w") && !/^[1-7]+$/.test(f.get("w")!)) throw Error("Invalid w.");
 
-    const tr = f.has("t") ? time(f.get("t")) : null;
+    const tr = f.has("t") ? time(f.get("t")!) : null;
     if (f.has("o") && (f.get("o") !== "1" || !tr || tr.s <= tr.e))
       throw Error("Invalid o;1.");
   } catch (e) {
-    return { ok: false, error: e.message, candidate: c };
+    return { ok: false, error: (e as Error).message, candidate: c };
   }
-  const model = {
+  const model: AshiatoModel = {
     version: 1,
     contextId: ctxId,
     geohash: g,
-    utcOffsetMinutes: f.has("z") ? signed(f.get("z")) : 0,
-    timezoneIndex: f.has("tz") ? dec(f.get("tz")) : null,
-    startUnixMinute: f.has("s") ? dec(f.get("s")) : null,
-    endUnixMinute: f.has("e") ? dec(f.get("e")) : null,
-    dates: f.has("d") ? f.get("d").split(".") : null,
-    weekdays: f.has("w") ? [...f.get("w")].map(Number) : null,
-    timeRange: f.has("t") ? time(f.get("t")) : null,
+    utcOffsetMinutes: f.has("z") ? signed(f.get("z")!) : 0,
+    timezoneIndex: f.has("tz") ? dec(f.get("tz")!) : null,
+    startUnixMinute: f.has("s") ? dec(f.get("s")!) : null,
+    endUnixMinute: f.has("e") ? dec(f.get("e")!) : null,
+    dates: f.has("d") ? f.get("d")!.split(".") : null,
+    weekdays: f.has("w") ? [...f.get("w")!].map(Number) : null,
+    timeRange: f.has("t") ? time(f.get("t")!) : null,
     overnight: f.get("o") === "1",
     extensions: Object.fromEntries(x),
   };
   return { ok: true, candidate: c, model, canonical: canonicalize(model) };
 }
 
-
-function canonicalize(m) {
+function canonicalize(m: AshiatoModel): string {
   const p = ["as;1"];
   if (m.contextId) p.push(`c;${m.contextId}`);
 
@@ -192,10 +215,9 @@ function canonicalize(m) {
   return `⟦${p.join(",")}⟧`;
 }
 
-
 // 投稿機能用: geohash1つだけを持つ最小限のAshiato Syntax文字列を組み立てる。
 // 時間条件フィールド(d/w/t/o/tz/z)は「まずは最低限から」の方針でまだ未対応。
-export function buildMinimalCandidate(geohash) {
+export function buildMinimalCandidate(geohash: string): string {
   return canonicalize({
     version: 1,
     contextId: null,
@@ -212,9 +234,8 @@ export function buildMinimalCandidate(geohash) {
   });
 }
 
-
-export function parseText(text) {
+export function parseText(text: string): Extract<ParseResult, { ok: true }>[] {
   return extractCandidates(text)
     .map(parseCandidate)
-    .filter((r) => r.ok);
+    .filter((r): r is Extract<ParseResult, { ok: true }> => r.ok);
 }

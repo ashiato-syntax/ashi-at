@@ -1,11 +1,20 @@
 const ALPHABET = "0123456789bcdefghjkmnpqrstuvwxyz";
 
+export interface GeohashBounds {
+  minLat: number;
+  maxLat: number;
+  minLon: number;
+  maxLon: number;
+  centerLat: number;
+  centerLon: number;
+}
+
 // 緯度経度からGeohashを生成する。decodeGeohashの逆演算。
 // precision桁のGeohash文字列を返す(Ashi@で使うのは5/6/7のいずれか)。
-export function encodeGeohash(lat, lon, precision) {
-  let latRange = [-90, 90],
-    lonRange = [-180, 180],
-    even = true,
+export function encodeGeohash(lat: number, lon: number, precision: number): string {
+  const latRange: [number, number] = [-90, 90];
+  const lonRange: [number, number] = [-180, 180];
+  let even = true,
     bit = 0,
     ch = 0,
     hash = "";
@@ -34,13 +43,13 @@ export function encodeGeohash(lat, lon, precision) {
   return hash;
 }
 
-export function decodeGeohash(hash) {
+export function decodeGeohash(hash: string): GeohashBounds {
   if (!/^[0-9bcdefghjkmnpqrstuvwxyz]{1,12}$/.test(hash))
     throw new Error(`Invalid Geohash: ${hash}`);
 
-  let lat = [-90, 90],
-    lon = [-180, 180],
-    even = true;
+  const lat: [number, number] = [-90, 90];
+  const lon: [number, number] = [-180, 180];
+  let even = true;
 
   for (const ch of hash) {
     const bits = ALPHABET.indexOf(ch);
@@ -70,7 +79,7 @@ export function decodeGeohash(hash) {
 // 発見判定の目安を表示する程度の用途なので、この精度で十分。
 const METERS_PER_DEGREE_LAT = 111320;
 
-export function geohashCellSizeMeters(hash) {
+export function geohashCellSizeMeters(hash: string): { widthM: number; heightM: number } {
   const { minLat, maxLat, minLon, maxLon, centerLat } = decodeGeohash(hash);
 
   const heightM = (maxLat - minLat) * METERS_PER_DEGREE_LAT;
@@ -83,7 +92,7 @@ export function geohashCellSizeMeters(hash) {
 }
 
 // 現在地(lat, lon)が、指定したgeohashセルの矩形範囲内に入っているかを判定する
-export function isInsideGeohashCell(lat, lon, hash) {
+export function isInsideGeohashCell(lat: number, lon: number, hash: string): boolean {
   const { minLat, maxLat, minLon, maxLon } = decodeGeohash(hash);
   return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
 }

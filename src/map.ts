@@ -1,7 +1,8 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { decodeGeohash, encodeGeohash } from "./geohash.js";
-import { addGraticule } from "./graticule.js";
+import type { AshiatoCell, AshiatoGroupHandle, AshiatoCellState } from "./types.js";
+import type { FeatureCollection, Geometry } from "geojson";
 
 // NOTE: ここでは意図的に L.tileLayer(...) を追加していない
 // サードパーティ製のタイルプロバイダは使用しない
@@ -9,9 +10,13 @@ import { addGraticule } from "./graticule.js";
 // https://github.com/smartnews-smri/japan-topography　の1%GeoJsonを使って描画してる
 const JAPAN_BOUNDS = L.latLngBounds([17, 122], [46, 154]);
 
+// 陸地の塗りつぶし色。海は#mapのCSS背景色(style.css)で表現しているので、
+// ここでは都道府県ポリゴンの塗りつぶしだけを指定する。
+const LAND_FILL_COLOR = "#F7F2EC";
+
 // Geohashの桁数(精度)ごとの色。精度が細かい(=判定エリアが狭い)ほど暖色にして目立たせる。
 // 5桁=緑, 6桁=黄色, 7桁=赤。Ashi@が扱うのはこの3種類の桁数のみ。
-const ASHIATO_COLORS_BY_LENGTH = {
+const ASHIATO_COLORS_BY_LENGTH: Record<number, string> = {
   5: "#4caf50",
   6: "#fbc02d",
   7: "#e53935",
@@ -20,67 +25,73 @@ const ASHIATO_COLORS_BY_LENGTH = {
 // (main.js の computeCellState を参照)。
 const OPENED_COLOR = "#888";
 
-function colorFor(state, geohashLength) {
+function colorFor(state: AshiatoCellState, geohashLength: number): string {
   if (state === "opened") return OPENED_COLOR;
   return ASHIATO_COLORS_BY_LENGTH[geohashLength] ?? ASHIATO_COLORS_BY_LENGTH[7];
 }
 
 // main.js側(エリアオーバーレイ用にcell.colorを覚えておく処理など)からも
 // 同じ色計算を使えるようにエクスポートしたもの。
-export function ashiatoColor(state, geohashLength) {
+export function ashiatoColor(state: AshiatoCellState, geohashLength: number): string {
   return colorFor(state, geohashLength);
 }
 
-export function createMap(el) {
+export function createMap(el: string | HTMLElement): L.Map {
   const map = L.map(el, {
     attributionControl: false,
     minZoom: 4, // ズームアウトの制限。大体日本が全部収まるくらい
     maxBounds: JAPAN_BOUNDS,
     maxBoundsViscosity: 0.8, // 表示領域をはみ出たらふわっと戻す
   }).setView([34.69, 135.50], 9);
-  addGraticule(map);
+
+  // 陸地(都道府県ポリゴンの塗りつぶし)専用のペイン。
+  // グリッド(デフォルトのoverlayPane, z-index 400)より前面、
+  // 市区町村・都道府県の境界線より背面に置くことで、
+  // 「塗りつぶしの上に境界線が乗る」見た目にする(逆順だと境界線が塗りに隠れる)。
+  map.createPane("landPane");
+  map.getPane("landPane")!.style.zIndex = "405";
 
   // 都道府県の境界線が常に市区町村の境界線より前面に描画されるように、専用のペインを割り当て
   map.createPane("municipalityPane");
-  map.getPane("municipalityPane").style.zIndex = 410;
+  map.getPane("municipalityPane")!.style.zIndex = "410";
   map.createPane("prefecturePane");
-  map.getPane("prefecturePane").style.zIndex = 420;
+  map.getPane("prefecturePane")!.style.zIndex = "420";
 
   // 「エリア」トグルで表示するGeohashセルの範囲。境界線より前面、あしあと本体より背面。
   map.createPane("areaOverlayPane");
-  map.getPane("areaOverlayPane").style.zIndex = 650;
+  map.getPane("areaOverlayPane")!.style.zIndex = "650";
 
   // 投稿UI表示中、選択中の精度でのGeohashセル範囲をプレビュー表示するペイン。
   // areaOverlayPaneより前面、あしあと本体より背面。
   map.createPane("precisionPreviewPane");
-  map.getPane("precisionPreviewPane").style.zIndex = 660;
+  map.getPane("precisionPreviewPane")!.style.zIndex = "660";
 
   // あしあとは、Geohashの桁数が細かい(=判定エリアが狭い)ほど前面に描画する。
   // 前面から順に 7桁 > 6桁 > 5桁。
   map.createPane("ashiatoPane5");
-  map.getPane("ashiatoPane5").style.zIndex = 680;
+  map.getPane("ashiatoPane5")!.style.zIndex = "680";
   map.createPane("ashiatoPane6");
-  map.getPane("ashiatoPane6").style.zIndex = 690;
+  map.getPane("ashiatoPane6")!.style.zIndex = "690";
   map.createPane("ashiatoPane7");
-  map.getPane("ashiatoPane7").style.zIndex = 700;
+  map.getPane("ashiatoPane7")!.style.zIndex = "700";
 
   // タップ判定も、見た目の重なり順(7→6→5)と一致させるため桁数ごとに分ける。
   // (どの桁数のペインよりも前面)
   map.createPane("ashiatoHitPane5");
-  map.getPane("ashiatoHitPane5").style.zIndex = 710;
+  map.getPane("ashiatoHitPane5")!.style.zIndex = "710";
   map.createPane("ashiatoHitPane6");
-  map.getPane("ashiatoHitPane6").style.zIndex = 720;
+  map.getPane("ashiatoHitPane6")!.style.zIndex = "720";
   map.createPane("ashiatoHitPane7");
-  map.getPane("ashiatoHitPane7").style.zIndex = 730;
+  map.getPane("ashiatoHitPane7")!.style.zIndex = "730";
 
   // 現在地はAshiatoよりさらに手前
   map.createPane("currentLocationPane");
-  map.getPane("currentLocationPane").style.zIndex = 750;
+  map.getPane("currentLocationPane")!.style.zIndex = "750";
 
   // ポップアップ(同じセルに複数Ashiatoがある場合の一覧)は常に最前面。
   // Leafletが標準で用意しているpopupPaneのzIndexを、Ashiato/現在地より
   // 上に上書きするだけで良い(専用paneを新設する必要はない)。
-  map.getPane("popupPane").style.zIndex = 900;
+  map.getPane("popupPane")!.style.zIndex = "900";
 
   // Leafletはコンテナのサイズを初期化時に一度だけ測ってキャッシュし、
   // 以後はwindowのresizeイベントくらいでしか再計測しない。
@@ -98,32 +109,64 @@ export function createMap(el) {
   return map;
 }
 
+export interface PrefectureProperties {
+  N03_001?: string;
+}
+
+export interface BoundaryResult {
+  data: FeatureCollection<Geometry, PrefectureProperties>;
+  labelLayer: L.LayerGroup;
+}
+
 // 都道府県境界(常に表示) GeoJSONそのものも返すので、呼び出し側で
 // prefectureIndex.js の buildPrefectureIndex に渡してバウンディングボックスを作れる。
 // ラベルは境界線と別レイヤー(labelLayer)にして、呼び出し側で
 // 境界線とは違うズーム閾値で表示/非表示を切り替えられるようにする。
-export async function loadPrefectureBoundaries(map) {
+// 境界線(線のみ)とは別に、同じGeoJsonをlandPaneへ塗りつぶし表示することで
+// 「陸地の色」を表現する(海は#mapのCSS背景色)。
+export async function loadPrefectureBoundaries(map: L.Map): Promise<BoundaryResult> {
   const res = await fetch("./data/maps/s0010/prefectures.json");
   if (!res.ok) throw new Error("都道府県境界GeoJSONの読み込みに失敗しました。");
-  const data = await res.json();
+  const data: FeatureCollection<Geometry, PrefectureProperties> = await res.json();
+
+  L.geoJSON(data, {
+    pane: "landPane",
+    style: {
+      stroke: false,
+      fill: true,
+      fillColor: LAND_FILL_COLOR,
+      fillOpacity: 1,
+      interactive: false,
+    },
+  }).addTo(map);
 
   L.geoJSON(data, {
     pane: "prefecturePane",
     style: { color: "#666", weight: 1.5, fill: false, interactive: false },
   }).addTo(map);
 
-  const labelLayer = buildLabelLayer(data, (p) => p.N03_001, "pref-label");
+  const labelLayer = buildLabelLayer(data, (p) => p.N03_001 ?? null, "pref-label");
 
   return { data, labelLayer };
+}
+
+interface MunicipalityProperties {
+  N03_003?: string;
+  N03_004?: string;
 }
 
 // 都道府県別の市区町村GeoJson(N03-21_{code}_210101.json)を取得する。
 // 同じ都道府県コードへの呼び出しはPromiseをキャッシュして使い回すので、
 // 地図描画用(loadMunicipalityBoundaries)と、下書きの場所逆引き用
 // (municipalityLookup.js)の両方から呼んでも二重取得にならない。
-const municipalityGeoJsonCache = new Map(); // prefCode -> Promise<GeoJSON>
+const municipalityGeoJsonCache = new Map<
+  string,
+  Promise<FeatureCollection<Geometry, MunicipalityProperties>>
+>(); // prefCode -> Promise<GeoJSON>
 
-export function fetchMunicipalityGeoJson(prefCode) {
+export function fetchMunicipalityGeoJson(
+  prefCode: string,
+): Promise<FeatureCollection<Geometry, MunicipalityProperties>> {
   if (!municipalityGeoJsonCache.has(prefCode)) {
     municipalityGeoJsonCache.set(
       prefCode,
@@ -134,13 +177,22 @@ export function fetchMunicipalityGeoJson(prefCode) {
       }),
     );
   }
-  return municipalityGeoJsonCache.get(prefCode);
+  return municipalityGeoJsonCache.get(prefCode)!;
+}
+
+export interface MunicipalityBoundaryResult {
+  boundaryLayer: L.GeoJSON;
+  labelLayer: L.LayerGroup;
 }
 
 // 市区町村境界は必要になったときだけ読み込む。全国版(10MB)は使わない。
 // boundaryLayerとlabelLayerを別に返すので、呼び出し側でそれぞれ別のズーム閾値で
-// 表示/非表示を切り替えられる。
-export async function loadMunicipalityBoundaries(map, prefCode) {
+// 表示/非表示を切り替えられる。陸地の塗りつぶしは都道府県レベルで既に描画済み
+// なので、市区町村側は境界線(線のみ)だけでよい。
+export async function loadMunicipalityBoundaries(
+  map: L.Map,
+  prefCode: string,
+): Promise<MunicipalityBoundaryResult> {
   const data = await fetchMunicipalityGeoJson(prefCode);
 
   const boundaryLayer = L.geoJSON(data, {
@@ -162,11 +214,15 @@ export async function loadMunicipalityBoundaries(map, prefCode) {
 // ラベル位置は「一番面積が大きいポリゴンパーツの重心」。離島持ちのfeature
 // (例: 本土+飛び地をまとめた都道府県)で、全パーツをまとめて重心を取ると
 // 本土と離島の間の海上に落ちることがあるため、最大パーツだけを使う。
-function buildLabelLayer(geojson, nameOf, className) {
+function buildLabelLayer<P>(
+  geojson: FeatureCollection<Geometry, P>,
+  nameOf: (properties: P) => string | null,
+  className: string,
+): L.LayerGroup {
   const group = L.layerGroup();
 
   for (const feature of geojson.features) {
-    const name = nameOf(feature.properties);
+    const name = feature.properties ? nameOf(feature.properties) : null;
     if (!name) continue;
 
     const center = labelPositionOf(feature.geometry);
@@ -185,13 +241,13 @@ function buildLabelLayer(geojson, nameOf, className) {
   return group;
 }
 
-function labelPositionOf(geometry) {
+function labelPositionOf(geometry: Geometry): [number, number] | null {
   const polygons =
     geometry.type === "Polygon" ? [geometry.coordinates] :
     geometry.type === "MultiPolygon" ? geometry.coordinates :
     [];
 
-  let best = null;
+  let best: { lat: number; lon: number; area: number } | null = null;
   for (const polygon of polygons) {
     const c = ringCentroid(polygon[0]); // 外接だけ。穴は無視。
     if (!best || c.area > best.area) best = c;
@@ -201,7 +257,7 @@ function labelPositionOf(geometry) {
 
 // 経緯度単位での、標準的な符号付き面積に基づく多角形重心（靴ひも公式）
 // 正確な測地線上の重心ではないが、テキストラベルを配置するには十分な精度
-function ringCentroid(ring) {
+function ringCentroid(ring: number[][]): { lat: number; lon: number; area: number } {
   let area = 0, cx = 0, cy = 0;
 
   for (let i = 0; i < ring.length - 1; i++) {
@@ -228,11 +284,16 @@ function ringCentroid(ring) {
 // による二重丸にして、「同じ場所に複数のAshiatoがある」ことを視覚的に示す。
 // クリック判定(hitArea)は常に1つ(グループ全体で1つのタップ対象)。
 // 色・ペインはgeohashの桁数(5/6/7)に応じて決まる(呼び出し側でこの桁数のみに絞り込み済み)。
-export function addAshiatoGroup(map, geohash, count, onOpen) {
+export function addAshiatoGroup(
+  map: L.Map,
+  geohash: string,
+  count: number,
+  onOpen: () => void,
+): AshiatoGroupHandle {
   const b = decodeGeohash(geohash);
   const centerLat = (b.minLat + b.maxLat) / 2;
   const centerLon = (b.minLon + b.maxLon) / 2;
-  const latlng = [centerLat, centerLon];
+  const latlng: [number, number] = [centerLat, centerLon];
   const geohashLength = geohash.length;
   const pane = `ashiatoPane${geohashLength}`;
   const hitPane = `ashiatoHitPane${geohashLength}`;
@@ -248,7 +309,7 @@ export function addAshiatoGroup(map, geohash, count, onOpen) {
     pane,
   });
 
-  const visualLayers = [outer];
+  const visualLayers: L.CircleMarker[] = [outer];
 
   if (count > 1) {
     const inner = L.circleMarker(latlng, {
@@ -279,25 +340,36 @@ export function addAshiatoGroup(map, geohash, count, onOpen) {
   return { visualLayers, hitArea, geohashLength };
 }
 
-export function removeAshiatoGroup(map, { visualLayers, hitArea }) {
+export function removeAshiatoGroup(
+  map: L.Map,
+  { visualLayers, hitArea }: Pick<AshiatoGroupHandle, "visualLayers" | "hitArea">,
+): void {
   for (const v of visualLayers) map.removeLayer(v);
   map.removeLayer(hitArea);
 }
 
 // state: "unlocked" | "opened"
 // (ロック中=未発見のセルは地図に一切表示しない方針のため、"locked"状態は存在しない)
-export function setAshiatoState({ visualLayers, hitArea, geohashLength }, state) {
+export function setAshiatoState(
+  { visualLayers, hitArea, geohashLength }: AshiatoGroupHandle,
+  state: AshiatoCellState,
+): void {
   const color = colorFor(state, geohashLength);
   for (const v of visualLayers) v.setStyle({ color });
   hitArea.setStyle({ color, fillOpacity: 0.5 });
 }
 
+export interface AreaOverlay {
+  setEnabled(value: boolean): void;
+  refresh(cells: AshiatoCell[]): void;
+}
+
 // 「エリア」トグル用: あしあとのGeohashセルの範囲そのものを、あしあと本体と同じ色で描画する。
 // setEnabled/refreshどちらからでも再描画され、無効時は常に空(クリア)。
-export function createAreaOverlay(map) {
+export function createAreaOverlay(map: L.Map): AreaOverlay {
   const group = L.layerGroup().addTo(map);
   let enabled = false;
-  let currentCells = [];
+  let currentCells: AshiatoCell[] = [];
 
   function render() {
     group.clearLayers();
@@ -326,17 +398,21 @@ export function createAreaOverlay(map) {
   }
 
   return {
-    setEnabled(value) {
+    setEnabled(value: boolean) {
       enabled = value;
       render();
     },
     // cellsは呼び出し側(main.js)のashiatoCellsの現在値のスナップショットを渡す想定。
-    // 各要素は { geohash, visualLayers, color } を持つこと。
-    refresh(cells) {
+    refresh(cells: AshiatoCell[]) {
       currentCells = cells;
       render();
     },
   };
+}
+
+export interface PrecisionPreviewLayer {
+  show(lat: number, lon: number, geohashLength: number): string;
+  hide(): void;
 }
 
 // 投稿UI表示中、選択中の精度でのGeohashセル範囲をプレビュー表示する。
@@ -347,7 +423,7 @@ export function createAreaOverlay(map) {
 // 組み立てに使い回せるように)。
 const PRECISION_PREVIEW_COLOR = "#8e24aa";
 
-export function createPrecisionPreviewLayer(map) {
+export function createPrecisionPreviewLayer(map: L.Map): PrecisionPreviewLayer {
   const rect = L.rectangle(
     [
       [0, 0],
@@ -364,7 +440,7 @@ export function createPrecisionPreviewLayer(map) {
   );
 
   return {
-    show(lat, lon, geohashLength) {
+    show(lat: number, lon: number, geohashLength: number) {
       const hash = encodeGeohash(lat, lon, geohashLength);
       const b = decodeGeohash(hash);
       rect.setBounds([
@@ -380,8 +456,13 @@ export function createPrecisionPreviewLayer(map) {
   };
 }
 
+export interface CurrentLocationLayer {
+  show(lat: number, lon: number, accuracyM: number): void;
+  hide(): void;
+}
+
 // 現在地マーカー+精度円。専用paneに乗せ、Ashiatoより手前に表示する
-export function createCurrentLocationLayer(map) {
+export function createCurrentLocationLayer(map: L.Map): CurrentLocationLayer {
   const accuracyCircle = L.circle([0, 0], {
     radius: 0,
     pane: "currentLocationPane",
@@ -403,8 +484,8 @@ export function createCurrentLocationLayer(map) {
   });
 
   return {
-    show(lat, lon, accuracyM) {
-      const latlng = [lat, lon];
+    show(lat: number, lon: number, accuracyM: number) {
+      const latlng: [number, number] = [lat, lon];
       dot.setLatLng(latlng);
       accuracyCircle.setLatLng(latlng).setRadius(accuracyM);
       if (!map.hasLayer(dot)) dot.addTo(map);
