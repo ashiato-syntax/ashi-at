@@ -41,6 +41,7 @@ import {
   clearSearchCache,
   clearCollectedAshiatoByIds,
   markAshiatoUnlocked,
+  markAshiatoRead,
   getSetting,
   putSetting,
   makeDraft,
@@ -68,7 +69,7 @@ const TAG = "Ashiato";
 const PAGE_SIZE = 30;
 
 // Ashi@で扱うgeohashの桁数(精度)。これ以外の精度の「あしあと」は対象外として無視する
-// (地図表示にも「あつめたあしあと」にも一切出さない)。
+// (地図表示にも「見つけたあしあと」にも一切出さない)。
 const MIN_GEOHASH_LENGTH = 5;
 const MAX_GEOHASH_LENGTH = 7;
 
@@ -86,7 +87,7 @@ const DRAFT_HIGH_PRECISION_DELAY_MS = 30 * 60 * 1000; // 30分
 
 const PRECISION_LABELS: Record<GeohashLength, string> = { 5: "約4km", 6: "約1km", 7: "約150m" };
 
-// 「あつめたあしあと」一覧・ポップアップに表示する本文プレビューの
+// 「見つけたあしあと」一覧・ポップアップに表示する本文プレビューの
 // 安全弁としての最大文字数。表示上の省略はCSS(.mfm-preview)での高さクリップ
 // +「続きを表示」ヒントで行うため、通常はここで切り詰められることはない
 // (Misskeyの標準的な投稿文字数上限を大きく超えるような極端なケースにのみ働く、
@@ -120,12 +121,18 @@ const $ = <T extends Element = HTMLElement>(s: string): T => document.querySelec
   statusText = $("#statusText"),
   statusCloseBtn = $<HTMLButtonElement>("#statusClose"),
   precisionWarning = $("#precisionWarning"),
+  discoveryBanner = $("#discoveryBanner"),
   unlockedList = $("#unlockedList"),
-  unlockedSortModeSelect = $<HTMLSelectElement>("#unlockedSortMode");
+  unlockedSortModeSelect = $<HTMLSelectElement>("#unlockedSortMode"),
+  unreadOnlyFilterCheckbox = $<HTMLInputElement>("#unreadOnlyFilter"),
+  unlockedBadge = $("#unlockedBadge"),
+  menuBadge = $("#menuBadge");
 
 // メニューFAB・ハンバーガーメニュー各項目のアイコン(絵文字は端末フォント依存で
 // 意図した絵文字が無い環境だと崩れるため、lucide-staticのインラインSVGに置き換える)。
-$(".menu-fab-icon").append(createIcon("footprints"));
+$(".menu-fab-icon").append(createIcon("menu"));
+$("#loadNewer .toolbar-btn-icon").append(createIcon("refresh-cw"));
+$("#search .toolbar-btn-icon").append(createIcon("history"));
 $("#composeAshiatoMenuItem .menu-item-icon").append(createIcon("footprints"));
 $("#unlockedListToggle .menu-item-icon").append(createIcon("map-pinned"));
 $("#draftListToggle .menu-item-icon").append(createIcon("notebook-pen"));
@@ -407,6 +414,33 @@ function formatDateTime(value: string | number | null): string | null {
   });
 }
 
+// 一覧・ポップアップの行ヘッダーに表示する投稿日時の「相対表示」。
+// 1時間未満は分、1日未満は時間、5日未満は日数だけを表示し(「◯前」等の接尾辞は付けない)、
+// それ以上は日付(今年なら月/日、年をまたぐなら年/月/日、いずれも0埋めなし)にする。
+// 「情報」ダイアログの投稿日時・発見日時はこれとは別に、常にformatDateTime(yyyy/MM/dd hh:mm)を使う。
+function formatRelativePostedAt(value: string | number | null): string {
+  if (!value) return "不明";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "不明";
+
+  const now = new Date();
+  const diffMs = Math.max(0, now.getTime() - d.getTime());
+  const diffMin = diffMs / 60000;
+  if (diffMin < 60) return `${Math.floor(diffMin)}分`;
+
+  const diffHour = diffMin / 60;
+  if (diffHour < 24) return `${Math.floor(diffHour)}時間`;
+
+  const diffDay = diffHour / 24;
+  if (diffDay < 5) return `${Math.floor(diffDay)}日`;
+
+  const month = d.getMonth() + 1;
+  const date = d.getDate();
+  return d.getFullYear() === now.getFullYear()
+    ? `${month}/${date}`
+    : `${d.getFullYear()}/${month}/${date}`;
+}
+
 // 投稿者のラベルを「{表示名} @{アカウント名}@{投稿元インスタンス}」の形式で組み立てる。
 // 表示名(note.user.name)を設定していないユーザーもいるため、その場合は
 // 「@アカウント名@インスタンス」のみになる。usernameそのものが無い
@@ -422,7 +456,7 @@ function formatUserLabel(record: AshiatoRecord): string {
 // --- 本文プレビュー中のカスタム絵文字描画 ---------------------------------
 // textPreview(MFMをプレーンテキスト化したもの)には、カスタム絵文字が
 // 「:name:」という記法のまま残っている(mfmNodeToPlainText参照)。
-// ポップアップ・あつめたあしあと一覧の2箇所だけ、record.emojiHost(投稿元インスタンス)
+// ポップアップ・見つけたあしあと一覧の2箇所だけ、record.emojiHost(投稿元インスタンス)
 // のmisskey.js:fetchEmojiMapを使ってshortcode→画像URLを解決し、実際の画像に置き換えて
 // 表示する(note.emojisは最近のMisskeyでは空のことが多く当てにできないため使わない)。
 // 下書き一覧はユーザーが本文を入力する欄自体が無いため対象外。
@@ -525,9 +559,10 @@ function applyPreviewOverflowChecks(root: ParentNode): void {
   }
 }
 
-// 投稿者名部分(ヘッダー行の先頭)を組み立てる。表示名は太字、
-// 「@アカウント名@インスタンス」のハンドル部分は一回り小さく薄い色にする
-// (SNSのタイムライン表示に近づけるため。色・サイズ自体は.ashiato-handle参照)。
+// 投稿者名部分(ヘッダー行内)を組み立てる。表示名は太字・改行しない固定幅、
+// 「@アカウント名@インスタンス」のハンドル部分は一回り小さく薄い色にした上で、
+// 長い場合は後半を省略記号(…)で切り詰める(投稿日時の表示を圧迫しないように。
+// 幅の制御自体はCSS側、.ashiato-user/.ashiato-handle参照)。
 function buildUserNameNode(record: AshiatoRecord): HTMLElement {
   const wrap = document.createElement("span");
   wrap.className = "ashiato-user";
@@ -541,7 +576,7 @@ function buildUserNameNode(record: AshiatoRecord): HTMLElement {
     const name = document.createElement("span");
     name.className = "ashiato-display-name";
     name.textContent = record.displayName;
-    wrap.append(name, document.createTextNode(" "));
+    wrap.append(name);
   }
 
   const host = (record.emojiHost ?? record.host).replace(/^https?:\/\//, "");
@@ -553,25 +588,44 @@ function buildUserNameNode(record: AshiatoRecord): HTMLElement {
   return wrap;
 }
 
-// あしあと1件分の行を組み立てる(あつめたあしあと一覧・マップ同一位置ポップアップ共通)。
+// あしあと1件分の行を組み立てる(見つけたあしあと一覧・マップ同一位置ポップアップ共通)。
 // SNSのタイムライン表示に近い3段構成:
-//   ヘッダー(投稿者名+ハンドル+投稿日時) → 本文プレビュー → フッター(発見日時+詳細/開封ボタン)
-// 行タップ自体では何も起きず、各ボタンだけがそれぞれのアクションを起動する。
+//   ヘッダー(未読ドット+投稿者名+ハンドル+投稿日時[相対表示]) → 本文プレビュー →
+//   フッター(発見日時[yyyy/MM/dd hh:mm]+「…」ボタン)
+// 行タップ自体では何も起きず、「…」ボタンだけがアクションシートを開く。
 // overflowRootは「続きを表示」ヒントの再計算対象(applyPreviewOverflowChecks)に渡すルート要素。
+// markReadがtrueの場合のみ、未読(readAtが無い)レコードをこの時点で既読にする
+// (呼び出し側でupdateUnreadBadge()を呼ぶこと)。refreshUnlockedList()はダイアログが
+// 閉じていても内部状態の同期のために呼ばれることがあるため、そのタイミングでは
+// markReadをfalseにして「見せてもいないのに既読になる」ことを防ぐ
+// (呼び出し元を参照)。未読ドット自体は、実際に既読にしたかどうかに関わらず、
+// 呼び出し時点でまだ未読だったレコードには表示する。
 function renderAshiatoRow(
   record: AshiatoRecord,
   overflowRoot: ParentNode,
-  { onMore }: { onMore: () => void },
+  { onMore, markRead }: { onMore: () => void; markRead: boolean },
 ): HTMLElement {
+  const isUnread = !record.readAt;
+  if (isUnread && markRead) {
+    record.readAt = Date.now();
+    markAshiatoRead(record.id, record.readAt);
+  }
+
   const row = document.createElement("div");
   row.className = "ashiato-row";
 
   const header = document.createElement("div");
   header.className = "ashiato-row-header";
+  if (isUnread) {
+    const dot = document.createElement("span");
+    dot.className = "unread-dot";
+    dot.setAttribute("aria-label", "未読");
+    header.append(dot);
+  }
   header.append(buildUserNameNode(record));
   const postedAt = document.createElement("span");
   postedAt.className = "ashiato-posted-at";
-  postedAt.textContent = formatDateTime(record.noteCreatedAt) ?? "不明";
+  postedAt.textContent = formatRelativePostedAt(record.noteCreatedAt);
   header.append(postedAt);
   row.append(header);
 
@@ -625,7 +679,8 @@ function rebuildCellVisual(cell: AshiatoCell): void {
   cell.color = null;
 
   const visibleRecords = [...cell.records.values()].filter(
-    (r) => SHOW_LOCKED_ASHIATO_FOR_DEBUG || r.unlockedAt,
+    (r) =>
+      (SHOW_LOCKED_ASHIATO_FOR_DEBUG || r.unlockedAt) && (!hideReadEnabled || !r.readAt),
   );
 
 
@@ -690,10 +745,13 @@ function promoteAgedRecords(): void {
 
 setInterval(promoteAgedRecords, PENDING_PROMOTION_INTERVAL_MS);
 
-// 「あつめたあしあと」一覧の並び順。"unlocked"=発見日順、"posted"=投稿日順。
+// 「見つけたあしあと」一覧の並び順。"unlocked"=発見日順、"posted"=投稿日順。
 // いずれも新しい方が上(降順固定)。起動時にsettingsから復元する(initSortMode参照)。
 type UnlockedSortMode = "unlocked" | "posted";
 let unlockedSortMode: UnlockedSortMode = "unlocked";
+
+// 「未読のみ」フィルター(見つけたあしあと一覧の表示フィルター)。
+let showOnlyUnread = false;
 
 function sortKeyFor(record: AshiatoRecord, mode: UnlockedSortMode): number {
   if (mode === "posted") {
@@ -703,7 +761,18 @@ function sortKeyFor(record: AshiatoRecord, mode: UnlockedSortMode): number {
   return record.unlockedAt ?? 0;
 }
 
-// 「あつめたあしあと」ダイアログの中身を、アンロック済みのものだけ・
+// 発見済み(unlockedAt)かつ未読(readAtが無い)のレコードが1件でもあれば、
+// メニューFABとハンバーガーメニュー内「見つけたあしあと」項目に緑の点を出す。
+// 一覧・ポップアップの描画(renderAshiatoRowが実際に既読化したかもしれない)後に呼ぶこと。
+function updateUnreadBadge(): void {
+  const hasUnread = [...ashiatoCells.values()].some((cell) =>
+    [...cell.records.values()].some((r) => r.unlockedAt && !r.readAt),
+  );
+  menuBadge.hidden = !hasUnread;
+  unlockedBadge.hidden = !hasUnread;
+}
+
+// 「見つけたあしあと」ダイアログの中身を、アンロック済みのものだけ・
 // 選択中の並び順で再構築する。ロック中(未発見)のものはここには載せない。
 // 各行の「…」ボタンから、詳細確認・地図表示・SNSを開く・削除をまとめた
 // アクションシート(openAshiatoActions)を開く。
@@ -713,20 +782,27 @@ function refreshUnlockedList(): void {
     .filter((r) => r.unlockedAt)
     .sort((a, b) => sortKeyFor(b, unlockedSortMode) - sortKeyFor(a, unlockedSortMode));
 
+  const visible = showOnlyUnread ? unlocked.filter((r) => !r.readAt) : unlocked;
+
   unlockedList.replaceChildren();
 
-  if (unlocked.length === 0) {
+  if (visible.length === 0) {
     const empty = document.createElement("p");
     empty.className = "unlocked-list-empty";
-    empty.textContent = "まだ発見したあしあとありません。";
+    empty.textContent =
+      unlocked.length === 0
+        ? "まだ発見したあしあとありません。"
+        : "未読のあしあとはありません。";
     unlockedList.append(empty);
+    updateUnreadBadge();
     return;
   }
 
-  for (const record of unlocked) {
+  for (const record of visible) {
     const li = document.createElement("li");
     const row = renderAshiatoRow(record, unlockedList, {
       onMore: () => openAshiatoActions(record),
+      markRead: unlockedListDialog.open,
     });
     li.append(row);
     unlockedList.append(li);
@@ -735,6 +811,7 @@ function refreshUnlockedList(): void {
   // このタイミングでdialogが開いていれば正しく測れる(閉じていれば後で
   // showModal()後に再度呼ばれて補正される。unlockedListToggleのonclick参照)。
   applyPreviewOverflowChecks(unlockedList);
+  updateUnreadBadge();
 }
 
 // セルをクリックしたときの入口。
@@ -753,7 +830,9 @@ function showAshiatoCellPopup(geohash: string): void {
   const cell = ashiatoCells.get(geohash);
   if (!cell) return;
 
-  const records = [...cell.records.values()].filter((r) => r.unlockedAt);
+  const records = [...cell.records.values()]
+    .filter((r) => r.unlockedAt)
+    .sort((a, b) => sortKeyFor(b, "posted") - sortKeyFor(a, "posted"));
   if (records.length === 0) return; // 通常は来ないはずだが念のため
 
   const { centerLat, centerLon } = decodeGeohash(geohash);
@@ -766,9 +845,11 @@ function showAshiatoCellPopup(geohash: string): void {
         map.closePopup();
         openAshiatoActions(record);
       },
+      markRead: true,
     });
     container.append(row);
   }
+  updateUnreadBadge();
 
   // maxHeightを指定すると、件数が多い場合にLeafletがポップアップ内を
   // 自動でスクロール可能にしてくれる(popupPaneのzIndexは createMap 側で
@@ -790,7 +871,7 @@ function showAshiatoCellPopup(geohash: string): void {
 // あしあと1件分の「…」ボタンから呼ばれるアクションシート。地図/一覧いずれの行から
 // 呼ばれた場合も対象は常に発見済み(unlockedAtがある)レコードのみ。
 // 情報(投稿者・投稿日時・発見日時・当たり判定エリア)を表示した上で、
-// マップ表示・SNSを開く・「あつめたあしあと」からの削除の3アクションを提供する。
+// マップ表示・SNSを開く・「見つけたあしあと」からの削除の3アクションを提供する。
 function openAshiatoActions(record: AshiatoRecord): void {
   ashiatoActionInfo.replaceChildren();
   const infoRows: [string, string][] = [
@@ -830,7 +911,7 @@ function openAshiatoActions(record: AshiatoRecord): void {
   ashiatoActionDeleteBtn.onclick = async () => {
     ashiatoActionDialog.close();
     const wantsToDelete = await showConfirm(
-      "このあしあとを「あつめたあしあと」から削除しますか？(現地に行けば再度発見できます)",
+      "このあしあとを「見つけたあしあと」から削除しますか？(現地に行けば再度発見できます)",
       { okLabel: "削除する", danger: true },
     );
     if (!wantsToDelete) return;
@@ -840,7 +921,10 @@ function openAshiatoActions(record: AshiatoRecord): void {
     const cell = ashiatoCells.get(record.geohash);
     if (cell) {
       const target = cell.records.get(record.id);
-      if (target) target.unlockedAt = null;
+      if (target) {
+        target.unlockedAt = null;
+        target.readAt = null;
+      }
       rebuildCellVisual(cell); // ロック中に戻るので円は消える(セルは保持)
       areaOverlay.refresh([...ashiatoCells.values()]);
     }
@@ -875,6 +959,27 @@ function isPrecisionBad(): boolean {
 
 function updatePrecisionWarning(): void {
   precisionWarning.hidden = !isPrecisionBad();
+}
+
+// 新規発見時、画面中央に一時的に出す通知バンド。precisionWarningと違い常時表示ではなく、
+// 一定時間後に自動で消える(setStatusのトースト表示と同様のタイマー方式)。
+let discoveryBannerHideTimer: ReturnType<typeof setTimeout> | undefined;
+
+function showDiscoveryBanner(count: number): void {
+  clearTimeout(discoveryBannerHideTimer);
+  discoveryBanner.textContent = `あしあとが${count}個見つかりました！`;
+  discoveryBanner.hidden = false;
+
+  // 連続して発見した場合でもアニメーションが最初からやり直されるよう、
+  // 一旦クラスを外して強制的にレイアウトさせてから付け直す。
+  discoveryBanner.classList.remove("show");
+  void discoveryBanner.offsetWidth;
+  discoveryBanner.classList.add("show");
+
+  discoveryBannerHideTimer = setTimeout(() => {
+    discoveryBanner.hidden = true;
+    discoveryBanner.classList.remove("show");
+  }, 3500);
 }
 
 // GPSトグルON/OFF・位置精度いずれの変化でも、投稿メニュー項目(新規投稿・新規下書きの入口)の
@@ -941,6 +1046,7 @@ function handlePositionError(error: GeolocationPositionError): void {
 async function checkCurrentPositionAgainstCells(): Promise<void> {
   if (!lastKnownPosition || isPrecisionBad()) return;
   const { lat, lon } = lastKnownPosition;
+  let discoveredCount = 0;
 
   for (const cell of ashiatoCells.values()) {
     const locked = [...cell.records.values()].filter((r) => !r.unlockedAt);
@@ -951,10 +1057,13 @@ async function checkCurrentPositionAgainstCells(): Promise<void> {
     for (const record of locked) {
       await markAshiatoUnlocked(record.id, unlockedAt);
       record.unlockedAt = unlockedAt;
+      discoveredCount++;
     }
     rebuildCellVisual(cell); // 初めて発見された/丸の数が増えたケースに対応
     refreshUnlockedList();
   }
+
+  if (discoveredCount > 0) showDiscoveryBanner(discoveredCount);
 }
 
 // 現在地が更新されるたびに呼ばれる。実際の判定はcheckCurrentPositionAgainstCellsに委譲する
@@ -977,6 +1086,9 @@ const unlockedListDialog = $<HTMLDialogElement>("#unlockedListDialog");
 $<HTMLButtonElement>("#unlockedListToggle").onclick = () => {
   closeMenu();
   unlockedListDialog.showModal();
+  // 開いた直後にrefreshUnlockedList()を呼び直すことで、今まさに表示された行を
+  // 既読として記録する(閉じている間の再構築ではmarkRead:falseのため既読にならない)。
+  refreshUnlockedList();
   // refreshUnlockedList()が閉じた状態で呼ばれていた場合、高さが正しく
   // 測れず「続きを表示」ヒントの表示要否判定が不正確なことがあるため、
   // 実際に表示された直後に測り直す。
@@ -987,6 +1099,11 @@ $<HTMLButtonElement>("#unlockedListCloseX").onclick = () => unlockedListDialog.c
 unlockedSortModeSelect.onchange = () => {
   unlockedSortMode = unlockedSortModeSelect.value as UnlockedSortMode;
   putSetting("unlockedSortMode", unlockedSortMode);
+  refreshUnlockedList();
+};
+
+unreadOnlyFilterCheckbox.onchange = () => {
+  showOnlyUnread = unreadOnlyFilterCheckbox.checked;
   refreshUnlockedList();
 };
 
@@ -1029,6 +1146,17 @@ toggleAreaBtn.onclick = () => {
   areaEnabled = !areaEnabled;
   toggleAreaBtn.setAttribute("aria-pressed", String(areaEnabled));
   areaOverlay.setEnabled(areaEnabled);
+};
+
+// --- 「既読を隠す」トグル(既読のAshiatoを地図に表示しない) -------------------
+
+const toggleHideReadBtn = $<HTMLButtonElement>("#toggleHideRead");
+let hideReadEnabled = false;
+
+toggleHideReadBtn.onclick = () => {
+  hideReadEnabled = !hideReadEnabled;
+  toggleHideReadBtn.setAttribute("aria-pressed", String(hideReadEnabled));
+  for (const cell of ashiatoCells.values()) rebuildCellVisual(cell);
 };
 
 // --- ハンバーガーメニュー(投稿ボタンを統合、画面下部・footprint型) -------
@@ -1138,7 +1266,7 @@ async function ensureHost(): Promise<string> {
 }
 
 // --- 本文プレビュー(MFM) ------------------------------------------------
-// 「あつめたあしあと」を開封する前でも、内容を少しだけ確認できるように、
+// 「見つけたあしあと」を開封する前でも、内容を少しだけ確認できるように、
 // ノート本文の冒頭をプレビュー表示する。ノート本文そのもの(全文)は
 // これまで通りキャッシュに保存しない方針を維持し、ここで作った短い
 // プレビュー文字列だけを例外的にレコードへ持たせる。
@@ -1359,7 +1487,7 @@ async function fetchNewer(): Promise<void> {
 
 // 「検索キャッシュを消す」。まだ発見していない(unlockedAtが無い)レコードと
 // 保留中(pendingRecords)のレコード、カーソルだけを消す。
-// 「あつめたあしあと」(発見済み)は地図上にもそのまま残す。
+// 「見つけたあしあと」(発見済み)は地図上にもそのまま残す。
 async function handleClearSearchCache(): Promise<void> {
   await clearSearchCache();
   pendingRecords.clear();
@@ -1387,21 +1515,21 @@ $<HTMLButtonElement>("#toggleGps").onclick = () => setGpsEnabled(!gpsEnabled);
 $<HTMLButtonElement>("#clearSearchCache").onclick = async () => {
   closeMenu();
   const wantsToClear = await showConfirm(
-    "検索キャッシュを削除しますか？(あつめたあしあとは残ります)",
+    "検索キャッシュを削除しますか？(見つけたあしあとは残ります)",
     { okLabel: "削除する", danger: true },
   );
   if (!wantsToClear) return;
   await handleClearSearchCache();
 };
 
-// 「リセット」: あつめたあしあと・検索キャッシュ・下書き・設定(インスタンスURL等)を
+// 「リセット」: 見つけたあしあと・検索キャッシュ・下書き・設定(インスタンスURL等)を
 // 含む全キャッシュを削除する(cache.jsのresetAllCacheがIndexedDBごと削除する)。
 // 削除後はアプリの状態(ashiatoCells等の変数)も含めて丸ごと作り直すのが確実なため、
 // 個別に状態をクリアするのではなくページをリロードする。
 $<HTMLButtonElement>("#resetAll").onclick = async () => {
   closeMenu();
   const wantsToReset = await showConfirm(
-    "すべてのキャッシュを削除しますか？\n\nあつめたあしあと・下書き・インスタンス設定など、保存されているデータがすべて消えます。この操作は取り消せません。",
+    "すべてのキャッシュを削除しますか？\n\n見つけたあしあと・下書き・インスタンス設定など、保存されているデータがすべて消えます。この操作は取り消せません。",
     { okLabel: "削除する", danger: true },
   );
   if (!wantsToReset) return;
@@ -1672,7 +1800,7 @@ async function refreshDraftList(): Promise<void> {
       refreshDraftList();
     };
 
-    actions.append(postBtn, deleteBtn);
+    actions.append(deleteBtn, postBtn);
     li.append(meta, precisionSelect, actions);
     draftList.append(li);
   }

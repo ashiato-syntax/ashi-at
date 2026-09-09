@@ -13,6 +13,9 @@ import ellipsis from "lucide-static/icons/ellipsis.svg?raw";
 import mapPin from "lucide-static/icons/map-pin.svg?raw";
 import externalLink from "lucide-static/icons/external-link.svg?raw";
 import x from "lucide-static/icons/x.svg?raw";
+import menu from "lucide-static/icons/menu.svg?raw";
+import refreshCw from "lucide-static/icons/refresh-cw.svg?raw";
+import history from "lucide-static/icons/history.svg?raw";
 
 const ICONS = {
   footprints,
@@ -26,6 +29,9 @@ const ICONS = {
   "map-pin": mapPin,
   "external-link": externalLink,
   x,
+  menu,
+  "refresh-cw": refreshCw,
+  history,
 } as const;
 
 export type IconName = keyof typeof ICONS;

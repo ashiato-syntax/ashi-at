@@ -76,12 +76,12 @@ function hostTagKey(host: string, tag: string): string {
  * @param parseResult parser.jsのparseCandidate()がok:trueで返すオブジェクトそのもの
  * @param noteCreatedAt Misskeyのnote.createdAt(ISO8601文字列)
  * @param username 投稿者のacct名(note.user.username)。
- *   「あつめたあしあと」で開封済みのものを表示する際に使う(本文・投稿者の他の情報は保存しない)。
+ *   「見つけたあしあと」で開封済みのものを表示する際に使う(本文・投稿者の他の情報は保存しない)。
  * @param textPreview ノート本文からAshiato Syntax部分を除き、MFMを
  *   プレーンテキスト化したプレビュー文字列。表示側(main.js)ではCSSでの高さクリップ
  *   +「続きを表示」で見た目上だけ省略する方針のため、ここでは意図的な文字数での
  *   切り詰めは行わない(極端に長い本文に対する安全弁としての上限のみ設ける)。
- *   未開封の「あつめたあしあと」一覧でも、開封前に内容を確認できるようにするために保持する
+ *   未開封の「見つけたあしあと」一覧でも、開封前に内容を確認できるようにするために保持する
  *   (ノート本文そのものを無条件に保存しないという方針は、Ashiato Syntax部分の除去や
  *   note.deletedAt等のノート単位フィルタでは維持しつつ、本文プレビュー自体は
  *   この用途のために例外的に保持する)。
@@ -125,6 +125,7 @@ export function makeRecord(
     emojiHost, // textPreview中のカスタム絵文字解決 / acct表示用のホスト
     cachedAt: Date.now(),
     unlockedAt: null, // 現在地がこのAshiatoのセル内に入った時刻(初回のみ記録)
+    readAt: null, // 一覧/マップポップアップで実際に表示された(=既読になった)時刻(初回のみ記録)
   };
 }
 
@@ -305,9 +306,14 @@ export function markAshiatoUnlocked(id: string, unlockedAt: number = Date.now())
   return updateAshiatoRecord(id, { unlockedAt });
 }
 
+/** 一覧/マップポップアップに実際に表示された(=既読になった)ことを記録する。 */
+export function markAshiatoRead(id: string, readAt: number = Date.now()): Promise<void> {
+  return updateAshiatoRecord(id, { readAt });
+}
+
 /**
  * 「検索キャッシュを消す」で呼ぶ。まだ発見していない(unlockedAtが無い)レコードと
- * カーソル(検索位置)だけを消す。「あつめたあしあと」(unlockedAtがあるレコード)は
+ * カーソル(検索位置)だけを消す。「見つけたあしあと」(unlockedAtがあるレコード)は
  * ここでは一切消さない。全host・全tag対象。
  */
 export async function clearSearchCache(): Promise<void> {
@@ -332,8 +338,8 @@ export async function clearSearchCache(): Promise<void> {
 }
 
 /**
- * 「あつめたあしあと」一覧で選んだレコードを、
- * 「まだ発見していない(ロック中)」状態に戻す(unlockedAtをnullに戻す)。
+ * 「見つけたあしあと」一覧で選んだレコードを、
+ * 「まだ発見していない(ロック中)」状態に戻す(unlockedAt/readAtをnullに戻す)。
  * レコード自体は削除しない — 削除すると、そのノートのIDが既にカーソル
  * (oldestSeenNoteId/newestSeenNoteId)の走査済み範囲に埋もれてしまい、
  * 「過去を探す」「最新を確認」のいずれでも二度と再取得できなくなる
@@ -358,7 +364,7 @@ export async function clearCollectedAshiatoByIds(ids: string[]): Promise<void> {
         getReq.onsuccess = () => {
           const existing: AshiatoRecord | undefined = getReq.result;
           if (existing && existing.unlockedAt) {
-            store.put({ ...existing, unlockedAt: null });
+            store.put({ ...existing, unlockedAt: null, readAt: null });
           }
         };
       }
@@ -469,7 +475,7 @@ export async function updateDraftPrecision(id: string, geohashLength: GeohashLen
 }
 
 // --- カスタム絵文字画像のキャッシュ -------------------------------------
-// あつめたあしあと一覧・ポップアップの本文プレビューでカスタム絵文字を表示する際、
+// 見つけたあしあと一覧・ポップアップの本文プレビューでカスタム絵文字を表示する際、
 // 同じ絵文字画像を毎回ネットワークから取り直さないようにするためのBlobキャッシュ。
 // URLをキーにするだけの単純なストアで、TTLは設けていない。
 
@@ -505,7 +511,7 @@ export async function putEmojiImageBlob(url: string, blob: Blob): Promise<void> 
 // --- 設定値(インスタンスURL、地図の表示位置など) ---------------------------
 // ashiatoCache/cursorsと違い、TTLで期限切れにはしない。プライバシー上保持
 // したくない投稿由来の情報ではなく、単なるアプリの利用状況・好みの記録なため。
-// 検索キャッシュ・あつめたあしあとのどちらの削除の対象にも含めていない
+// 検索キャッシュ・見つけたあしあとのどちらの削除の対象にも含めていない
 // (削除したいだけのユーザーが、意図せずインスタンス設定や地図の表示位置まで
 // 失ってしまうのを避けるため)。
 
@@ -540,7 +546,7 @@ export async function putSetting(key: string, value: unknown): Promise<void> {
 
 // --- 全リセット ---------------------------------------------------------
 // メニューの「リセット」から呼ばれる。ストアを個別に消すのではなく
-// IndexedDBのデータベースごと削除することで、あつめたあしあと・検索キャッシュ・
+// IndexedDBのデータベースごと削除することで、見つけたあしあと・検索キャッシュ・
 // カーソル・下書き・設定(インスタンスURL・地図表示位置など)・絵文字画像キャッシュを
 // まとめて確実に消去する。呼び出し側でページをリロードし、まっさらな状態
 // (デフォルト設定)で再初期化させる想定。

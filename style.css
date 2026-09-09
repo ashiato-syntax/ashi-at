@@ -86,7 +86,7 @@ button.btn-danger:hover {
 
 .status-toast {
     position: absolute;
-    top: 96px; /* GPS/エリアトグル(右上、top:12px/54px, 各高さ32px)の下に来るように */
+    top: 138px; /* GPS/エリア/既読トグル(右上、top:12/54/96px、各高さ32px)の下に来るように */
     left: 12px;
     right: 12px;
     z-index: 20;
@@ -157,6 +157,44 @@ button.btn-danger:hover {
     }
 }
 
+/* 新規発見時、画面中央に一時的に出す通知バンド(青、自動で消える)。 */
+.discovery-banner {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    transform: translateY(-50%) scale(0.92);
+    z-index: 26;
+    padding: 10px 16px;
+    text-align: center;
+    background: rgba(26, 115, 232, 0.92);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 600;
+    pointer-events: none;
+    opacity: 0;
+    transition:
+        opacity 0.25s ease,
+        transform 0.25s ease;
+}
+.discovery-banner[hidden] {
+    display: none;
+}
+.discovery-banner.show {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+    animation: discovery-banner-pulse 1.6s ease-in-out infinite;
+}
+@keyframes discovery-banner-pulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(26, 115, 232, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 16px 4px rgba(26, 115, 232, 0.5);
+    }
+}
+
 /* 画面下部に貼り付く操作列。左に検索系ボタン、右端に投稿/メニュー統合ボタン(menu-fab)。 */
 .bottom-toolbar {
     position: absolute;
@@ -178,6 +216,16 @@ button.btn-danger:hover {
     white-space: nowrap;
     box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
 }
+.toolbar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+.toolbar-btn-icon {
+    display: inline-flex;
+    flex: none;
+}
 @media (min-width: 700px) {
     .bottom-toolbar .search-buttons button {
         flex: none;
@@ -198,11 +246,37 @@ button.btn-danger:hover {
     display: flex;
     align-items: center;
     justify-content: center;
+    background: #1a73e8;
+    color: #fff;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 .menu-fab-icon .icon {
     width: 26px;
     height: 26px;
+}
+/* メニューFAB右上の未読バッジ(緑の点)。位置はbadge-dot本体で指定。 */
+.badge-dot {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #34c759;
+    border: 1.5px solid #f5f5f5;
+    animation: unread-glow 1.8s ease-in-out infinite;
+}
+.badge-dot[hidden] {
+    display: none;
+}
+@keyframes unread-glow {
+    0%,
+    100% {
+        box-shadow: 0 0 2px 0 rgba(52, 199, 89, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 7px 3px rgba(52, 199, 89, 0.9);
+    }
 }
 
 /* アイコン(lucide-static由来のインラインSVG)共通。stroke="currentColor"のため
@@ -224,7 +298,7 @@ button.btn-danger:hover {
     border-radius: 10px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
     display: grid;
-    min-width: 180px;
+    min-width: 230px;
     overflow: hidden;
     z-index: 30;
 }
@@ -257,6 +331,12 @@ button.btn-danger:hover {
 }
 .menu-item-label {
     flex: 1;
+    white-space: nowrap;
+}
+.menu-dropdown button .badge-dot {
+    position: static;
+    flex: none;
+    border: none;
 }
 .menu-current-host {
     margin: 0;
@@ -383,8 +463,28 @@ dialog#instanceDialog label {
 
 .unlocked-list-controls {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
     margin-bottom: 8px;
+}
+.unlocked-list-filter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 0.85rem;
+    color: #444;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.unlocked-list-filter input {
+    min-height: auto;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    margin: 0;
 }
 .unlocked-list-sort {
     display: flex;
@@ -404,10 +504,11 @@ dialog#instanceDialog label {
 .unlocked-list {
     list-style: none;
     margin: 0;
-    padding: 0;
+    padding: 0 6px 0 0; /* スクロールバーが投稿内容(「…」ボタン等)に被らないよう余白を確保 */
     display: grid;
     max-height: 65vh; /* 元は50vh。下部シート化に合わせて表示件数を増やす */
     overflow-y: auto;
+    scrollbar-gutter: stable;
 }
 /* 投稿と投稿の境目が分かりづらかったため、行ごとに区切り線+余白を入れる
    (SNSのタイムライン表示に近い見た目)。最後の行だけ区切り線を省く。 */
@@ -424,10 +525,9 @@ dialog#instanceDialog label {
     margin: 8px 0;
 }
 
-/* あしあと1件分の行(あつめたあしあと一覧・マップ同一位置ポップアップ共通)。
-   ヘッダー(投稿者+投稿日時)→本文プレビュー→フッター(発見日時+詳細/開封ボタン)の
-   3段構成(SNSのタイムライン表示に近いレイアウト)。
-   「開封/未開封」の概念は廃止したため、色分け・バッジ等の状態表示は一切行わない。 */
+/* あしあと1件分の行(見つけたあしあと一覧・マップ同一位置ポップアップ共通)。
+   ヘッダー(未読ドット+投稿者+投稿日時)→本文プレビュー→フッター(発見日時+「…」ボタン)の
+   3段構成(SNSのタイムライン表示に近いレイアウト)。 */
 .ashiato-row {
     display: flex;
     flex-direction: column;
@@ -436,23 +536,49 @@ dialog#instanceDialog label {
     overflow-wrap: anywhere;
     text-align: left;
 }
+/* 折り返さず、投稿者名部分(.ashiato-user)だけを縮めて省略記号(…)を出す。
+   投稿日時(.ashiato-posted-at)は常に全体を表示する。 */
 .ashiato-row-header {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: baseline;
-    column-gap: 8px;
-    row-gap: 2px;
+    gap: 8px;
+}
+/* 未読(まだ一覧/ポップアップで表示していない)を示す小さな緑の点。ぼんやり光らせる。 */
+.unread-dot {
+    flex: none;
+    align-self: center;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #34c759;
+    animation: unread-glow 1.8s ease-in-out infinite;
+}
+.ashiato-user {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
 }
 .ashiato-display-name {
+    flex: none;
     font-weight: 600;
+    white-space: nowrap;
 }
-/* 「@アカウント名@インスタンス」部分。表示名より一回り小さく薄い色にする(要望対応)。 */
+/* 「@アカウント名@インスタンス」部分。表示名より一回り小さく薄い色にし、
+   長い場合は投稿日時を圧迫しないよう後半を省略記号(…)で切り詰める。 */
 .ashiato-handle {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 0.8rem;
     color: #888;
 }
 .ashiato-posted-at {
-    margin-left: auto;
+    flex: none;
     font-size: 0.78rem;
     color: #888;
     white-space: nowrap;
@@ -520,6 +646,9 @@ dialog#instanceDialog label {
 .area-toggle {
     top: 54px;
 }
+.hide-read-toggle {
+    top: 96px;
+}
 .gps-toggle-track {
     width: 34px;
     height: 20px;
@@ -555,7 +684,14 @@ dialog#instanceDialog label {
     display: grid;
     max-width: 300px; /* 元は220px。あしあとリストの横幅が狭すぎたため拡大 */
 }
-/* あつめたあしあと一覧(.unlocked-list li)と同様、行の境目に区切り線を入れる。 */
+/* 件数が多い時、LeafletがpopupにmaxHeight指定で自前のスクロールバーを付ける
+   (map.js/main.js側のL.popup({maxHeight:...})参照)。投稿内容に被らないよう
+   スクロールバー分の余白を確保する。 */
+.leaflet-popup-content {
+    padding-right: 4px;
+    scrollbar-gutter: stable;
+}
+/* 見つけたあしあと一覧(.unlocked-list li)と同様、行の境目に区切り線を入れる。 */
 .ashiato-popup-list > .ashiato-row {
     padding: 8px 0;
     border-bottom: 1px solid #eee;
@@ -733,11 +869,12 @@ dialog#draftListDialog {
 .draft-list {
     list-style: none;
     margin: 0;
-    padding: 0;
+    padding: 0 6px 0 0; /* スクロールバーが投稿内容に被らないよう余白を確保 */
     display: grid;
     gap: 12px;
     max-height: 68vh; /* 元は55vh。下部シート化に合わせて表示件数を増やす */
     overflow-y: auto;
+    scrollbar-gutter: stable;
 }
 .draft-list li {
     border: 1px solid #eee;

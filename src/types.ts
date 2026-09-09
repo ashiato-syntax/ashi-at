@@ -17,6 +17,7 @@ export interface AshiatoRecord {
   emojiHost: string | null;
   cachedAt: number;
   unlockedAt: number | null;
+  readAt: number | null;
 }
 
 export interface Cursor {
