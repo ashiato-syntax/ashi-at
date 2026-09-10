@@ -1,5 +1,16 @@
 import type L from "leaflet";
 
+// ノートに添付されていた画像/GIF/動画1件分。実体(バイナリ)は保存せず、
+// 表示時にブラウザが直接参照するURLだけを保持する(カスタム絵文字画像のような
+// Blobキャッシュは行わない。カスタム絵文字と違いshortcode解決が不要で、
+// URLそのものがノートJSONに含まれているため)。
+export interface AshiatoFile {
+  url: string;
+  thumbnailUrl: string | null;
+  type: string; // MIMEタイプ(例: "image/jpeg", "image/gif", "video/mp4")
+  isSensitive: boolean;
+}
+
 export interface AshiatoRecord {
   id: string;
   hostTag: string;
@@ -15,6 +26,8 @@ export interface AshiatoRecord {
   displayName: string | null;
   textPreview: string | null;
   emojiHost: string | null;
+  avatarUrl: string | null;
+  files: AshiatoFile[];
   cachedAt: number;
   unlockedAt: number | null;
   readAt: number | null;

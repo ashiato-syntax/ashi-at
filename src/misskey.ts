@@ -81,6 +81,15 @@ export interface MisskeyUser {
   username: string;
   host: string | null;
   name: string | null;
+  avatarUrl?: string | null;
+}
+
+export interface MisskeyDriveFile {
+  id: string;
+  type: string; // MIMEタイプ(例: "image/jpeg", "image/gif", "video/mp4")
+  url: string;
+  thumbnailUrl: string | null;
+  isSensitive: boolean;
 }
 
 export interface MisskeyNote {
@@ -89,6 +98,7 @@ export interface MisskeyNote {
   createdAt: string | null;
   deletedAt?: string | null;
   user?: MisskeyUser | null;
+  files?: MisskeyDriveFile[];
 }
 
 export interface SearchNotesByTagOptions {

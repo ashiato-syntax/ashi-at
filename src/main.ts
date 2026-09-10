@@ -54,7 +54,14 @@ import {
   resetAllCache,
 } from "./cache.js";
 import L from "leaflet";
-import type { AshiatoRecord, AshiatoCell, Draft, Cursor, GeohashLength } from "./types.js";
+import type {
+  AshiatoRecord,
+  AshiatoCell,
+  AshiatoFile,
+  Draft,
+  Cursor,
+  GeohashLength,
+} from "./types.js";
 import { createIcon } from "./icons.js";
 
 // これよりズームしたら、都道府県名ラベルを表示
@@ -76,11 +83,16 @@ const MIN_GEOHASH_LENGTH = 5;
 const MAX_GEOHASH_LENGTH = 7;
 
 // 投稿からこの時間が経過するまでは、その「あしあと」を発見判定の対象にしない
-// (セルにすら登録しないので、現在地判定も一切かからない)。
+// (セルにすら登録しないので、現在地判定も一切かからない)。桁数が細かい(=判定エリアが
+// 狭い)ほど投稿者の居場所が絞り込まれやすいが、5桁(約4km)は十分広いため15分、
+// 6桁・7桁(約1km/約150m)は30分とする。
 // PENDING_PROMOTION_INTERVAL_MSごとに保留分を再チェックし、経過後は
 // 手動で「探す」し直さなくても自動的に対象へ昇格する。
-// NOTE: デバッグ用に一時的に0にしている(本来は30分)場合は、本番前に戻すこと。
-const MIN_NOTE_AGE_MS = 60 * 30 * 1000; // 30分
+const MIN_NOTE_AGE_MS_BY_LENGTH: Record<GeohashLength, number> = {
+  5: 15 * 60 * 1000, // 15分
+  6: 30 * 60 * 1000, // 30分
+  7: 30 * 60 * 1000, // 30分
+};
 const PENDING_PROMOTION_INTERVAL_MS = 60 * 1000; // 1分ごとに再チェック
 
 // 投稿機能: この精度(Geohash桁数)は「高精度」とみなし、プライバシー配慮のため
@@ -115,12 +127,18 @@ function isSupportedGeohashLength(geohash: string): boolean {
   );
 }
 
-// noteCreatedAtが無い/不正な場合は、安全側に倒して「まだ扱わない」扱いにする
-function isOldEnough(noteCreatedAt: string | null): boolean {
+// noteCreatedAtが無い/不正な場合は、安全側に倒して「まだ扱わない」扱いにする。
+// 必要な経過時間はgeohashの桁数によって異なる(MIN_NOTE_AGE_MS_BY_LENGTH参照)ため、
+// 呼び出し側は対象レコードのgeohash桁数を渡すこと(isSupportedGeohashLengthで
+// 5〜7桁に絞り込み済みのレコードのみがここに来る想定)。
+function isOldEnough(noteCreatedAt: string | null, geohashLength: number): boolean {
   if (!noteCreatedAt) return false;
   const postedAt = new Date(noteCreatedAt).getTime();
   if (Number.isNaN(postedAt)) return false;
-  return Date.now() - postedAt >= MIN_NOTE_AGE_MS;
+  const threshold =
+    MIN_NOTE_AGE_MS_BY_LENGTH[geohashLength as GeohashLength] ??
+    MIN_NOTE_AGE_MS_BY_LENGTH[MAX_GEOHASH_LENGTH as GeohashLength];
+  return Date.now() - postedAt >= threshold;
 }
 
 const $ = <T extends Element = HTMLElement>(s: string): T => document.querySelector<T>(s)!,
@@ -656,6 +674,10 @@ function appendTextWithEmojis(
 // 読み込みで高さが変わりうるタイミング(appendTextWithEmojisのonEmojiSettled経由)で呼ぶ。
 function applyPreviewOverflowChecks(root: ParentNode): void {
   for (const preview of root.querySelectorAll<HTMLElement>(".mfm-preview")) {
+    // 手動で「続きを表示」→展開済みのものは、クリップが外れて overflow が
+    // 無くなった状態になるため、ここで再計算すると「折りたたむ」ヒントが
+    // 誤って隠れてしまう。展開中は判定自体をスキップする。
+    if (preview.classList.contains("mfm-preview-expanded")) continue;
     const hint = preview.nextElementSibling as HTMLElement | null;
     if (!hint?.classList.contains("mfm-preview-hint")) continue;
     hint.hidden = preview.scrollHeight <= preview.clientHeight + 1;
@@ -710,6 +732,19 @@ function renderAshiatoRow(
   const row = document.createElement("div");
   row.className = "ashiato-row";
 
+  // 投稿者アイコン(丸くクロップ)。取得できない/読み込み失敗時は
+  // 背景色だけのプレースホルダーになる(style.css参照)。
+  const avatar = document.createElement("img");
+  avatar.className = "ashiato-avatar";
+  avatar.alt = "";
+  avatar.loading = "lazy";
+  if (record.avatarUrl) avatar.src = record.avatarUrl;
+  row.append(avatar);
+
+  const main = document.createElement("div");
+  main.className = "ashiato-row-main";
+  row.append(main);
+
   const header = document.createElement("div");
   header.className = "ashiato-row-header";
   if (isUnread) {
@@ -727,22 +762,32 @@ function renderAshiatoRow(
   postedAt.className = "ashiato-posted-at";
   postedAt.textContent = formatRelativePostedAt(record.noteCreatedAt);
   header.append(postedAt);
-  row.append(header);
+  main.append(header);
 
   if (record.textPreview) {
     const preview = document.createElement("span");
     preview.className = "mfm-preview";
-    const hint = document.createElement("span");
+    const hint = document.createElement("button");
+    hint.type = "button";
     hint.className = "mfm-preview-hint";
     hint.textContent = "続きを表示";
     hint.hidden = true;
+    // クリックのたびに高さクリップ(max-height)の解除/再適用を切り替える。
+    hint.onclick = () => {
+      const expanded = preview.classList.toggle("mfm-preview-expanded");
+      hint.textContent = expanded ? "折りたたむ" : "続きを表示";
+    };
     appendTextWithEmojis(
       preview,
       record.textPreview,
       record.emojiHost ?? record.host,
       () => applyPreviewOverflowChecks(overflowRoot),
     );
-    row.append(preview, hint);
+    main.append(preview, hint);
+  }
+
+  if (record.files.length > 0) {
+    main.append(buildMediaGrid(record.files));
   }
 
   const footer = document.createElement("div");
@@ -761,9 +806,81 @@ function renderAshiatoRow(
   moreBtn.onclick = onMore;
   footer.append(moreBtn);
 
-  row.append(footer);
+  main.append(footer);
 
   return row;
+}
+
+// 添付画像/GIF/動画のグリッドを組み立てる(Twitter風、1〜4枚以上に対応)。
+// 動画1件だけの投稿はグリッドでクロップせず全幅で表示し、シーク・音声ON/OFFは
+// ブラウザ標準のvideo controlsに任せる(カスタムUIは作らない)。
+// 画像は押すと画面いっぱいのライトボックスで拡大表示する(openMediaLightbox参照)。
+// 複数画像中、動画は数に含めつつライトボックスのナビゲーションからは除外する
+// (画像同士の送り/戻りだけを行う)。
+function buildMediaGrid(files: AshiatoFile[]): HTMLElement {
+  const grid = document.createElement("div");
+  grid.className = "ashiato-media-grid";
+  grid.dataset.count = String(Math.min(files.length, 4));
+
+  if (files.length === 1 && files[0].type.startsWith("video/")) {
+    grid.classList.add("ashiato-media-grid-single-video");
+    grid.append(buildMediaItem(files[0], [], -1));
+    return grid;
+  }
+
+  const images = files.filter((f) => !f.type.startsWith("video/"));
+  for (const file of files) {
+    grid.append(buildMediaItem(file, images, images.indexOf(file)));
+  }
+  return grid;
+}
+
+// imagesForLightbox/lightboxIndexは、この1件が画像の場合の「ライトボックスに
+// 渡す画像だけの配列とその中でのインデックス」。動画の場合は使わない(-1)。
+function buildMediaItem(
+  file: AshiatoFile,
+  imagesForLightbox: AshiatoFile[],
+  lightboxIndex: number,
+): HTMLElement {
+  const item = document.createElement("div");
+  item.className = "ashiato-media-item";
+
+  const isVideo = file.type.startsWith("video/");
+  if (isVideo) {
+    const video = document.createElement("video");
+    video.src = file.url;
+    video.controls = true;
+    video.playsInline = true;
+    video.preload = "metadata";
+    item.append(video);
+  } else {
+    const img = document.createElement("img");
+    img.src = file.thumbnailUrl ?? file.url;
+    img.alt = "";
+    img.loading = "lazy";
+    img.onclick = () => {
+      // 閲覧注意でまだ表示していない画像は、最初のタップはベール解除だけに使う
+      // (veilのclickでstopPropagationしているのでここには来ないが、念のため二重チェック)。
+      if (item.classList.contains("ashiato-media-sensitive") && !item.classList.contains("ashiato-media-revealed")) return;
+      openMediaLightbox(imagesForLightbox, lightboxIndex);
+    };
+    item.append(img);
+  }
+
+  if (file.isSensitive) {
+    item.classList.add("ashiato-media-sensitive");
+    const veil = document.createElement("button");
+    veil.type = "button";
+    veil.className = "ashiato-media-veil";
+    veil.textContent = "閲覧注意\n（タップで表示）";
+    veil.onclick = (e) => {
+      e.stopPropagation();
+      item.classList.add("ashiato-media-revealed");
+    };
+    item.append(veil);
+  }
+
+  return item;
 }
 
 // セルの地図上の見た目(円+タップ判定)だけを取り除く。cell.records自体は
@@ -819,12 +936,12 @@ function addRecordToCell(record: AshiatoRecord): void {
 }
 
 // geohashの桁数条件は満たしているレコードを、状態に応じて登録する。
-// - 既に発見済み(unlockedAt)、または投稿から1時間経過済み: 即座にセルへ登録する
-//   (これ以降、現在地判定(GPS)の対象になる)
-// - まだ1時間経っていない: pendingRecordsで保留する(セルには一切登録しない=
+// - 既に発見済み(unlockedAt)、または投稿からMIN_NOTE_AGE_MS_BY_LENGTH(桁数依存)分
+//   経過済み: 即座にセルへ登録する(これ以降、現在地判定(GPS)の対象になる)
+// - まだ経っていない: pendingRecordsで保留する(セルには一切登録しない=
 //   現在地判定も一切かからない)。promoteAgedRecords()が定期的に昇格させる。
 function registerRecord(record: AshiatoRecord): void {
-  if (record.unlockedAt || isOldEnough(record.noteCreatedAt)) {
+  if (record.unlockedAt || isOldEnough(record.noteCreatedAt, record.geohash.length)) {
     pendingRecords.delete(record.id);
     addRecordToCell(record);
   } else {
@@ -832,13 +949,13 @@ function registerRecord(record: AshiatoRecord): void {
   }
 }
 
-// 保留中のレコードを定期的に再チェックし、投稿から1時間経過したものを
+// 保留中のレコードを定期的に再チェックし、必要な経過時間(桁数依存)を過ぎたものを
 // 自動的にセルへ昇格させる(ページを開きっぱなしでも、手動で「探す」し直す
 // 必要が無いように)。
 function promoteAgedRecords(): void {
   let promoted = false;
   for (const [id, record] of pendingRecords) {
-    if (isOldEnough(record.noteCreatedAt)) {
+    if (isOldEnough(record.noteCreatedAt, record.geohash.length)) {
       pendingRecords.delete(id);
       addRecordToCell(record);
       promoted = true;
@@ -885,7 +1002,7 @@ function updateUnreadBadge(): void {
 // (=表示された瞬間)に即既読化すると未読ドットを目にする間もなく消えてしまうため、
 // 「ちゃんと表示された」とみなせるだけの猶予を設ける。この間にスクロールで
 // 画面外に出た場合はタイマーを取り消し、既読にしない。
-const READ_DWELL_MS = 3000;
+const READ_DWELL_MS = 1000;
 
 // 「開いただけ」ではなく「実際にスクロールされて画面内に表示された」行だけを
 // 既読にする(可視性ベースの既読判定)。rootは実際のスクロール領域
@@ -1041,8 +1158,9 @@ function showAshiatoCellPopup(geohash: string): void {
 
   const rowsForReadTracking: { row: HTMLElement; record: AshiatoRecord }[] = [];
   for (const record of records) {
+    // ポップアップは閉じない(「…」を押しても地図上の吹き出しはそのまま残る)。
+    // アクションシートはモーダルダイアログとしてその上に重なって表示される。
     const row = renderAshiatoRow(record, container, () => {
-      map.closePopup();
       openAshiatoActions(record);
     });
     rowsForReadTracking.push({ row, record });
@@ -1084,17 +1202,31 @@ function openAshiatoActions(record: AshiatoRecord): void {
   ashiatoActionInfo.replaceChildren();
   const infoRows: [string, string][] = [
     ["投稿者", formatUserLabel(record)],
+    ["場所", "取得中…"],
     ["投稿", formatDateTime(record.noteCreatedAt) ?? "不明"],
     ["発見", formatDateTime(record.unlockedAt) ?? "不明"],
     ["当たり判定エリア", cellSizeText(record.geohash)],
   ];
+  let placeDd: HTMLElement | null = null;
   for (const [label, value] of infoRows) {
     const dt = document.createElement("dt");
     dt.textContent = label;
     const dd = document.createElement("dd");
     dd.textContent = value;
     ashiatoActionInfo.append(dt, dd);
+    if (label === "場所") placeDd = dd;
   }
+
+  // 市区町村境界GeoJsonのオンデマンド取得が絡むため非同期。取得完了まで「取得中…」
+  // のまま表示し、終わり次第「場所」の行だけを差し替える(他の行は待たせない)。
+  const { centerLat, centerLon } = decodeGeohash(record.geohash);
+  lookupMunicipality(prefectureIndex, centerLat, centerLon, { includePrefecture: true })
+    .then((place) => {
+      if (placeDd) placeDd.textContent = place ?? "不明";
+    })
+    .catch(() => {
+      if (placeDd) placeDd.textContent = "不明";
+    });
 
   ashiatoActionShowOnMapBtn.onclick = () => {
     ashiatoActionDialog.close();
@@ -1156,10 +1288,10 @@ let lastKnownPosition: { lat: number; lon: number } | null = null;
 // 直近の位置精度(半径, メートル)。GPSトグルOFF中は常にnull。
 let lastKnownAccuracy: number | null = null;
 
-// 位置精度がこの半径(メートル)を超えたら「精度が悪い」とみなす(直径200mより悪い = 半径100m超)。
+// 位置精度がこの半径(メートル)を超えたら「精度が悪い」とみなす。
 // この状態では、あしあとの発見(当たり判定)・新規投稿・新規下書きを行わない
 // (下書き済みのあしあとの投稿はisDraftPostableのルールのみに従い、ここでは制限しない)。
-const BAD_ACCURACY_RADIUS_M = 1000;
+const BAD_ACCURACY_RADIUS_M = 200;
 
 function isPrecisionBad(): boolean {
   return gpsEnabled && lastKnownAccuracy !== null && lastKnownAccuracy > BAD_ACCURACY_RADIUS_M;
@@ -1352,6 +1484,63 @@ const ashiatoActionDeleteBtn = $<HTMLButtonElement>("#ashiatoActionDelete");
 $<HTMLButtonElement>("#ashiatoActionCloseX").onclick = () => ashiatoActionDialog.close();
 
 closeOnBackdropClick(ashiatoActionDialog);
+
+// --- 画像ライトボックス(添付画像のタップで拡大表示) --------------------------
+
+const mediaLightbox = $<HTMLDialogElement>("#mediaLightbox");
+const mediaLightboxImg = $<HTMLImageElement>("#mediaLightboxImg");
+const mediaLightboxPrevBtn = $<HTMLButtonElement>("#mediaLightboxPrev");
+const mediaLightboxNextBtn = $<HTMLButtonElement>("#mediaLightboxNext");
+const mediaLightboxCounter = $("#mediaLightboxCounter");
+
+$("#mediaLightboxCloseX").append(createIcon("x"));
+mediaLightboxPrevBtn.append(createIcon("chevron-left"));
+mediaLightboxNextBtn.append(createIcon("chevron-right"));
+
+let lightboxImages: AshiatoFile[] = [];
+let lightboxIndex = 0;
+
+function updateLightboxImage(): void {
+  const file = lightboxImages[lightboxIndex];
+  if (!file) return;
+  mediaLightboxImg.src = file.url;
+
+  const multi = lightboxImages.length > 1;
+  mediaLightboxPrevBtn.hidden = !multi;
+  mediaLightboxNextBtn.hidden = !multi;
+  mediaLightboxCounter.hidden = !multi;
+  mediaLightboxCounter.textContent = `${lightboxIndex + 1} / ${lightboxImages.length}`;
+}
+
+// images: 同じ投稿内の画像だけの配列(動画は含まない)、startIndex: その中での初期表示位置。
+function openMediaLightbox(images: AshiatoFile[], startIndex: number): void {
+  if (images.length === 0) return;
+  lightboxImages = images;
+  lightboxIndex = startIndex;
+  updateLightboxImage();
+  mediaLightbox.showModal();
+}
+
+mediaLightboxPrevBtn.onclick = () => {
+  lightboxIndex = (lightboxIndex - 1 + lightboxImages.length) % lightboxImages.length;
+  updateLightboxImage();
+};
+mediaLightboxNextBtn.onclick = () => {
+  lightboxIndex = (lightboxIndex + 1) % lightboxImages.length;
+  updateLightboxImage();
+};
+$<HTMLButtonElement>("#mediaLightboxCloseX").onclick = () => mediaLightbox.close();
+// 表示中の画像を消しておく(閉じてもすぐ次を開く場合はupdateLightboxImageで
+// 上書きされるが、読み込み中の古い画像が一瞬見えるのを避けるため)。
+mediaLightbox.addEventListener("close", () => {
+  mediaLightboxImg.src = "";
+});
+// mediaLightboxはビューポート全体を覆う(closeOnBackdropClickの「矩形の外側か」判定が
+// 使えない)ため、代わりにクリックされた要素がdialog自身(=画像や各ボタン以外の
+// 背景部分)かどうかで判定する。
+mediaLightbox.addEventListener("click", (e) => {
+  if (e.target === mediaLightbox) mediaLightbox.close();
+});
 
 // --- 「現在地」「エリア」「既読を隠す」をまとめたパネルの折りたたみ -------------
 // デフォルトは展開状態(index.html側のaria-expanded="true"、togglePanelRowsも
@@ -1547,7 +1736,13 @@ function extractPreviewText(noteText: string): string | null {
     plain = stripped;
   }
 
-  plain = plain.replace(/\s+/g, " ").trim();
+  // 改行以外の空白(スペース・タブ等)は1つに正規化しつつ、改行そのものは残す
+  // (表示側の.mfm-previewはwhite-space:pre-lineで改行を再現する想定)。
+  // 3行以上連続する空行はさすがに詰める。
+  plain = plain
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   if (!plain) return null;
 
   const chars = [...plain];
@@ -1569,6 +1764,12 @@ async function ingestNotes(host: string, notes: MisskeyNote[]): Promise<AshiatoR
     // (=そのホストが投稿元インスタンス)、無ければローカルユーザー
     // (=host、つまり今検索しているインスタンス自身が投稿元)。
     const emojiHost = note.user?.host ? `https://${note.user.host}` : host;
+    const files: AshiatoFile[] = (note.files ?? []).map((f) => ({
+      url: f.url,
+      thumbnailUrl: f.thumbnailUrl,
+      type: f.type,
+      isSensitive: f.isSensitive,
+    }));
 
     let idx = 0;
     for (const r of parseText(note.text)) {
@@ -1585,6 +1786,8 @@ async function ingestNotes(host: string, notes: MisskeyNote[]): Promise<AshiatoR
             preview,
             emojiHost,
             note.user?.name ?? null,
+            note.user?.avatarUrl ?? null,
+            files,
           ),
         );
       }

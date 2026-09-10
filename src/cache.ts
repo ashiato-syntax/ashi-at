@@ -1,5 +1,5 @@
 import type { AshiatoModel } from "./parser.js";
-import type { AshiatoRecord, Cursor, Draft, GeohashLength } from "./types.js";
+import type { AshiatoFile, AshiatoRecord, Cursor, Draft, GeohashLength } from "./types.js";
 
 // ローカルキャッシュ(IndexedDB)。
 const DB_NAME = "ashi-at";
@@ -94,6 +94,11 @@ function hostTagKey(host: string, tag: string): string {
  *   投稿者のacct表示(@username@host)を組み立てる際のhostとしても表示側で流用する。
  * @param displayName 投稿者の表示名(note.user.name)。設定していないユーザーも
  *   いるためnullになりうる。表示側では「{displayName} @{username}@{host}」の形式で使う。
+ * @param avatarUrl 投稿者のアバター画像URL(note.user.avatarUrl)。ノートJSONに
+ *   既にURLそのものが含まれているため、カスタム絵文字のようなBlobキャッシュは行わず
+ *   表示側で直接<img src>として参照する。
+ * @param files ノートに添付された画像/GIF/動画(note.files)。実体は保存せず、
+ *   表示に必要なURL・種別・閲覧注意フラグだけを保持する。
  * @returns Ashiatoキャッシュ1レコード(ノート本文全体は含まない)
  */
 export function makeRecord(
@@ -107,6 +112,8 @@ export function makeRecord(
   textPreview: string | null = null,
   emojiHost: string | null = null,
   displayName: string | null = null,
+  avatarUrl: string | null = null,
+  files: AshiatoFile[] = [],
 ): AshiatoRecord {
   return {
     id: `${host}::${noteId}::${indexInNote}`,
@@ -123,6 +130,8 @@ export function makeRecord(
     displayName, // 投稿者の表示名(表示用、無いユーザーもいる)
     textPreview, // 本文プレビュー(MFMをプレーンテキスト化、Ashiato Syntax除去済み)
     emojiHost, // textPreview中のカスタム絵文字解決 / acct表示用のホスト
+    avatarUrl, // 投稿者のアバター画像URL
+    files, // 添付画像/GIF/動画
     cachedAt: Date.now(),
     unlockedAt: null, // 現在地がこのAshiatoのセル内に入った時刻(初回のみ記録)
     readAt: null, // 一覧/マップポップアップで実際に表示された(=既読になった)時刻(初回のみ記録)
@@ -228,13 +237,24 @@ export async function getAshiatoRecords(
     });
 
     const now = Date.now();
-    return all.filter(
-      (r) => now - r.cachedAt < (r.unlockedAt ? unlockedTtlMs : ttlMs),
-    );
+    return all
+      .filter((r) => now - r.cachedAt < (r.unlockedAt ? unlockedTtlMs : ttlMs))
+      .map(normalizeRecord);
   } catch (error) {
     console.warn("cache: getAshiatoRecords failed — キャッシュなしとして続行します:", error);
     return [];
   }
+}
+
+// avatarUrl/filesを追加する前にキャッシュされたレコードは、これらのプロパティが
+// 存在しない(undefined)状態でIndexedDBに残っている。呼び出し側が
+// AshiatoRecordの型契約(常にnull/配列)を信頼できるよう、読み込み時に補う。
+function normalizeRecord(r: AshiatoRecord): AshiatoRecord {
+  return {
+    ...r,
+    avatarUrl: r.avatarUrl ?? null,
+    files: r.files ?? [],
+  };
 }
 
 export interface PruneCacheOptions extends GetAshiatoRecordsOptions {

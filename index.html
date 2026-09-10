@@ -246,6 +246,34 @@
                 </button>
             </div>
         </dialog>
+        <dialog id="mediaLightbox" aria-label="画像を拡大表示">
+            <button
+                type="button"
+                class="dialog-close-x media-lightbox-close"
+                id="mediaLightboxCloseX"
+                aria-label="閉じる"
+            ></button>
+            <button
+                type="button"
+                class="media-lightbox-nav media-lightbox-prev"
+                id="mediaLightboxPrev"
+                aria-label="前の画像"
+                hidden
+            ></button>
+            <img id="mediaLightboxImg" class="media-lightbox-img" alt="" />
+            <button
+                type="button"
+                class="media-lightbox-nav media-lightbox-next"
+                id="mediaLightboxNext"
+                aria-label="次の画像"
+                hidden
+            ></button>
+            <span
+                id="mediaLightboxCounter"
+                class="media-lightbox-counter"
+                hidden
+            ></span>
+        </dialog>
         <dialog id="composeDialog">
             <div class="sheet-handle" aria-hidden="true">
                 <span class="sheet-handle-grip"></span>

@@ -41,11 +41,15 @@ function pointInGeometry(lon: number, lat: number, geometry: Geometry): boolean 
  * (呼び出し側で「@緯度, 経度」表示にフォールバックする想定)。
  *
  * Nominatim等の外部APIは使わない方針(サードパーティ依存を増やさないため)。
+ *
+ * @param includePrefecture trueの場合、市区町村名の前に都道府県名も付ける
+ *   (「東京都渋谷区」等)。下書き一覧は元々市区町村名だけの表示のため省略時はfalse。
  */
 export async function lookupMunicipality(
   prefectureIndex: PrefectureIndexEntry[],
   lat: number,
   lon: number,
+  { includePrefecture = false }: { includePrefecture?: boolean } = {},
 ): Promise<string | null> {
   const point = { minLat: lat, maxLat: lat, minLon: lon, maxLon: lon };
   const candidates = findPrefecturesInView(prefectureIndex, point);
@@ -57,10 +61,9 @@ export async function lookupMunicipality(
         if (pointInGeometry(lon, lat, feature.geometry)) {
           const city = feature.properties?.N03_003;
           const ward = feature.properties?.N03_004;
-          if (city && ward) {
-            return `${city}${ward}`;
-          }
-          return city || ward || pref.name;
+          const municipality = city && ward ? `${city}${ward}` : city || ward || null;
+          if (!includePrefecture) return municipality || pref.name;
+          return municipality ? `${pref.name}${municipality}` : pref.name;
         }
       }
     } catch (error) {
