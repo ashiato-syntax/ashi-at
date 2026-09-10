@@ -60,8 +60,10 @@ import { createIcon } from "./icons.js";
 // これよりズームしたら、都道府県名ラベルを表示
 const MIN_ZOOM_FOR_PREFECTURE_LABELS = 7;
 // これよりズームしたら、当該都道府県の市区町村GeoJsonを読み込む
-const MIN_ZOOM_FOR_MUNICIPALITIES = 9;
-// これよりズームしたら、市区町村名ラベルを表示
+const MIN_ZOOM_FOR_MUNICIPALITIES = 10;
+// これよりズームしたら、県庁所在地・政令指定都市の大きいラベルを表示。
+const MIN_ZOOM_FOR_CAPITAL_LABELS = 10;
+// これよりズームしたら、区・区が無い市町村等、通常の市区町村名ラベルを表示
 const MIN_ZOOM_FOR_MUNICIPALITY_LABELS = 11;
 
 // 固定タグ。将来複数タグに対応するなら cache.js のhostTagキーはそのまま使い回せる。
@@ -81,8 +83,10 @@ const MAX_GEOHASH_LENGTH = 7;
 const MIN_NOTE_AGE_MS = 60 * 30 * 1000; // 30分
 const PENDING_PROMOTION_INTERVAL_MS = 60 * 1000; // 1分ごとに再チェック
 
-// 投稿機能: 精度「約150m」(Geohash7桁)の下書きは、プライバシー配慮のため
-// 作成からこの時間が経過するまで投稿できないようにする。
+// 投稿機能: この精度(Geohash桁数)は「高精度」とみなし、プライバシー配慮のため
+// 作成からDRAFT_HIGH_PRECISION_DELAY_MSが経過するまで投稿できないようにする
+// (isDraftPostable/updateComposeButtonsの両方でこの定数を参照すること)。
+const HIGH_PRECISION_GEOHASH_LENGTH: GeohashLength = 7;
 const DRAFT_HIGH_PRECISION_DELAY_MS = 30 * 60 * 1000; // 30分
 
 const PRECISION_LABELS: Record<GeohashLength, string> = { 5: "約4km", 6: "約1km", 7: "約150m" };
@@ -97,6 +101,12 @@ const TEXT_PREVIEW_SAFETY_CAP_LENGTH = 3000;
 // デバッグ用: trueにすると、未発見(ロック中)のAshiatoも地図に表示する。
 // GPSによる発見判定や「集めたあしあと」一覧の仕様は変えない。本番ではfalse。
 const SHOW_LOCKED_ASHIATO_FOR_DEBUG = false;
+
+// インスタンスのorigin(https://misskey.io等)を、画面表示用に"misskey.io"の
+// ようなホスト名だけへ短縮する。
+function stripProtocol(url: string): string {
+  return url.replace(/^https?:\/\//, "");
+}
 
 function isSupportedGeohashLength(geohash: string): boolean {
   return (
@@ -131,6 +141,7 @@ const $ = <T extends Element = HTMLElement>(s: string): T => document.querySelec
 // メニューFAB・ハンバーガーメニュー各項目のアイコン(絵文字は端末フォント依存で
 // 意図した絵文字が無い環境だと崩れるため、lucide-staticのインラインSVGに置き換える)。
 $(".menu-fab-icon").append(createIcon("menu"));
+$("#togglePanelCollapse .toggle-panel-handle-icon").append(createIcon("chevron-down"));
 $("#loadNewer .toolbar-btn-icon").append(createIcon("refresh-cw"));
 $("#search .toolbar-btn-icon").append(createIcon("history"));
 $("#composeAshiatoMenuItem .menu-item-icon").append(createIcon("footprints"));
@@ -150,6 +161,7 @@ $("#unlockedListCloseX").append(createIcon("x"));
 $("#ashiatoActionCloseX").append(createIcon("x"));
 $("#composeCloseX").append(createIcon("x"));
 $("#draftListCloseX").append(createIcon("x"));
+$("#aboutCloseX").append(createIcon("x"));
 
 // 地図の表示位置(中心緯度経度・ズーム)をTTL無しで保存しておき、次回起動時に
 // 復元する(復元自体は起動処理の中でsetView()する形で行う。createMap()の
@@ -169,6 +181,7 @@ let prefectureLabelsVisible = false;
 const municipalityLayers = new Map<string, "loading" | MunicipalityBoundaryResult>();
 let municipalitiesVisible = false;
 let municipalityLabelsVisible = false;
+let capitalLabelsVisible = false;
 
 // ページング/キャッシュ用の状態。host(インスタンスのorigin)ごとに区画が分かれる。
 let currentHost: string | null = null;
@@ -222,27 +235,20 @@ statusCloseBtn.onclick = () => {
 // 同じ見た目のダイアログで代替する。showConfirmはPromise<boolean>を返し、
 // OKボタンなら true、キャンセル/ESC/外側クリックならすべて false になる。
 
-const infoDialog = $<HTMLDialogElement>("#infoDialog");
-const infoMessage = $("#infoMessage");
-const infoOkBtn = $<HTMLButtonElement>("#infoOk");
-
-function showInfo(message: string): void {
-  infoMessage.textContent = message;
-  infoDialog.showModal();
+// ダイアログの外側(::backdrop)をクリックしたら閉じる、というほぼ全ダイアログ
+// 共通の挙動をまとめたヘルパー。矩形の内外判定でrect.top/left等を毎回
+// 書き下すのではなく、Element.contains()同等の簡易版として使う。
+function closeOnBackdropClick(dialog: HTMLDialogElement): void {
+  dialog.addEventListener("click", (e) => {
+    const rect = dialog.getBoundingClientRect();
+    const inside =
+      rect.top <= e.clientY &&
+      e.clientY <= rect.top + rect.height &&
+      rect.left <= e.clientX &&
+      e.clientX <= rect.left + rect.width;
+    if (!inside) dialog.close(); // キャンセル扱い(showConfirm等ではresultはfalseのまま)
+  });
 }
-void showInfo; // 現状未使用だが、alert()代替の共通部品として残しておく
-
-infoOkBtn.onclick = () => infoDialog.close();
-
-infoDialog.addEventListener("click", (e) => {
-  const rect = infoDialog.getBoundingClientRect();
-  const inside =
-    rect.top <= e.clientY &&
-    e.clientY <= rect.top + rect.height &&
-    rect.left <= e.clientX &&
-    e.clientX <= rect.left + rect.width;
-  if (!inside) infoDialog.close();
-});
 
 const confirmDialog = $<HTMLDialogElement>("#confirmDialog");
 const confirmMessage = $("#confirmMessage");
@@ -292,15 +298,85 @@ function showConfirm(
   });
 }
 
-confirmDialog.addEventListener("click", (e) => {
-  const rect = confirmDialog.getBoundingClientRect();
-  const inside =
-    rect.top <= e.clientY &&
-    e.clientY <= rect.top + rect.height &&
-    rect.left <= e.clientX &&
-    e.clientX <= rect.left + rect.width;
-  if (!inside) confirmDialog.close(); // キャンセル扱い(resultはfalseのまま)
-});
+closeOnBackdropClick(confirmDialog);
+
+// --- 下部シート(投稿UI/見つけたあしあと/下書き)のドラッグ操作 ---------------
+// シート上部の.sheet-handleをドラッグすると、シートの高さを直接調整できる
+// (CSSのmax-heightを上限、MIN_SHEET_HEIGHT_PXを下限にクランプする)。
+// 開閉のスライドアニメーション自体はstyle.css側(transform+@starting-style)で
+// 完結しているため、ここではclose()を呼ぶだけでよい。
+// 素早く下方向にフリックした場合、または一定以上(START_HEIGHT×
+// SHEET_CLOSE_HEIGHT_RATIO)まで小さくした場合は、指を離した時点でそのまま
+// 閉じる(dialog.close())。
+const MIN_SHEET_HEIGHT_PX = 120;
+const SHEET_FLICK_VELOCITY_PX_PER_MS = 0.6;
+const SHEET_CLOSE_HEIGHT_RATIO = 0.35;
+
+function enableSheetDragResize(dialog: HTMLDialogElement): void {
+  const handle = dialog.querySelector<HTMLElement>(".sheet-handle");
+  if (!handle) return;
+
+  // hasPointerCapture()ではなくこのフラグでドラッグ中かどうかを判定する。
+  // ブラウザによってはpointercancel発火前に暗黙的にpointer captureが
+  // 解放されていることがあり、hasPointerCapture()に頼ると
+  // pointercancel時にfinishDragが何もしないまま抜けてしまう
+  // (シートが中途半端な高さで固まって見える)ことがあるため。
+  let dragging = false;
+  let startY = 0;
+  let startHeight = 0;
+  let maxHeightPx = 0;
+  let lastY = 0;
+  let lastT = 0;
+  let velocity = 0; // 直近の指の移動速度(px/ms)。正=下方向。
+
+  handle.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    handle.setPointerCapture(e.pointerId);
+    dragging = true;
+
+    startY = e.clientY;
+    lastY = e.clientY;
+    lastT = e.timeStamp;
+    velocity = 0;
+    startHeight = dialog.getBoundingClientRect().height;
+    // ドラッグで広げられる上限は、そのシートのCSS上のmax-heightまでとする。
+    maxHeightPx = parseFloat(getComputedStyle(dialog).maxHeight) || startHeight;
+  });
+
+  handle.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+
+    const dy = e.clientY - startY;
+    const dt = e.timeStamp - lastT;
+    if (dt > 0) velocity = (e.clientY - lastY) / dt;
+    lastY = e.clientY;
+    lastT = e.timeStamp;
+
+    const newHeight = Math.min(maxHeightPx, Math.max(MIN_SHEET_HEIGHT_PX, startHeight - dy));
+    dialog.style.height = `${newHeight}px`;
+  });
+
+  const finishDrag = () => {
+    if (!dragging) return;
+    dragging = false;
+
+    const currentHeight = dialog.getBoundingClientRect().height;
+    const isFastDownwardFlick = velocity > SHEET_FLICK_VELOCITY_PX_PER_MS;
+    const isTooShort = currentHeight < startHeight * SHEET_CLOSE_HEIGHT_RATIO;
+
+    if (isFastDownwardFlick || isTooShort) {
+      dialog.close();
+    }
+  };
+  handle.addEventListener("pointerup", finishDrag);
+  handle.addEventListener("pointercancel", finishDrag);
+
+  // 次に開いたときは常にCSSで指定された既定の高さから始める
+  // (前回ドラッグで変更した高さを持ち越さない)。
+  dialog.addEventListener("close", () => {
+    dialog.style.height = "";
+  });
+}
 
 async function initBoundaries(): Promise<void> {
   try {
@@ -323,7 +399,10 @@ async function initBoundaries(): Promise<void> {
 function syncLabelVisibility(): void {
   const zoom = map.getZoom();
 
-  const wantPrefLabels = zoom >= MIN_ZOOM_FOR_PREFECTURE_LABELS;
+  // 県庁所在地・政令指定都市の大きいラベルが表示されるレベルまでズームしたら、
+  // 都道府県ラベルは邪魔になるため非表示にする。
+  const wantPrefLabels =
+    zoom >= MIN_ZOOM_FOR_PREFECTURE_LABELS && zoom < MIN_ZOOM_FOR_CAPITAL_LABELS;
   if (wantPrefLabels !== prefectureLabelsVisible && prefectureLabelLayer) {
     if (wantPrefLabels) prefectureLabelLayer.addTo(map);
     else map.removeLayer(prefectureLabelLayer);
@@ -339,6 +418,18 @@ function syncLabelVisibility(): void {
     }
     municipalityLabelsVisible = wantMunicipalityLabels;
   }
+
+  // 県庁所在地・政令指定都市の大きいラベルは、通常の市区町村ラベルとは
+  // 独立したズーム閾値(MIN_ZOOM_FOR_CAPITAL_LABELS)で切り替える。
+  const wantCapitalLabels = zoom >= MIN_ZOOM_FOR_CAPITAL_LABELS;
+  if (wantCapitalLabels !== capitalLabelsVisible) {
+    for (const entry of municipalityLayers.values()) {
+      if (entry === "loading") continue;
+      if (wantCapitalLabels) entry.prominentLabelLayer.addTo(map);
+      else map.removeLayer(entry.prominentLabelLayer);
+    }
+    capitalLabelsVisible = wantCapitalLabels;
+  }
 }
 
 async function syncMunicipalityLayers(): Promise<void> {
@@ -348,6 +439,7 @@ async function syncMunicipalityLayers(): Promise<void> {
         if (entry === "loading") continue;
         map.removeLayer(entry.boundaryLayer);
         map.removeLayer(entry.labelLayer);
+        map.removeLayer(entry.prominentLabelLayer);
       }
       municipalitiesVisible = false;
     }
@@ -361,6 +453,7 @@ async function syncMunicipalityLayers(): Promise<void> {
       if (entry === "loading") continue;
       entry.boundaryLayer.addTo(map);
       if (municipalityLabelsVisible) entry.labelLayer.addTo(map);
+      if (capitalLabelsVisible) entry.prominentLabelLayer.addTo(map);
     }
     municipalitiesVisible = true;
   }
@@ -380,7 +473,17 @@ async function syncMunicipalityLayers(): Promise<void> {
     municipalityLayers.set(pref.code, "loading");
     try {
       const entry = await loadMunicipalityBoundaries(map, pref.code);
-      if (municipalityLabelsVisible) entry.labelLayer.addTo(map);
+      // loadMunicipalityBoundariesはboundaryLayerを内部で無条件にaddTo(map)して
+      // いるため、取得を待っている間にズームアウトされてmunicipalitiesVisibleが
+      // falseに戻っていた場合は、ここで取り除いておかないと次にこの閾値を
+      // 跨ぐまで境界線が残留してしまう(entry自体はキャッシュしておき、
+      // 再度ズームインしたときは既存のentryをそのまま使い回す)。
+      if (!municipalitiesVisible) {
+        map.removeLayer(entry.boundaryLayer);
+      } else {
+        if (municipalityLabelsVisible) entry.labelLayer.addTo(map);
+        if (capitalLabelsVisible) entry.prominentLabelLayer.addTo(map);
+      }
       municipalityLayers.set(pref.code, entry);
     } catch (error) {
       console.error(`市区町村境界の読み込みに失敗(${pref.name}):`, error);
@@ -448,7 +551,7 @@ function formatRelativePostedAt(value: string | number | null): string {
 // ホストはemojiHost(投稿元インスタンスのorigin。無ければ検索に使ったhost)から導出する。
 function formatUserLabel(record: AshiatoRecord): string {
   if (!record.username) return "(不明なユーザー)";
-  const host = (record.emojiHost ?? record.host).replace(/^https?:\/\//, "");
+  const host = stripProtocol(record.emojiHost ?? record.host);
   const handle = `@${record.username}@${host}`;
   return record.displayName ? `${record.displayName} ${handle}` : handle;
 }
@@ -579,7 +682,7 @@ function buildUserNameNode(record: AshiatoRecord): HTMLElement {
     wrap.append(name);
   }
 
-  const host = (record.emojiHost ?? record.host).replace(/^https?:\/\//, "");
+  const host = stripProtocol(record.emojiHost ?? record.host);
   const handle = document.createElement("span");
   handle.className = "ashiato-handle";
   handle.textContent = `@${record.username}@${host}`;
@@ -594,22 +697,15 @@ function buildUserNameNode(record: AshiatoRecord): HTMLElement {
 //   フッター(発見日時[yyyy/MM/dd hh:mm]+「…」ボタン)
 // 行タップ自体では何も起きず、「…」ボタンだけがアクションシートを開く。
 // overflowRootは「続きを表示」ヒントの再計算対象(applyPreviewOverflowChecks)に渡すルート要素。
-// markReadがtrueの場合のみ、未読(readAtが無い)レコードをこの時点で既読にする
-// (呼び出し側でupdateUnreadBadge()を呼ぶこと)。refreshUnlockedList()はダイアログが
-// 閉じていても内部状態の同期のために呼ばれることがあるため、そのタイミングでは
-// markReadをfalseにして「見せてもいないのに既読になる」ことを防ぐ
-// (呼び出し元を参照)。未読ドット自体は、実際に既読にしたかどうかに関わらず、
-// 呼び出し時点でまだ未読だったレコードには表示する。
+// ここでは既読化は一切行わない(呼び出し側がobserveRowsForReadで返り値の行要素を
+// 監視し、実際にスクロールされて画面内に表示された時点で初めて既読にする)。
+// 未読ドットは、呼び出し時点でまだ未読だったレコードにのみ表示する。
 function renderAshiatoRow(
   record: AshiatoRecord,
   overflowRoot: ParentNode,
-  { onMore, markRead }: { onMore: () => void; markRead: boolean },
+  onMore: () => void,
 ): HTMLElement {
   const isUnread = !record.readAt;
-  if (isUnread && markRead) {
-    record.readAt = Date.now();
-    markAshiatoRead(record.id, record.readAt);
-  }
 
   const row = document.createElement("div");
   row.className = "ashiato-row";
@@ -619,6 +715,10 @@ function renderAshiatoRow(
   if (isUnread) {
     const dot = document.createElement("span");
     dot.className = "unread-dot";
+    // マップ上の丸と同じ配色(Geohashの桁数=精度で色分け)に揃える。
+    // .unread-dotのbackground/box-shadowはcurrentColorを参照しているため、
+    // ここでcolorを指定するだけで明滅の色も追従する(style.css参照)。
+    dot.style.color = ashiatoColor(record.geohash.length);
     dot.setAttribute("aria-label", "未読");
     header.append(dot);
   }
@@ -666,35 +766,39 @@ function renderAshiatoRow(
   return row;
 }
 
+// セルの地図上の見た目(円+タップ判定)だけを取り除く。cell.records自体は
+// 変更しないので、呼び出し側がその後cellを削除するか、rebuildCellVisualで
+// 作り直すかを決める。
+function clearCellVisual(cell: AshiatoCell): void {
+  if (cell.hitArea) removeAshiatoGroup(map, { visualLayers: cell.visualLayers!, hitArea: cell.hitArea });
+}
+
 // セルの見た目(円)を、現在のrecords件数・状態に合わせて作り直す。
 // ロック中(未発見)のレコードは地図上に一切表示しない方針のため、
 // 表示対象は「発見済み(unlockedAtあり)」のレコードだけに絞る。
 // 発見済みレコードが1件も無いセルは、円そのものを描画しない
 // (GPS判定用の内部データとしてはcell.recordsに保持し続ける)。
 function rebuildCellVisual(cell: AshiatoCell): void {
-  if (cell.hitArea) removeAshiatoGroup(map, { visualLayers: cell.visualLayers!, hitArea: cell.hitArea });
+  clearCellVisual(cell);
   cell.visualLayers = null;
   cell.hitArea = null;
-  cell.geohashLength = null;
-  cell.color = null;
 
   const visibleRecords = [...cell.records.values()].filter(
     (r) =>
       (SHOW_LOCKED_ASHIATO_FOR_DEBUG || r.unlockedAt) && (!hideReadEnabled || !r.readAt),
   );
 
-
   if (visibleRecords.length > 0) {
-    const { visualLayers, hitArea, geohashLength } = addAshiatoGroup(
+    const allRead = visibleRecords.every((r) => r.readAt);
+    const { visualLayers, hitArea } = addAshiatoGroup(
       map,
       cell.geohash,
       visibleRecords.length,
+      allRead,
       () => handleCellClick(cell.geohash),
     );
     cell.visualLayers = visualLayers;
     cell.hitArea = hitArea;
-    cell.geohashLength = geohashLength;
-    cell.color = ashiatoColor(geohashLength);
   }
 
   areaOverlay.refresh([...ashiatoCells.values()]);
@@ -705,7 +809,7 @@ function rebuildCellVisual(cell: AshiatoCell): void {
 function addRecordToCell(record: AshiatoRecord): void {
   let cell = ashiatoCells.get(record.geohash);
   if (!cell) {
-    cell = { geohash: record.geohash, records: new Map(), visualLayers: null, hitArea: null, geohashLength: null, color: null };
+    cell = { geohash: record.geohash, records: new Map(), visualLayers: null, hitArea: null };
     ashiatoCells.set(record.geohash, cell);
   }
   if (cell.records.has(record.id)) return;
@@ -753,6 +857,10 @@ let unlockedSortMode: UnlockedSortMode = "unlocked";
 // 「未読のみ」フィルター(見つけたあしあと一覧の表示フィルター)。
 let showOnlyUnread = false;
 
+// 見つけたあしあと一覧に現在張られている可視性ベース既読判定(observeRowsForRead)の
+// 解除関数。refreshUnlockedListで作り直すたびに、古いものをここで解除する。
+let disposeUnlockedListReadObserver: (() => void) | null = null;
+
 function sortKeyFor(record: AshiatoRecord, mode: UnlockedSortMode): number {
   if (mode === "posted") {
     const posted = record.noteCreatedAt ? new Date(record.noteCreatedAt).getTime() : NaN;
@@ -763,13 +871,100 @@ function sortKeyFor(record: AshiatoRecord, mode: UnlockedSortMode): number {
 
 // 発見済み(unlockedAt)かつ未読(readAtが無い)のレコードが1件でもあれば、
 // メニューFABとハンバーガーメニュー内「見つけたあしあと」項目に緑の点を出す。
-// 一覧・ポップアップの描画(renderAshiatoRowが実際に既読化したかもしれない)後に呼ぶこと。
+// 一覧・ポップアップの描画後、および可視性ベースの既読化(observeRowsForRead)が
+// 実際に既読化を行った後、いずれのタイミングでも呼ぶこと。
 function updateUnreadBadge(): void {
   const hasUnread = [...ashiatoCells.values()].some((cell) =>
     [...cell.records.values()].some((r) => r.unlockedAt && !r.readAt),
   );
   menuBadge.hidden = !hasUnread;
   unlockedBadge.hidden = !hasUnread;
+}
+
+// 一定時間(このミリ秒数)表示され続けたレコードだけを既読にする。開いた瞬間
+// (=表示された瞬間)に即既読化すると未読ドットを目にする間もなく消えてしまうため、
+// 「ちゃんと表示された」とみなせるだけの猶予を設ける。この間にスクロールで
+// 画面外に出た場合はタイマーを取り消し、既読にしない。
+const READ_DWELL_MS = 3000;
+
+// 「開いただけ」ではなく「実際にスクロールされて画面内に表示された」行だけを
+// 既読にする(可視性ベースの既読判定)。rootは実際のスクロール領域
+// (見つけたあしあと一覧ではunlockedList自身、マップの吹き出しではLeafletが
+// 用意する.leaflet-popup-content)を渡すこと — スクロールしないrootを渡すと、
+// 交差判定がその要素の矩形基準になってしまい正しく機能しない。
+// 60%以上表示された状態がREAD_DWELL_MS続いた時点で既読と判定する
+// (端がわずかに覗いただけ・一瞬スクロールで通り過ぎただけでは既読にしない)。
+// 既読化したレコードのマップ上の丸(セル)は、その場でrebuildCellVisualして
+// 既読/未読の見た目(色を薄くする/明滅を止める)を更新する。
+// 既に既読のレコードは監視対象から除外する。返り値は監視解除用のdispose関数。
+// IntersectionObserver非対応の古い環境では、判定しようがないため即座に既読にする
+// (未読のまま何も表示できなくなるより安全側に倒す)。
+function observeRowsForRead(
+  root: Element,
+  rows: { row: HTMLElement; record: AshiatoRecord }[],
+): () => void {
+  const pending = rows.filter(({ record }) => !record.readAt);
+  if (pending.length === 0) return () => {};
+
+  if (!("IntersectionObserver" in window)) {
+    const cellsToRebuild = new Set<AshiatoCell>();
+    for (const { record } of pending) {
+      record.readAt = Date.now();
+      markAshiatoRead(record.id, record.readAt);
+      const cell = ashiatoCells.get(record.geohash);
+      if (cell) cellsToRebuild.add(cell);
+    }
+    for (const cell of cellsToRebuild) rebuildCellVisual(cell);
+    updateUnreadBadge();
+    return () => {};
+  }
+
+  const recordByRow = new Map(pending.map(({ row, record }) => [row as Element, record]));
+  const dwellTimers = new Map<Element, ReturnType<typeof setTimeout>>();
+
+  const markRead = (target: Element, record: AshiatoRecord) => {
+    dwellTimers.delete(target);
+    if (record.readAt) return; // 他経路(削除→再発見など)で既に確定済みなら何もしない
+    observer.unobserve(target);
+
+    record.readAt = Date.now();
+    markAshiatoRead(record.id, record.readAt);
+    target.querySelector(".unread-dot")?.remove();
+
+    const cell = ashiatoCells.get(record.geohash);
+    if (cell) rebuildCellVisual(cell);
+    updateUnreadBadge();
+  };
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const pendingTimer = dwellTimers.get(entry.target);
+        if (pendingTimer) {
+          clearTimeout(pendingTimer);
+          dwellTimers.delete(entry.target);
+        }
+        if (!entry.isIntersecting) continue;
+
+        const record = recordByRow.get(entry.target);
+        if (!record || record.readAt) continue;
+
+        dwellTimers.set(
+          entry.target,
+          setTimeout(() => markRead(entry.target, record), READ_DWELL_MS),
+        );
+      }
+    },
+    { root, threshold: 0.6 },
+  );
+
+  for (const { row } of pending) observer.observe(row);
+
+  return () => {
+    observer.disconnect();
+    for (const timer of dwellTimers.values()) clearTimeout(timer);
+    dwellTimers.clear();
+  };
 }
 
 // 「見つけたあしあと」ダイアログの中身を、アンロック済みのものだけ・
@@ -784,6 +979,8 @@ function refreshUnlockedList(): void {
 
   const visible = showOnlyUnread ? unlocked.filter((r) => !r.readAt) : unlocked;
 
+  disposeUnlockedListReadObserver?.();
+  disposeUnlockedListReadObserver = null;
   unlockedList.replaceChildren();
 
   if (visible.length === 0) {
@@ -798,12 +995,11 @@ function refreshUnlockedList(): void {
     return;
   }
 
+  const rowsForReadTracking: { row: HTMLElement; record: AshiatoRecord }[] = [];
   for (const record of visible) {
     const li = document.createElement("li");
-    const row = renderAshiatoRow(record, unlockedList, {
-      onMore: () => openAshiatoActions(record),
-      markRead: unlockedListDialog.open,
-    });
+    const row = renderAshiatoRow(record, unlockedList, () => openAshiatoActions(record));
+    rowsForReadTracking.push({ row, record });
     li.append(row);
     unlockedList.append(li);
   }
@@ -811,6 +1007,10 @@ function refreshUnlockedList(): void {
   // このタイミングでdialogが開いていれば正しく測れる(閉じていれば後で
   // showModal()後に再度呼ばれて補正される。unlockedListToggleのonclick参照)。
   applyPreviewOverflowChecks(unlockedList);
+  // ダイアログが閉じている間はunlockedList自体に表示領域が無いため交差が
+  // 発生しないだけで、observer自体は張っておいて問題ない
+  // (実際に開かれた時点で自動的に判定が始まる)。
+  disposeUnlockedListReadObserver = observeRowsForRead(unlockedList, rowsForReadTracking);
   updateUnreadBadge();
 }
 
@@ -839,14 +1039,13 @@ function showAshiatoCellPopup(geohash: string): void {
   const container = document.createElement("div");
   container.className = "ashiato-popup-list";
 
+  const rowsForReadTracking: { row: HTMLElement; record: AshiatoRecord }[] = [];
   for (const record of records) {
-    const row = renderAshiatoRow(record, container, {
-      onMore: () => {
-        map.closePopup();
-        openAshiatoActions(record);
-      },
-      markRead: true,
+    const row = renderAshiatoRow(record, container, () => {
+      map.closePopup();
+      openAshiatoActions(record);
     });
+    rowsForReadTracking.push({ row, record });
     container.append(row);
   }
   updateUnreadBadge();
@@ -859,13 +1058,22 @@ function showAshiatoCellPopup(geohash: string): void {
   // つぶれてしまい、maxWidthだけでは広がらない(実際に描画される幅は
   // minWidthとの兼ね合いで決まる)。minWidthで下限を明示して確実に
   // 横幅を確保する。
-  L.popup({ minWidth: 280, maxWidth: 320, maxHeight: 260 })
+  const popup = L.popup({ minWidth: 280, maxWidth: 320, maxHeight: 260 })
     .setLatLng([centerLat, centerLon])
     .setContent(container)
     .openOn(map);
 
   // openOn()でDOMに接続・表示された直後なので、ここで初めて高さが正しく測れる。
   applyPreviewOverflowChecks(container);
+
+  // container.parentElement は Leaflet が用意する実際のスクロール領域
+  // (.leaflet-popup-content。maxHeight超過時にoverflow-y:autoが付く、
+  // map.ts/L.popup呼び出し側のmaxHeight指定を参照)。このポップアップが
+  // 閉じられたら(他の吹き出しに差し替わった場合を含む)observerを解放する。
+  const disposeReadObserver = observeRowsForRead(container.parentElement!, rowsForReadTracking);
+  map.once("popupclose", (e) => {
+    if (e.popup === popup) disposeReadObserver();
+  });
 }
 
 // あしあと1件分の「…」ボタンから呼ばれるアクションシート。地図/一覧いずれの行から
@@ -1002,21 +1210,33 @@ function setGpsEnabled(enabled: boolean): void {
     return;
   }
 
-  gpsEnabled = enabled;
-  gpsToggleBtn.setAttribute("aria-pressed", String(enabled));
-  // 投稿UIは現在地が前提の機能のため、GPSトグルOFF中は投稿メニュー項目も無効化する。
-  updateComposeAvailability();
-
   if (!enabled) {
+    gpsEnabled = false;
+    gpsToggleBtn.setAttribute("aria-pressed", "false");
+    // 投稿UIは現在地が前提の機能のため、GPSトグルOFF中は投稿メニュー項目も無効化する。
+    updateComposeAvailability();
     if (watchId !== null) navigator.geolocation.clearWatch(watchId);
     watchId = null;
     currentLocationLayer.hide();
     lastKnownPosition = null; // OFFにしたら古い位置情報は使い回さない
     lastKnownAccuracy = null;
     updatePrecisionWarning();
+    // 投稿UIを開いたままGPSをOFFにした場合、古い位置情報のまま投稿できて
+    // しまわないよう、開いていれば閉じて下書き用の位置情報も破棄する。
+    if (composeDialog.open) composeDialog.close();
+    composePosition = null;
     return;
   }
 
+  if (watchId !== null) return; // 既に取得試行中(確定前含む)なら二重に開始しない
+
+  // ここではまだgpsEnabled/aria-pressedをONにしない。スマホ側の位置情報
+  // サービスがOFFになっている等でこの後のwatchPositionが失敗する可能性が
+  // あり、要求した時点で即座にONの見た目にしてしまうと、実際には取得できて
+  // いないのに一瞬(あるいはエラーが返るまでの間)「ONにできてしまった」ように
+  // 見えてしまうため。ON状態の確定はhandlePositionUpdateで初回取得に
+  // 成功した時点で行う。
+  setStatus("現在地を取得中…");
   watchId = navigator.geolocation.watchPosition(
     handlePositionUpdate,
     handlePositionError,
@@ -1055,9 +1275,13 @@ async function checkCurrentPositionAgainstCells(): Promise<void> {
 
     const unlockedAt = Date.now();
     for (const record of locked) {
-      await markAshiatoUnlocked(record.id, unlockedAt);
+      // DBへの書き込み(await)を待つ前に確定させる。GPSの更新が連続して
+      // 届いた場合、この関数の呼び出しが重なることがあり、awaitの間に
+      // 別の呼び出しが同じレコードを「まだロック中」として二重に処理して
+      // しまわないようにするため。
       record.unlockedAt = unlockedAt;
       discoveredCount++;
+      await markAshiatoUnlocked(record.id, unlockedAt);
     }
     rebuildCellVisual(cell); // 初めて発見された/丸の数が増えたケースに対応
     refreshUnlockedList();
@@ -1069,6 +1293,12 @@ async function checkCurrentPositionAgainstCells(): Promise<void> {
 // 現在地が更新されるたびに呼ばれる。実際の判定はcheckCurrentPositionAgainstCellsに委譲する
 // (「過去を探す」等でセル自体が増減したタイミングでも同じ判定を再利用できるようにするため)。
 async function handlePositionUpdate(position: GeolocationPosition): Promise<void> {
+  if (!gpsEnabled) {
+    // 初回の取得成功。ここで初めてトグルのON状態を確定させる(setGpsEnabled参照)。
+    gpsEnabled = true;
+    gpsToggleBtn.setAttribute("aria-pressed", "true");
+  }
+
   const { latitude, longitude, accuracy } = position.coords;
   lastKnownPosition = { lat: latitude, lon: longitude };
   lastKnownAccuracy = accuracy;
@@ -1082,12 +1312,14 @@ async function handlePositionUpdate(position: GeolocationPosition): Promise<void
 // --- 開封可能なAshiatoリスト(ダイアログ) ----------------------------------
 
 const unlockedListDialog = $<HTMLDialogElement>("#unlockedListDialog");
+enableSheetDragResize(unlockedListDialog);
 
 $<HTMLButtonElement>("#unlockedListToggle").onclick = () => {
   closeMenu();
   unlockedListDialog.showModal();
-  // 開いた直後にrefreshUnlockedList()を呼び直すことで、今まさに表示された行を
-  // 既読として記録する(閉じている間の再構築ではmarkRead:falseのため既読にならない)。
+  // 開いている間にデータが変化している可能性があるため念のため再構築する。
+  // 既読化自体はobserveRowsForReadによる可視性ベースの判定に任せるため、
+  // ここで明示的に既読化する処理は不要(実際に表示された行だけが既読になる)。
   refreshUnlockedList();
   // refreshUnlockedList()が閉じた状態で呼ばれていた場合、高さが正しく
   // 測れず「続きを表示」ヒントの表示要否判定が不正確なことがあるため、
@@ -1107,15 +1339,7 @@ unreadOnlyFilterCheckbox.onchange = () => {
   refreshUnlockedList();
 };
 
-unlockedListDialog.addEventListener("click", (e) => {
-  const rect = unlockedListDialog.getBoundingClientRect();
-  const inside =
-    rect.top <= e.clientY &&
-    e.clientY <= rect.top + rect.height &&
-    rect.left <= e.clientX &&
-    e.clientX <= rect.left + rect.width;
-  if (!inside) unlockedListDialog.close();
-});
+closeOnBackdropClick(unlockedListDialog);
 
 // --- あしあと1件のアクションシート(「…」ボタン) ----------------------------
 
@@ -1127,15 +1351,23 @@ const ashiatoActionDeleteBtn = $<HTMLButtonElement>("#ashiatoActionDelete");
 
 $<HTMLButtonElement>("#ashiatoActionCloseX").onclick = () => ashiatoActionDialog.close();
 
-ashiatoActionDialog.addEventListener("click", (e) => {
-  const rect = ashiatoActionDialog.getBoundingClientRect();
-  const inside =
-    rect.top <= e.clientY &&
-    e.clientY <= rect.top + rect.height &&
-    rect.left <= e.clientX &&
-    e.clientX <= rect.left + rect.width;
-  if (!inside) ashiatoActionDialog.close();
-});
+closeOnBackdropClick(ashiatoActionDialog);
+
+// --- 「現在地」「エリア」「既読を隠す」をまとめたパネルの折りたたみ -------------
+// デフォルトは展開状態(index.html側のaria-expanded="true"、togglePanelRowsも
+// collapsedクラス無しが初期値)。状態は永続化しない(セッションごとに展開状態から始まる)。
+// 開閉はhidden属性ではなくcollapsedクラスの付け外しで行う
+// (grid-template-rowsのtransitionでアニメーションさせるため、要素自体は
+// 常にレイアウトに残しておく必要がある。style.css参照)。
+
+const togglePanelCollapseBtn = $<HTMLButtonElement>("#togglePanelCollapse");
+const togglePanelRows = $("#togglePanelRows");
+
+togglePanelCollapseBtn.onclick = () => {
+  const willExpand = togglePanelRows.classList.contains("collapsed");
+  togglePanelRows.classList.toggle("collapsed", !willExpand);
+  togglePanelCollapseBtn.setAttribute("aria-expanded", String(willExpand));
+};
 
 // --- 「エリア」トグル(Geohashセルの範囲描画) ------------------------------
 
@@ -1185,18 +1417,10 @@ $<HTMLButtonElement>("#aboutButton").onclick = () => {
   closeMenu();
   aboutDialog.showModal();
 };
-$<HTMLButtonElement>("#aboutClose").onclick = () => aboutDialog.close();
+$<HTMLButtonElement>("#aboutCloseX").onclick = () => aboutDialog.close();
 
 // ダイアログ外側(::backdrop)クリックでも閉じられるようにする
-aboutDialog.addEventListener("click", (e) => {
-  const rect = aboutDialog.getBoundingClientRect();
-  const inside =
-    rect.top <= e.clientY &&
-    e.clientY <= rect.top + rect.height &&
-    rect.left <= e.clientX &&
-    e.clientX <= rect.left + rect.width;
-  if (!inside) aboutDialog.close();
-});
+closeOnBackdropClick(aboutDialog);
 
 // --- インスタンス変更ダイアログ --------------------------------------------
 
@@ -1209,15 +1433,7 @@ $<HTMLButtonElement>("#changeInstance").onclick = () => {
 };
 $<HTMLButtonElement>("#instanceCancel").onclick = () => instanceDialog.close();
 
-instanceDialog.addEventListener("click", (e) => {
-  const rect = instanceDialog.getBoundingClientRect();
-  const inside =
-    rect.top <= e.clientY &&
-    e.clientY <= rect.top + rect.height &&
-    rect.left <= e.clientX &&
-    e.clientX <= rect.left + rect.width;
-  if (!inside) instanceDialog.close();
-});
+closeOnBackdropClick(instanceDialog);
 
 $<HTMLButtonElement>("#instanceApply").onclick = () => {
   instanceDialog.close();
@@ -1228,12 +1444,10 @@ $<HTMLButtonElement>("#instanceApply").onclick = () => {
 // そのhost用のキャッシュ(あれば)を読み込み直す。
 async function switchHost(host: string): Promise<number> {
   currentHost = host;
-  currentHostLabel.textContent = `現在: ${host.replace(/^https?:\/\//, "")}`;
+  currentHostLabel.textContent = `現在: ${stripProtocol(host)}`;
   putSetting("instanceUrl", host); // TTL無し。次回起動時のデフォルト接続先にする
 
-  for (const cell of ashiatoCells.values()) {
-    if (cell.hitArea) removeAshiatoGroup(map, { visualLayers: cell.visualLayers!, hitArea: cell.hitArea });
-  }
+  for (const cell of ashiatoCells.values()) clearCellVisual(cell);
   ashiatoCells.clear();
   pendingRecords.clear();
   areaOverlay.refresh([]);
@@ -1403,6 +1617,10 @@ async function fetchOlder(): Promise<void> {
       untilId: cursor?.oldestSeenNoteId,
     });
 
+    // 検索中にインスタンスが切り替えられていたら、この結果は今のcurrentHostの
+    // ものではないので破棄する(取り込むとホストをまたいでセル/cursorが混線する)。
+    if (host !== currentHost) return;
+
     await ingestNotes(host, notes);
 
     if (notes.length > 0) {
@@ -1458,6 +1676,10 @@ async function fetchNewer(): Promise<void> {
       sinceId: cursor.newestSeenNoteId,
     });
 
+    // 検索中にインスタンスが切り替えられていたら、この結果は今のcurrentHostの
+    // ものではないので破棄する(取り込むとホストをまたいでセル/cursorが混線する)。
+    if (host !== currentHost) return;
+
     await ingestNotes(host, notes);
 
     if (notes.length > 0) {
@@ -1497,7 +1719,7 @@ async function handleClearSearchCache(): Promise<void> {
       if (!record.unlockedAt) cell.records.delete(id);
     }
     if (cell.records.size === 0) {
-      if (cell.hitArea) removeAshiatoGroup(map, { visualLayers: cell.visualLayers!, hitArea: cell.hitArea });
+      clearCellVisual(cell);
       ashiatoCells.delete(geohash);
     } else {
       rebuildCellVisual(cell); // 残るのは発見済みだけなので、見た目は基本変わらない
@@ -1511,7 +1733,10 @@ async function handleClearSearchCache(): Promise<void> {
 
 $<HTMLButtonElement>("#search").onclick = fetchOlder;
 $<HTMLButtonElement>("#loadNewer").onclick = fetchNewer;
-$<HTMLButtonElement>("#toggleGps").onclick = () => setGpsEnabled(!gpsEnabled);
+// 確定ON(gpsEnabled)・取得試行中で未確定(watchId!==nullだがgpsEnabledはまだfalse)の
+// いずれの状態でもOFFに戻す。完全にOFFの状態からのみONにする試行を開始する。
+$<HTMLButtonElement>("#toggleGps").onclick = () =>
+  setGpsEnabled(!(gpsEnabled || watchId !== null));
 $<HTMLButtonElement>("#clearSearchCache").onclick = async () => {
   closeMenu();
   const wantsToClear = await showConfirm(
@@ -1553,8 +1778,10 @@ $<HTMLInputElement>("#instance").onkeydown = (e) => {
 // フォームまで開いた)時点でその下書きを削除する(役目を終えたとみなす)。
 
 const composeDialog = $<HTMLDialogElement>("#composeDialog");
+enableSheetDragResize(composeDialog);
 const composePrecisionNote = $("#composePrecisionNote");
 const draftListDialog = $<HTMLDialogElement>("#draftListDialog");
+enableSheetDragResize(draftListDialog);
 const draftList = $("#draftList");
 
 let composePosition: { lat: number; lon: number } | null = null; // 投稿UI表示中のみ有効
@@ -1568,12 +1795,12 @@ function selectedPrecision(): GeohashLength {
 // 精度「約150m」(7桁)は、作成から30分経つまで投稿不可
 // (下書きの精度をあとから変更しても、常にこの条件で都度再評価する)。
 function isDraftPostable(draft: Draft): boolean {
-  if (draft.geohashLength !== 7) return true;
+  if (draft.geohashLength !== HIGH_PRECISION_GEOHASH_LENGTH) return true;
   return Date.now() - draft.createdAt >= DRAFT_HIGH_PRECISION_DELAY_MS;
 }
 
 function updateComposeButtons(): void {
-  const isHighPrecision = selectedPrecision() === 7;
+  const isHighPrecision = selectedPrecision() === HIGH_PRECISION_GEOHASH_LENGTH;
   const precisionBad = isPrecisionBad();
 
   $<HTMLButtonElement>("#composePost").disabled = isHighPrecision || precisionBad;
@@ -1644,6 +1871,9 @@ $<HTMLButtonElement>("#composeAshiatoMenuItem").onclick = () => {
   setStatus("現在地を取得中…");
   navigator.geolocation.getCurrentPosition(
     (pos) => {
+      // 取得を待っている間にGPSがOFFにされていたら、古い位置情報で
+      // 投稿UIを開き直さない。
+      if (!gpsEnabled) return;
       composePosition = { lat: pos.coords.latitude, lon: pos.coords.longitude };
       updateComposeButtons();
       // dialogを開いてから高さを測ってfitBoundsする必要があるため、
@@ -1818,15 +2048,7 @@ $<HTMLButtonElement>("#draftListToggle").onclick = () => {
 };
 $<HTMLButtonElement>("#draftListCloseX").onclick = () => draftListDialog.close();
 
-draftListDialog.addEventListener("click", (e) => {
-  const rect = draftListDialog.getBoundingClientRect();
-  const inside =
-    rect.top <= e.clientY &&
-    e.clientY <= rect.top + rect.height &&
-    rect.left <= e.clientX &&
-    e.clientX <= rect.left + rect.width;
-  if (!inside) draftListDialog.close();
-});
+closeOnBackdropClick(draftListDialog);
 
 // --- スプラッシュ画面 -------------------------------------------------
 // ヘッダーから「Ashi@」「どこにいた？」を外した代わりに、起動直後だけ

@@ -48,12 +48,10 @@ export interface AshiatoGroupHandle {
 }
 
 // main.js側で保持する1セル分の状態。発見済みレコードが1件も無い間は
-// visualLayers/hitArea/geohashLength/colorがnullのまま(地図に未描画)。
+// visualLayers/hitAreaがnullのまま(地図に未描画)。
 export interface AshiatoCell {
   geohash: string;
   records: Map<string, AshiatoRecord>;
   visualLayers: L.CircleMarker[] | null;
   hitArea: L.CircleMarker | null;
-  geohashLength: number | null;
-  color: string | null;
 }

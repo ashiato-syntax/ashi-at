@@ -2,7 +2,8 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { decodeGeohash, encodeGeohash } from "./geohash.js";
 import type { AshiatoCell, AshiatoGroupHandle } from "./types.js";
-import type { FeatureCollection, Geometry } from "geojson";
+import type { FeatureCollection, Geometry, Position } from "geojson";
+import { createIcon } from "./icons.js";
 
 // NOTE: ここでは意図的に L.tileLayer(...) を追加していない
 // サードパーティ製のタイルプロバイダは使用しない
@@ -14,6 +15,222 @@ const JAPAN_BOUNDS = L.latLngBounds([17, 122], [46, 154]);
 // ここでは都道府県ポリゴンの塗りつぶしだけを指定する。
 const LAND_FILL_COLOR = "#F7F2EC";
 
+// 都道府県境界線に使う一点鎖線(長い破線, 隙間, 点, 隙間 の繰り返し)。
+// 「点」はlineCap:'round'(Path options既定値)により短い線分が丸い点として描画される。
+const PREFECTURE_DASH_ARRAY = "10,4,1,4";
+
+// 市区町村境界線に使う二点鎖線(長い破線, 隙間, 点, 隙間, 点, 隙間 の繰り返し)。
+const MUNICIPALITY_DASH_ARRAY = "10,4,1,4,1,4";
+
+// 都道府県境界線の色・太さ。二点鎖線レイヤーと、海岸線を実線で見せるための
+// 重ね描きレイヤーの両方で同じ値を使う(色・太さがずれると重ね描きの意味が無くなるため)。
+const PREFECTURE_BOUNDARY_COLOR = "#707070";
+const PREFECTURE_BOUNDARY_WEIGHT = 1.0;
+
+function ringsOf(geometry: Geometry): Position[][] {
+  if (geometry.type === "Polygon") return geometry.coordinates;
+  if (geometry.type === "MultiPolygon") return geometry.coordinates.flat();
+  return [];
+}
+
+// 浮動小数点の微妙な誤差で「同じ頂点なのに一致しない」ことがないよう、
+// 座標を丸めた上でキー化する。
+function coordKey(c: Position): string {
+  return `${c[0].toFixed(7)},${c[1].toFixed(7)}`;
+}
+
+interface BoundaryEdge {
+  count: number;
+  a: Position;
+  b: Position;
+  keyA: string;
+  keyB: string;
+}
+
+interface BoundaryNeighbor {
+  to: string;
+  edgeKey: string;
+  coord: Position;
+}
+
+// 辺の集合(内陸の境界だけに絞り込み済みのもの)を、1本ずつの連続した線
+// (チェーン)として再構成する共通処理。extractInternalBoundaryChains/
+// extractMunicipalityBoundaryChainsの両方から使う。
+//
+// 1. 対象の辺だけで頂点の隣接グラフを作り、分岐点・端点(隣接する辺が
+//    ちょうど2本ではない頂点)を起点に、辺を1本ずつ辿って繋ぎ合わせる。
+//    バラバラの2頂点の線分としてではなく1本の連続した線にすることで、
+//    二点鎖線のリズム(破線→点→点の繰り返し)が繋ぎ目でリセットされず
+//    綺麗に続くようにする。
+// 2. どの分岐点・端点にも繋がらない閉ループ(飛び地を囲む境界線など、
+//    次数2の頂点だけで構成される辺の輪)は最後にまとめて処理する。
+function chainEdges(internalEdges: BoundaryEdge[]): [number, number][][] {
+  const adjacency = new Map<string, BoundaryNeighbor[]>();
+  const vertexCoord = new Map<string, Position>();
+
+  const addNeighbor = (from: string, to: string, edgeKey: string, toCoord: Position) => {
+    let list = adjacency.get(from);
+    if (!list) {
+      list = [];
+      adjacency.set(from, list);
+    }
+    list.push({ to, edgeKey, coord: toCoord });
+  };
+
+  for (const { a, b, keyA, keyB } of internalEdges) {
+    const edgeKey = keyA < keyB ? `${keyA}|${keyB}` : `${keyB}|${keyA}`;
+    vertexCoord.set(keyA, a);
+    vertexCoord.set(keyB, b);
+    addNeighbor(keyA, keyB, edgeKey, b);
+    addNeighbor(keyB, keyA, edgeKey, a);
+  }
+
+  const usedEdges = new Set<string>();
+
+  // startKeyからfirstの方向へ辺を辿り、次数がちょうど2の頂点を通過点として
+  // 繋ぎながら、分岐点・端点(または閉ループの一周)に着くまで進む。
+  function walk(startKey: string, first: BoundaryNeighbor): Position[] {
+    const chain: Position[] = [vertexCoord.get(startKey)!, first.coord];
+    usedEdges.add(first.edgeKey);
+    let currentKey = first.to;
+
+    for (;;) {
+      const neighbors = adjacency.get(currentKey)!;
+      if (neighbors.length !== 2) break; // 分岐点・端点に到着
+
+      const next = neighbors.find((n) => !usedEdges.has(n.edgeKey));
+      if (!next) break; // 閉ループを一周し終えた
+
+      usedEdges.add(next.edgeKey);
+      chain.push(next.coord);
+      currentKey = next.to;
+    }
+
+    return chain;
+  }
+
+  const chains: Position[][] = [];
+
+  // 1. 分岐点・端点から辿る
+  for (const [vertexKey, neighbors] of adjacency) {
+    if (neighbors.length === 2) continue;
+    for (const n of neighbors) {
+      if (usedEdges.has(n.edgeKey)) continue;
+      chains.push(walk(vertexKey, n));
+    }
+  }
+
+  // 2. 残り(次数2の頂点だけで構成される閉ループ)を処理する
+  for (const [vertexKey, neighbors] of adjacency) {
+    for (const n of neighbors) {
+      if (usedEdges.has(n.edgeKey)) continue;
+      chains.push(walk(vertexKey, n));
+    }
+  }
+
+  // GeoJSONの座標は[lon, lat]、Leafletは[lat, lon]の順序なので入れ替える。
+  return chains.map((chain) => chain.map((c): [number, number] => [c[1], c[0]]));
+}
+
+// 都道府県境界(prefectures.json)から、海岸線を除いた「内陸の県境」だけを
+// 1本ずつの連続した線として再構成する。全ポリゴンの辺(隣接する2頂点の組)を
+// 数え上げ、2回出てくる辺(隣の都道府県のポリゴンにも同じ辺があり、境界を
+// 共有している=内陸の県境)だけを残す。1回しか出てこない辺(どの都道府県とも
+// 共有していない=海岸線)は除外する — 結果として海岸線には一切線を引かない。
+//
+// 都道府県データは47件・頂点数は合計6万程度で、この処理は起動時に1回だけ
+// (loadPrefectureBoundaries内で)行うだけなので重くはならない。
+function extractInternalBoundaryChains(
+  geojson: FeatureCollection<Geometry>,
+): [number, number][][] {
+  const edges = new Map<string, BoundaryEdge>();
+
+  for (const feature of geojson.features) {
+    for (const ring of ringsOf(feature.geometry)) {
+      for (let i = 0; i < ring.length - 1; i++) {
+        const a = ring[i];
+        const b = ring[i + 1];
+        const keyA = coordKey(a);
+        const keyB = coordKey(b);
+        const key = keyA < keyB ? `${keyA}|${keyB}` : `${keyB}|${keyA}`;
+
+        const existing = edges.get(key);
+        if (existing) existing.count++;
+        else edges.set(key, { count: 1, a, b, keyA, keyB });
+      }
+    }
+  }
+
+  return chainEdges([...edges.values()].filter((e) => e.count === 2));
+}
+
+// フィーチャが政令指定都市の区(N03_003が「〜市」で終わる)なら親市名を返す。
+// それ以外(区が無い市町村)はnull。boundary用のグループ分け・ラベル用の
+// グループ分けの両方が、この判定を土台にしている。
+function designatedCityNameOf(props: MunicipalityProperties): string | null {
+  return props.N03_003?.endsWith("市") ? props.N03_003 : null;
+}
+
+// 政令指定都市の区は同じ親市名でまとめ、それ以外(区が無い市町村)は
+// 自分自身の市区町村名を1件だけのグループとする。
+function municipalityGroupKey(props: MunicipalityProperties): string {
+  return designatedCityNameOf(props) ?? props.N03_004 ?? "";
+}
+
+interface MunicipalityBoundaryChains {
+  // 通常の市区町村境界(政令市の場合はその市全体の外縁を含む)
+  cityBoundaryChains: [number, number][][];
+  // 政令指定都市内部の区どうしの境界だけ(外縁より薄い色で描画する対象)
+  wardInternalChains: [number, number][][];
+}
+
+// 市区町村境界(1都道府県分のN03-21_{code}_...json)から、海岸線・都道府県境を
+// 除いた内陸の境界を再構成する。extractInternalBoundaryChainsとほぼ同じだが、
+// 2回出てくる辺(内陸の境界)をさらに2種類に分類する:
+// - 政令指定都市の区どうしが共有する辺(同じ親市の区+区) → wardInternalChains
+// - それ以外(政令市の外縁、区が無い市町村どうしの境界など) → cityBoundaryChains
+// 1つの都道府県データだけを見た場合、どちらのケースでも「1回しか出てこない辺」は
+// 海岸線か都道府県境のどちらかであり、区別する必要なくまとめて除外できる。
+function extractMunicipalityBoundaryChains(
+  geojson: FeatureCollection<Geometry, MunicipalityProperties>,
+): MunicipalityBoundaryChains {
+  const edges = new Map<string, BoundaryEdge & { groups: string[] }>();
+
+  for (const feature of geojson.features) {
+    const group = municipalityGroupKey(feature.properties ?? {});
+    for (const ring of ringsOf(feature.geometry)) {
+      for (let i = 0; i < ring.length - 1; i++) {
+        const a = ring[i];
+        const b = ring[i + 1];
+        const keyA = coordKey(a);
+        const keyB = coordKey(b);
+        const key = keyA < keyB ? `${keyA}|${keyB}` : `${keyB}|${keyA}`;
+
+        const existing = edges.get(key);
+        if (existing) {
+          existing.count++;
+          existing.groups.push(group);
+        } else {
+          edges.set(key, { count: 1, a, b, keyA, keyB, groups: [group] });
+        }
+      }
+    }
+  }
+
+  const wardInternalEdges: BoundaryEdge[] = [];
+  const cityBoundaryEdges: BoundaryEdge[] = [];
+
+  for (const e of edges.values()) {
+    if (e.count !== 2) continue; // 1回だけ=海岸線・都道府県境はここで除外される
+    (e.groups[0] === e.groups[1] ? wardInternalEdges : cityBoundaryEdges).push(e);
+  }
+
+  return {
+    cityBoundaryChains: chainEdges(cityBoundaryEdges),
+    wardInternalChains: chainEdges(wardInternalEdges),
+  };
+}
+
 // Geohashの桁数(精度)ごとの色。精度が細かい(=判定エリアが狭い)ほど暖色にして目立たせる。
 // 5桁=緑, 6桁=黄色, 7桁=赤。Ashi@が扱うのはこの3種類の桁数のみ。
 const ASHIATO_COLORS_BY_LENGTH: Record<number, string> = {
@@ -21,23 +238,27 @@ const ASHIATO_COLORS_BY_LENGTH: Record<number, string> = {
   6: "#fbc02d",
   7: "#e53935",
 };
-function colorFor(geohashLength: number): string {
-  return ASHIATO_COLORS_BY_LENGTH[geohashLength] ?? ASHIATO_COLORS_BY_LENGTH[7];
-}
-
-// main.js側(エリアオーバーレイ用にcell.colorを覚えておく処理など)からも
-// 同じ色計算を使えるようにエクスポートしたもの。
+// main.js側(エリアオーバーレイの色計算等)からも使えるようにエクスポートする。
 export function ashiatoColor(geohashLength: number): string {
-  return colorFor(geohashLength);
+  return ASHIATO_COLORS_BY_LENGTH[geohashLength] ?? ASHIATO_COLORS_BY_LENGTH[7];
 }
 
 export function createMap(el: string | HTMLElement): L.Map {
   const map = L.map(el, {
     attributionControl: false,
+    zoomControl: false, // 標準のズームコントロールは自前で追加する(下記参照)
     minZoom: 4, // ズームアウトの制限。大体日本が全部収まるくらい
     maxBounds: JAPAN_BOUNDS,
     maxBoundsViscosity: 0.8, // 表示領域をはみ出たらふわっと戻す
   }).setView([34.69, 135.50], 9);
+
+  // ズームボタン。標準のズームコントロールは英語のtitle・"+"/"−"の文字表示・
+  // 角ばった見た目のままなので、日本語のtitleに変えた上でlucideアイコンに
+  // 差し替える(見た目自体の丸み・影はstyle.cssの.leaflet-control-zoom側で付ける)。
+  const zoomControl = L.control.zoom({ zoomInTitle: "拡大", zoomOutTitle: "縮小" }).addTo(map);
+  const zoomContainer = zoomControl.getContainer();
+  zoomContainer?.querySelector(".leaflet-control-zoom-in")?.replaceChildren(createIcon("plus"));
+  zoomContainer?.querySelector(".leaflet-control-zoom-out")?.replaceChildren(createIcon("minus"));
 
   // 陸地(都道府県ポリゴンの塗りつぶし)専用のペイン。
   // グリッド(デフォルトのoverlayPane, z-index 400)より前面、
@@ -135,20 +356,69 @@ export async function loadPrefectureBoundaries(map: L.Map): Promise<BoundaryResu
     },
   }).addTo(map);
 
-  L.geoJSON(data, {
+  // 内陸の県境だけを一点鎖線で描画する(海岸線には一切線を引かない —
+  // extractInternalBoundaryChains参照)。海岸線自体は、上のlandPaneの
+  // 塗りつぶし(陸地)とmap.wrapのCSS背景色(海)の境目としてそのまま見える。
+  L.polyline(extractInternalBoundaryChains(data), {
     pane: "prefecturePane",
-    style: { color: "#666", weight: 1.5, fill: false, interactive: false },
+    color: PREFECTURE_BOUNDARY_COLOR,
+    weight: PREFECTURE_BOUNDARY_WEIGHT,
+    interactive: false,
+    dashArray: PREFECTURE_DASH_ARRAY, // 一点鎖線(長い破線→点の繰り返し)
   }).addTo(map);
 
-  const labelLayer = buildLabelLayer(data, (p) => p.N03_001 ?? null, "pref-label");
+  const labelLayer = buildPrefectureLabelLayer(data);
 
   return { data, labelLayer };
+}
+
+// 都道府県ラベルは都道府県ポリゴン自体の重心(最大パーツ)に表示する。
+function buildPrefectureLabelLayer(
+  geojson: FeatureCollection<Geometry, PrefectureProperties>,
+): L.LayerGroup {
+  const group = L.layerGroup();
+
+  for (const feature of geojson.features) {
+    const name = feature.properties?.N03_001;
+    if (!name) continue;
+
+    const center = labelPositionOf(feature.geometry);
+    if (!center) continue;
+
+    L.marker(center, {
+      icon: L.divIcon({
+        className: "",
+        html: `<span class="pref-label">${name}</span>`,
+        iconSize: [0, 0],
+      }),
+      interactive: false,
+    }).addTo(group);
+  }
+
+  return group;
 }
 
 interface MunicipalityProperties {
   N03_003?: string;
   N03_004?: string;
 }
+
+// 東京都(コード13)は特別扱いする(下記TOKYO_PREF_CODE参照)ため、このテーブルには含めない。
+// 都道府県コード(N03-21_{code}_210101.jsonのcode)ごとの県庁所在地(の市区町村)名。
+// 政令指定都市が県庁所在地の場合はその市名(例:"横浜市")、それ以外は市区町村名
+// そのもの(例:"水戸市")。
+const PREFECTURE_CAPITAL_NAME_BY_CODE: Record<string, string> = {
+  "01": "札幌市", "02": "青森市", "03": "盛岡市", "04": "仙台市", "05": "秋田市",
+  "06": "山形市", "07": "福島市", "08": "水戸市", "09": "宇都宮市", "10": "前橋市",
+  "11": "さいたま市", "12": "千葉市", "14": "横浜市", "15": "新潟市",
+  "16": "富山市", "17": "金沢市", "18": "福井市", "19": "甲府市", "20": "長野市",
+  "21": "岐阜市", "22": "静岡市", "23": "名古屋市", "24": "津市", "25": "大津市",
+  "26": "京都市", "27": "大阪市", "28": "神戸市", "29": "奈良市", "30": "和歌山市",
+  "31": "鳥取市", "32": "松江市", "33": "岡山市", "34": "広島市", "35": "山口市",
+  "36": "徳島市", "37": "高松市", "38": "松山市", "39": "高知市", "40": "福岡市",
+  "41": "佐賀市", "42": "長崎市", "43": "熊本市", "44": "大分市", "45": "宮崎市",
+  "46": "鹿児島市", "47": "那覇市",
+};
 
 // 都道府県別の市区町村GeoJson(N03-21_{code}_210101.json)を取得する。
 // 同じ都道府県コードへの呼び出しはPromiseをキャッシュして使い回すので、
@@ -163,79 +433,175 @@ export function fetchMunicipalityGeoJson(
   prefCode: string,
 ): Promise<FeatureCollection<Geometry, MunicipalityProperties>> {
   if (!municipalityGeoJsonCache.has(prefCode)) {
-    municipalityGeoJsonCache.set(
-      prefCode,
-      fetch(`./data/maps/s0010/N03-21_${prefCode}_210101.json`).then((res) => {
-        if (!res.ok)
-          throw new Error(`市区町村境界GeoJSONの読み込みに失敗しました(都道府県コード ${prefCode})。`);
-        return res.json();
-      }),
-    );
+    const promise = fetch(`./data/maps/s0010/N03-21_${prefCode}_210101.json`).then((res) => {
+      if (!res.ok)
+        throw new Error(`市区町村境界GeoJSONの読み込みに失敗しました(都道府県コード ${prefCode})。`);
+      return res.json();
+    });
+    // 失敗したPromiseをキャッシュに残したままにすると、電波が回復した後も
+    // 二度と再取得できなくなる。失敗時だけキャッシュから外し、次回の呼び出しで
+    // 再試行できるようにする(成功時はそのままキャッシュに残す)。
+    promise.catch(() => municipalityGeoJsonCache.delete(prefCode));
+    municipalityGeoJsonCache.set(prefCode, promise);
   }
   return municipalityGeoJsonCache.get(prefCode)!;
 }
 
+// 市区町村境界の色・太さ。政令指定都市の区どうしの境界(wardBoundaryColor)は
+// それ以外の境界(通常の市区町村境界、政令市の外縁を含む)より薄い色にする。
+const MUNICIPALITY_BOUNDARY_COLOR = "#AAAAAA";
+const WARD_BOUNDARY_COLOR = "#CCCCCC"; // 上記より薄い色
+const MUNICIPALITY_BOUNDARY_WEIGHT = 0.8;
+
 export interface MunicipalityBoundaryResult {
-  boundaryLayer: L.GeoJSON;
+  boundaryLayer: L.LayerGroup;
   labelLayer: L.LayerGroup;
+  // 県庁所在地・政令指定都市の大きいラベル。regularなlabelLayerとは別の
+  // ズーム閾値(main.jsのMIN_ZOOM_FOR_CAPITAL_LABELS)で表示/非表示を切り替える。
+  prominentLabelLayer: L.LayerGroup;
 }
 
 // 市区町村境界は必要になったときだけ読み込む。全国版(10MB)は使わない。
-// boundaryLayerとlabelLayerを別に返すので、呼び出し側でそれぞれ別のズーム閾値で
-// 表示/非表示を切り替えられる。陸地の塗りつぶしは都道府県レベルで既に描画済み
-// なので、市区町村側は境界線(線のみ)だけでよい。
+// boundaryLayer・labelLayer・prominentLabelLayerを別に返すので、呼び出し側で
+// それぞれ別のズーム閾値で表示/非表示を切り替えられる。陸地の塗りつぶしは
+// 都道府県レベルで既に描画済みなので、市区町村側は境界線(線のみ)だけでよい。
 export async function loadMunicipalityBoundaries(
   map: L.Map,
   prefCode: string,
 ): Promise<MunicipalityBoundaryResult> {
   const data = await fetchMunicipalityGeoJson(prefCode);
 
-  const boundaryLayer = L.geoJSON(data, {
+  const { cityBoundaryChains, wardInternalChains } = extractMunicipalityBoundaryChains(data);
+
+  // 通常の市区町村境界(政令指定都市の場合はその市全体の外縁を含む)。
+  const cityBoundaryLine = L.polyline(cityBoundaryChains, {
     pane: "municipalityPane",
-    style: { color: "#ccc", weight: 0.8, fill: false, interactive: false },
-  }).addTo(map);
+    color: MUNICIPALITY_BOUNDARY_COLOR,
+    weight: MUNICIPALITY_BOUNDARY_WEIGHT,
+    interactive: false,
+    dashArray: MUNICIPALITY_DASH_ARRAY, // 二点鎖線(都道府県境界は一点鎖線)
+  });
 
-  const labelLayer = buildLabelLayer(
-    data,
-    //(p) => `${p.N03_003 ?? ""}${p.N03_004 ?? ""}` || null, // 郡まで表示する版
-    (p) => `${p.N03_004 ?? ""}` || null, // 市区町村名だけ版
-    "municipality-label",
-  );
+  // 政令指定都市内部の区どうしの境界だけ、外縁より薄い色で重ねる。
+  const wardBoundaryLine = L.polyline(wardInternalChains, {
+    pane: "municipalityPane",
+    color: WARD_BOUNDARY_COLOR,
+    weight: MUNICIPALITY_BOUNDARY_WEIGHT,
+    interactive: false,
+    dashArray: MUNICIPALITY_DASH_ARRAY,
+  });
 
-  return { boundaryLayer, labelLayer };
+  const boundaryLayer = L.layerGroup([cityBoundaryLine, wardBoundaryLine]).addTo(map);
+
+  const { labelLayer, prominentLabelLayer } = buildMunicipalityLabelLayers(data, prefCode);
+
+  return { boundaryLayer, labelLayer, prominentLabelLayer };
+}
+
+interface MunicipalityLabelLayers {
+  labelLayer: L.LayerGroup;
+  prominentLabelLayer: L.LayerGroup;
+}
+
+// 東京都(特別区)のコード。東京23区は政令指定都市の区と違いN03_003に親市名を
+// 持たず(23区それぞれが独立した自治体のため)、「東京市」のような上位の市区分も
+// 存在しない。そのためprominentLabelGroupKeyでは、区名(「〜区」)を持つ東京都の
+// フィーチャを、政令指定都市の区と同じ「大きいラベル用グループ」の一種として
+// (県庁所在地名の新宿区ではなく)「東京」にまとめる。
+// 新宿区自体は他の22区と同じ通常の市区町村ラベル(labelLayer)は変わらず出す。
+const TOKYO_PREF_CODE = "13";
+const TOKYO_WARDS_LABEL = "東京";
+
+// 「大きいラベル」を出す対象かどうかを判定し、そのグループキーを返す。
+// - 政令指定都市の区 → 親市名(例:"横浜市")
+// - 東京都の特別区(区が無い政令指定都市の一種として扱う) → "東京"
+// - どちらでもなければnull(この時点では県庁所在地かどうかは見ていない。
+//   政令指定都市ではない県庁所在地は呼び出し側でcapitalNameと比較して扱う)
+function prominentLabelGroupKey(props: MunicipalityProperties, prefCode: string): string | null {
+  const designatedCity = designatedCityNameOf(props);
+  if (designatedCity) return designatedCity;
+  if (prefCode === TOKYO_PREF_CODE && props.N03_004?.endsWith("区")) return TOKYO_WARDS_LABEL;
+  return null;
+}
+
+function pushInto<K, V>(map: Map<K, V[]>, key: K, value: V): void {
+  let list = map.get(key);
+  if (!list) {
+    list = [];
+    map.set(key, list);
+  }
+  list.push(value);
+}
+
+// 市区町村ラベルを組み立てる。通常のlabelLayerには各フィーチャ(区・市町村)
+// 自身の名前ラベルを入れる。prominentLabelLayerには、区名・区が無い市町村よりも
+// 大きいラベル(都道府県ラベルと同じ見た目=pref-labelクラスを流用)を、
+// 政令指定都市(全区をまとめた重心、「○○市」)・東京23区(全区をまとめた重心、
+// 「東京」)・県庁所在地(政令指定都市でなければ自分自身の重心、「○○市」)の
+// 分だけ入れる。県庁所在地が政令指定都市の場合は二重に出さないよう1つにまとめる。
+function buildMunicipalityLabelLayers(
+  geojson: FeatureCollection<Geometry, MunicipalityProperties>,
+  prefCode: string,
+): MunicipalityLabelLayers {
+  const labelLayer = L.layerGroup();
+  const prominentLabelLayer = L.layerGroup();
+  const prominentGeometries = new Map<string, Geometry[]>();
+
+  // 東京都は上記の通り特別扱いするため、県庁所在地テーブルには含まれていない
+  // (PREFECTURE_CAPITAL_NAME_BY_CODE参照)。
+  const capitalName = PREFECTURE_CAPITAL_NAME_BY_CODE[prefCode];
+
+  for (const feature of geojson.features) {
+    const props = feature.properties;
+    const name = props?.N03_004;
+    // 県庁所在地自身の通常ラベルは省略する(prominentLabelLayer側に
+    // 同じ名前の大きいラベルを出すため、二重表示にしないようにする)。
+    // 東京23区はここでの特別扱いの対象外(新宿区も他の区と同じ通常ラベルを出す)。
+    if (name && name !== capitalName) {
+      const center = labelPositionOf(feature.geometry);
+      if (center) {
+        L.marker(center, {
+          icon: L.divIcon({
+            className: "",
+            html: `<span class="municipality-label">${name}</span>`,
+            iconSize: [0, 0],
+          }),
+          interactive: false,
+        }).addTo(labelLayer);
+      }
+    }
+
+    const groupKey = props && prominentLabelGroupKey(props, prefCode);
+    if (groupKey) {
+      pushInto(prominentGeometries, groupKey, feature.geometry);
+    } else if (name && name === capitalName) {
+      // 政令指定都市ではない県庁所在地(水戸市など)は、自分自身の
+      // フィーチャ1件だけを対象にしても同じ計算で重心が求まる。
+      prominentGeometries.set(name, [feature.geometry]);
+    }
+  }
+
+  for (const [cityName, geometries] of prominentGeometries) {
+    const center = combinedCentroid(geometries);
+    if (!center) continue;
+
+    L.marker(center, {
+      icon: L.divIcon({
+        className: "",
+        html: `<span class="pref-label">${cityName}</span>`,
+        iconSize: [0, 0],
+      }),
+      interactive: false,
+    }).addTo(prominentLabelLayer);
+  }
+
+  return { labelLayer, prominentLabelLayer };
 }
 
 // GeoJSONの各featureについて、名前ラベルを1つ作ってLayerGroupにまとめる。
 // ラベル位置は「一番面積が大きいポリゴンパーツの重心」。離島持ちのfeature
 // (例: 本土+飛び地をまとめた都道府県)で、全パーツをまとめて重心を取ると
 // 本土と離島の間の海上に落ちることがあるため、最大パーツだけを使う。
-function buildLabelLayer<P>(
-  geojson: FeatureCollection<Geometry, P>,
-  nameOf: (properties: P) => string | null,
-  className: string,
-): L.LayerGroup {
-  const group = L.layerGroup();
-
-  for (const feature of geojson.features) {
-    const name = feature.properties ? nameOf(feature.properties) : null;
-    if (!name) continue;
-
-    const center = labelPositionOf(feature.geometry);
-    if (!center) continue;
-
-    L.marker(center, {
-      icon: L.divIcon({
-        className: "",
-        html: `<span class="${className}">${name}</span>`,
-        iconSize: [0, 0],
-      }),
-      interactive: false,
-    }).addTo(group);
-  }
-
-  return group;
-}
-
 function labelPositionOf(geometry: Geometry): [number, number] | null {
   const polygons =
     geometry.type === "Polygon" ? [geometry.coordinates] :
@@ -274,15 +640,50 @@ function ringCentroid(ring: number[][]): { lat: number; lon: number; area: numbe
   return { lon: cx / (6 * area), lat: cy / (6 * area), area: Math.abs(area) };
 }
 
+// 複数フィーチャ(政令指定都市の各区など)をまとめて1つの塊とみなした場合の重心。
+// labelPositionOfは1フィーチャの中で最大のパーツだけを使うが、こちらは全パーツ・
+// 全フィーチャの重心を面積で重み付けして平均する(離島等の飛び地区は通常無いため、
+// 最大パーツに絞る必要はない)。
+function combinedCentroid(geometries: Geometry[]): [number, number] | null {
+  let totalArea = 0;
+  let sumLat = 0;
+  let sumLon = 0;
+
+  for (const geometry of geometries) {
+    const polygons =
+      geometry.type === "Polygon" ? [geometry.coordinates] :
+      geometry.type === "MultiPolygon" ? geometry.coordinates :
+      [];
+    for (const polygon of polygons) {
+      const c = ringCentroid(polygon[0]);
+      totalArea += c.area;
+      sumLat += c.lat * c.area;
+      sumLon += c.lon * c.area;
+    }
+  }
+
+  if (totalArea === 0) return null;
+  return [sumLat / totalArea, sumLon / totalArea];
+}
+
+// 表示対象レコードが全て既読かどうかで、マーカーの見た目を変えるためのCSSクラス。
+// 全て既読ならフェード(薄く・明滅なし)、1件でも未読が残っていればゆっくり明滅させる
+// (実際のスタイル・アニメーションはstyle.css参照)。
+function readStateClassName(allRead: boolean): string {
+  return allRead ? "ashiato-marker-read" : "ashiato-marker-unread";
+}
+
 // 1つのgeohashセルにつき1グループ(円1〜2個)を描画する。
 // count(そのセルに紐づく「表示対象」Ashiatoレコード数)が2件以上のときは、外側の輪+内側の点
 // による二重丸にして、「同じ場所に複数のAshiatoがある」ことを視覚的に示す。
 // クリック判定(hitArea)は常に1つ(グループ全体で1つのタップ対象)。
 // 色・ペインはgeohashの桁数(5/6/7)に応じて決まる(呼び出し側でこの桁数のみに絞り込み済み)。
+// allReadは、表示対象レコードが全て既読(readAtあり)かどうか(呼び出し側で判定済み)。
 export function addAshiatoGroup(
   map: L.Map,
   geohash: string,
   count: number,
+  allRead: boolean,
   onOpen: () => void,
 ): AshiatoGroupHandle {
   const b = decodeGeohash(geohash);
@@ -292,7 +693,8 @@ export function addAshiatoGroup(
   const geohashLength = geohash.length;
   const pane = `ashiatoPane${geohashLength}`;
   const hitPane = `ashiatoHitPane${geohashLength}`;
-  const color = colorFor(geohashLength);
+  const color = ashiatoColor(geohashLength);
+  const className = readStateClassName(allRead);
 
   const outer = L.circleMarker(latlng, {
     color,
@@ -301,6 +703,7 @@ export function addAshiatoGroup(
     fill: count === 1, // 複数件のときは外側は輪だけ(内側の点と区別するため塗りつぶさない)
     interactive: false,
     pane,
+    className,
   });
 
   const visualLayers: L.CircleMarker[] = [outer];
@@ -311,6 +714,7 @@ export function addAshiatoGroup(
       radius: 2,
       interactive: false,
       pane,
+      className,
     });
     visualLayers.push(inner);
   }
@@ -324,6 +728,7 @@ export function addAshiatoGroup(
     fillOpacity: 0.5,
     interactive: true,
     pane: hitPane,
+    className,
   });
 
   hitArea.on("click", () => onOpen());
@@ -361,9 +766,10 @@ export function createAreaOverlay(map: L.Map): AreaOverlay {
 
     for (const cell of currentCells) {
       // 地図に円が出ていない(=発見済みが1件も無い)セルは対象外
-      if (!cell.visualLayers || !cell.color) continue;
+      if (!cell.visualLayers) continue;
 
       const b = decodeGeohash(cell.geohash);
+      const color = ashiatoColor(cell.geohash.length);
       L.rectangle(
         [
           [b.minLat, b.minLon],
@@ -371,9 +777,9 @@ export function createAreaOverlay(map: L.Map): AreaOverlay {
         ],
         {
           pane: "areaOverlayPane",
-          color: cell.color,
+          color,
           weight: 1.5,
-          fillColor: cell.color,
+          fillColor: color,
           fillOpacity: 0.15,
           interactive: false,
         },

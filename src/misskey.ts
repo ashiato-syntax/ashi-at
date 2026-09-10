@@ -49,14 +49,15 @@ interface EmojisResponse {
 export function fetchEmojiMap(instance: string): Promise<Map<string, string>> {
   const origin = normalizeInstanceUrl(instance);
   if (!emojiMapCache.has(origin)) {
-    emojiMapCache.set(
-      origin,
-      apiRequest<EmojisResponse>(origin, "emojis", {}).then((res) => {
-        const map = new Map<string, string>();
-        for (const e of res.emojis ?? []) map.set(e.name, e.url);
-        return map;
-      }),
-    );
+    const promise = apiRequest<EmojisResponse>(origin, "emojis", {}).then((res) => {
+      const map = new Map<string, string>();
+      for (const e of res.emojis ?? []) map.set(e.name, e.url);
+      return map;
+    });
+    // 失敗したPromiseをキャッシュに残すと、以後そのインスタンスのカスタム絵文字が
+    // ずっと解決できなくなる。失敗時はキャッシュから外し、再試行できるようにする。
+    promise.catch(() => emojiMapCache.delete(origin));
+    emojiMapCache.set(origin, promise);
   }
   return emojiMapCache.get(origin)!;
 }

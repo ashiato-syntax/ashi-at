@@ -168,6 +168,12 @@ export async function putCursor(
   }
 }
 
+// 同じノートが「過去を探す」「最新を確認」で範囲が重複して再取得されることは
+// 仕様上あり得る(main.jsのfetchNewer参照)ため、その場合に備えて既存レコードの
+// unlockedAt/readAt(発見済み/既読の記録)を保持する。新しく作られたレコード
+// (parser.js/makeRecordの結果)は常にunlockedAt:null/readAt:nullなので、
+// 単純にstore.put()で上書きすると、既に発見・既読にしていた「あしあと」が
+// 未発見・未読に巻き戻ってしまう。
 export async function putAshiatoRecords(records: AshiatoRecord[]): Promise<void> {
   if (records.length === 0) return;
   try {
@@ -175,7 +181,17 @@ export async function putAshiatoRecords(records: AshiatoRecord[]): Promise<void>
     await new Promise<void>((resolve, reject) => {
       const t = db.transaction("ashiatoCache", "readwrite");
       const store = t.objectStore("ashiatoCache");
-      for (const r of records) store.put(r);
+      for (const r of records) {
+        const getReq = store.get(r.id);
+        getReq.onsuccess = () => {
+          const existing: AshiatoRecord | undefined = getReq.result;
+          store.put(
+            existing
+              ? { ...r, unlockedAt: existing.unlockedAt ?? r.unlockedAt, readAt: existing.readAt ?? r.readAt }
+              : r,
+          );
+        };
+      }
       t.oncomplete = () => resolve();
       t.onerror = () => reject(t.error);
     });

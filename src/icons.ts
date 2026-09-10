@@ -16,6 +16,9 @@ import x from "lucide-static/icons/x.svg?raw";
 import menu from "lucide-static/icons/menu.svg?raw";
 import refreshCw from "lucide-static/icons/refresh-cw.svg?raw";
 import history from "lucide-static/icons/history.svg?raw";
+import chevronDown from "lucide-static/icons/chevron-down.svg?raw";
+import plus from "lucide-static/icons/plus.svg?raw";
+import minus from "lucide-static/icons/minus.svg?raw";
 
 const ICONS = {
   footprints,
@@ -32,6 +35,9 @@ const ICONS = {
   menu,
   "refresh-cw": refreshCw,
   history,
+  "chevron-down": chevronDown,
+  plus,
+  minus,
 } as const;
 
 export type IconName = keyof typeof ICONS;

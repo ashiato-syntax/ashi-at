@@ -79,10 +79,7 @@ export function extractCandidates(text: string): string[] {
 
   while ((p = text.indexOf(OPEN, p)) !== -1) {
     const e = text.indexOf(CLOSE, p + 1);
-    if (e === -1) {
-      out.push(text.slice(p));
-      break;
-    }
+    if (e === -1) break; // 対応する閉じ括弧が無ければ、それ以降は候補として扱わない
     out.push(text.slice(p, e + 1));
     p = e + 1;
   }
@@ -156,6 +153,9 @@ export function parseCandidate(c: string): ParseResult {
       const z = signed(f.get("z")!);
       if (z < -1440 || z > 1440) throw Error("z out of range.");
     }
+    // z/s/e等と同様、ここで検証しておかないと不正な値がtry/catchの外
+    // (このあとのmodel構築時のdec()呼び出し)で例外として漏れてしまう。
+    if (f.has("tz")) dec(f.get("tz")!);
 
     if (f.has("s")) dec(f.get("s")!);
     if (f.has("e")) dec(f.get("e")!);

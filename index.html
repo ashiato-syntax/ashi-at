@@ -36,39 +36,54 @@
                     現在地の精度が低いです
                 </div>
                 <div id="discoveryBanner" class="discovery-banner" hidden></div>
-                <button
-                    id="toggleGps"
-                    type="button"
-                    class="gps-toggle"
-                    aria-pressed="false"
-                >
-                    <span class="gps-toggle-track"
-                        ><span class="gps-toggle-knob"></span
-                    ></span>
-                    <span class="gps-toggle-label">現在地</span>
-                </button>
-                <button
-                    id="toggleArea"
-                    type="button"
-                    class="gps-toggle area-toggle"
-                    aria-pressed="false"
-                >
-                    <span class="gps-toggle-track"
-                        ><span class="gps-toggle-knob"></span
-                    ></span>
-                    <span class="gps-toggle-label">エリア</span>
-                </button>
-                <button
-                    id="toggleHideRead"
-                    type="button"
-                    class="gps-toggle hide-read-toggle"
-                    aria-pressed="false"
-                >
-                    <span class="gps-toggle-track"
-                        ><span class="gps-toggle-knob"></span
-                    ></span>
-                    <span class="gps-toggle-label">既読を隠す</span>
-                </button>
+                <div class="toggle-panel">
+                    <button
+                        id="togglePanelCollapse"
+                        type="button"
+                        class="toggle-panel-handle"
+                        aria-expanded="true"
+                        aria-label="設定パネルの折りたたみ"
+                    >
+                        <span class="toggle-panel-handle-icon"></span>
+                    </button>
+                    <div id="togglePanelRows" class="toggle-panel-rows">
+                        <div class="toggle-panel-rows-inner">
+                            <button
+                                id="toggleGps"
+                                type="button"
+                                class="toggle-panel-row"
+                                aria-pressed="false"
+                            >
+                                <span class="gps-toggle-label">現在地</span>
+                                <span class="gps-toggle-track"
+                                    ><span class="gps-toggle-knob"></span
+                                ></span>
+                            </button>
+                            <button
+                                id="toggleArea"
+                                type="button"
+                                class="toggle-panel-row"
+                                aria-pressed="false"
+                            >
+                                <span class="gps-toggle-label">エリア</span>
+                                <span class="gps-toggle-track"
+                                    ><span class="gps-toggle-knob"></span
+                                ></span>
+                            </button>
+                            <button
+                                id="toggleHideRead"
+                                type="button"
+                                class="toggle-panel-row"
+                                aria-pressed="false"
+                            >
+                                <span class="gps-toggle-label">既読を隠す</span>
+                                <span class="gps-toggle-track"
+                                    ><span class="gps-toggle-knob"></span
+                                ></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
                 <div class="bottom-toolbar">
                     <div class="search-buttons">
                         <button id="loadNewer" type="button" class="toolbar-btn">
@@ -157,6 +172,9 @@
             </div>
         </main>
         <dialog id="unlockedListDialog">
+            <div class="sheet-handle" aria-hidden="true">
+                <span class="sheet-handle-grip"></span>
+            </div>
             <button
                 type="button"
                 class="dialog-close-x"
@@ -229,6 +247,9 @@
             </div>
         </dialog>
         <dialog id="composeDialog">
+            <div class="sheet-handle" aria-hidden="true">
+                <span class="sheet-handle-grip"></span>
+            </div>
             <button
                 type="button"
                 class="dialog-close-x"
@@ -267,6 +288,9 @@
             </div>
         </dialog>
         <dialog id="draftListDialog">
+            <div class="sheet-handle" aria-hidden="true">
+                <span class="sheet-handle-grip"></span>
+            </div>
             <button
                 type="button"
                 class="dialog-close-x"
@@ -294,6 +318,12 @@
             </div>
         </dialog>
         <dialog id="aboutDialog">
+            <button
+                type="button"
+                class="dialog-close-x"
+                id="aboutCloseX"
+                aria-label="閉じる"
+            ></button>
             <h2>Ashi@について</h2>
             <p>
                 Ashi@は、Misskeyの「#Ashiato」投稿に埋め込まれた位置・時間情報(Ashiato Syntax)をもとに、実際にその場所へ行くと開封できるクライアントです。
@@ -301,13 +331,21 @@
             <p>
                 ここの文章は公開直前に考える
             </p>
-            <button id="aboutClose" type="button">閉じる</button>
-        </dialog>
-        <dialog id="infoDialog">
-            <p id="infoMessage" class="dialog-message"></p>
-            <div class="dialog-actions">
-                <button id="infoOk" type="button">閉じる</button>
-            </div>
+            <h3>ライセンス情報</h3>
+            <section class="about-credit">
+                <h4>市区町村境界データ</h4>
+                <p>
+                    国土交通省 国土数値情報（2021年9月28日取得）をもとに加工して作成した市区町村境界データを使用しています。
+                </p>
+                <p class="about-credit-source">
+                    出典：<a
+                        href="https://nlftp.mlit.go.jp/ksj/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >国土交通省 国土数値情報</a
+                    >
+                </p>
+            </section>
         </dialog>
         <dialog id="confirmDialog">
             <p id="confirmMessage" class="dialog-message"></p>
