@@ -21,6 +21,8 @@ import plus from "lucide-static/icons/plus.svg?raw";
 import minus from "lucide-static/icons/minus.svg?raw";
 import chevronLeft from "lucide-static/icons/chevron-left.svg?raw";
 import chevronRight from "lucide-static/icons/chevron-right.svg?raw";
+import eye from "lucide-static/icons/eye.svg?raw";
+import settings from "lucide-static/icons/settings.svg?raw";
 
 const ICONS = {
   footprints,
@@ -42,6 +44,8 @@ const ICONS = {
   minus,
   "chevron-left": chevronLeft,
   "chevron-right": chevronRight,
+  eye,
+  settings,
 } as const;
 
 export type IconName = keyof typeof ICONS;

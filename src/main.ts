@@ -169,6 +169,7 @@ $("#changeInstance .menu-item-icon").append(createIcon("server"));
 $("#clearSearchCache .menu-item-icon").append(createIcon("trash-2"));
 $("#resetAll .menu-item-icon").append(createIcon("rotate-ccw"));
 $("#aboutButton .menu-item-icon").append(createIcon("info"));
+$("#settingsToggle .menu-item-icon").append(createIcon("settings"));
 $("#ashiatoActionShowOnMapIcon").append(createIcon("map-pin"));
 $("#ashiatoActionOpenPostIcon").append(createIcon("external-link"));
 $("#ashiatoActionDeleteIcon").append(createIcon("trash-2"));
@@ -180,6 +181,7 @@ $("#ashiatoActionCloseX").append(createIcon("x"));
 $("#composeCloseX").append(createIcon("x"));
 $("#draftListCloseX").append(createIcon("x"));
 $("#aboutCloseX").append(createIcon("x"));
+$("#settingsCloseX").append(createIcon("x"));
 
 // 地図の表示位置(中心緯度経度・ズーム)をTTL無しで保存しておき、次回起動時に
 // 復元する(復元自体は起動処理の中でsetView()する形で行う。createMap()の
@@ -811,6 +813,22 @@ function renderAshiatoRow(
   return row;
 }
 
+// 「設定」ダイアログのメディア表示モード。起動時にsettingsから復元する
+// (起動時処理参照)。putSettingを使うため、「リセット」(IndexedDBごと削除)を
+// 実行しない限り永続する。
+type MediaVisibilityMode = "hide-all" | "hide-sensitive" | "show-all";
+let mediaVisibilityMode: MediaVisibilityMode = "hide-sensitive";
+
+// この添付ファイルを最初はモザイク(ぼかし)状態で表示すべきかどうか。
+// - hide-all: 全てのメディアを隠す
+// - hide-sensitive: isSensitiveなものだけ隠す(既定)
+// - show-all: 何も隠さない(ただしセンシティブタグ自体は別途常に表示する)
+function shouldBlurMedia(file: AshiatoFile): boolean {
+  if (mediaVisibilityMode === "show-all") return false;
+  if (mediaVisibilityMode === "hide-all") return true;
+  return file.isSensitive;
+}
+
 // 添付画像/GIF/動画のグリッドを組み立てる(Twitter風、1〜4枚以上に対応)。
 // 動画1件だけの投稿はグリッドでクロップせず全幅で表示し、シーク・音声ON/OFFは
 // ブラウザ標準のvideo controlsに任せる(カスタムUIは作らない)。
@@ -837,6 +855,12 @@ function buildMediaGrid(files: AshiatoFile[]): HTMLElement {
 
 // imagesForLightbox/lightboxIndexは、この1件が画像の場合の「ライトボックスに
 // 渡す画像だけの配列とその中でのインデックス」。動画の場合は使わない(-1)。
+// モザイク(ぼかし)の状態はitemの"ashiato-media-blurred"クラスの有無だけで管理する。
+// veil(タップで表示)とeyeBtn(タップでモザイクをかけ直す)はどちらも常にDOM上に
+// 存在し、どちらを見せるかはCSS側でそのクラスの有無から切り替える
+// (style.css: .ashiato-media-blurred .ashiato-media-veil / :not(...) .ashiato-media-eye-btn)。
+// センシティブタグは、モザイク状態に関わらずisSensitiveなら常に表示する
+// (ライトボックス側には付けない = このitem内だけの要素なので自然に満たされる)。
 function buildMediaItem(
   file: AshiatoFile,
   imagesForLightbox: AshiatoFile[],
@@ -844,6 +868,7 @@ function buildMediaItem(
 ): HTMLElement {
   const item = document.createElement("div");
   item.className = "ashiato-media-item";
+  if (shouldBlurMedia(file)) item.classList.add("ashiato-media-blurred");
 
   const isVideo = file.type.startsWith("video/");
   if (isVideo) {
@@ -859,26 +884,41 @@ function buildMediaItem(
     img.alt = "";
     img.loading = "lazy";
     img.onclick = () => {
-      // 閲覧注意でまだ表示していない画像は、最初のタップはベール解除だけに使う
-      // (veilのclickでstopPropagationしているのでここには来ないが、念のため二重チェック)。
-      if (item.classList.contains("ashiato-media-sensitive") && !item.classList.contains("ashiato-media-revealed")) return;
+      // モザイク中はveilがimgの上を覆っておりクリックはveil側に吸収されるはずだが、
+      // 念のため二重にガードしておく。
+      if (item.classList.contains("ashiato-media-blurred")) return;
       openMediaLightbox(imagesForLightbox, lightboxIndex);
     };
     item.append(img);
   }
 
   if (file.isSensitive) {
-    item.classList.add("ashiato-media-sensitive");
-    const veil = document.createElement("button");
-    veil.type = "button";
-    veil.className = "ashiato-media-veil";
-    veil.textContent = "閲覧注意\n（タップで表示）";
-    veil.onclick = (e) => {
-      e.stopPropagation();
-      item.classList.add("ashiato-media-revealed");
-    };
-    item.append(veil);
+    const tag = document.createElement("span");
+    tag.className = "ashiato-media-sensitive-tag";
+    tag.textContent = "センシティブ";
+    item.append(tag);
   }
+
+  const veil = document.createElement("button");
+  veil.type = "button";
+  veil.className = "ashiato-media-veil";
+  veil.textContent = file.isSensitive ? "閲覧注意\n（タップで表示）" : "タップで表示";
+  veil.onclick = (e) => {
+    e.stopPropagation();
+    item.classList.remove("ashiato-media-blurred");
+  };
+  item.append(veil);
+
+  const eyeBtn = document.createElement("button");
+  eyeBtn.type = "button";
+  eyeBtn.className = "ashiato-media-eye-btn";
+  eyeBtn.setAttribute("aria-label", "モザイクをかけ直す");
+  eyeBtn.append(createIcon("eye"));
+  eyeBtn.onclick = (e) => {
+    e.stopPropagation();
+    item.classList.add("ashiato-media-blurred");
+  };
+  item.append(eyeBtn);
 
   return item;
 }
@@ -1611,6 +1651,28 @@ $<HTMLButtonElement>("#aboutCloseX").onclick = () => aboutDialog.close();
 // ダイアログ外側(::backdrop)クリックでも閉じられるようにする
 closeOnBackdropClick(aboutDialog);
 
+// --- 設定ダイアログ(メディアの表示モード) -----------------------------------
+// 「リセット」(resetAllCache、IndexedDBごと削除)を実行しない限り、
+// settingsストア経由で永続する(他の設定値と同じ扱い)。
+
+const settingsDialog = $<HTMLDialogElement>("#settingsDialog");
+
+$<HTMLButtonElement>("#settingsToggle").onclick = () => {
+  closeMenu();
+  settingsDialog.showModal();
+};
+$<HTMLButtonElement>("#settingsCloseX").onclick = () => settingsDialog.close();
+closeOnBackdropClick(settingsDialog);
+
+document.querySelectorAll<HTMLInputElement>('input[name="mediaVisibility"]').forEach((el) => {
+  el.onchange = () => {
+    mediaVisibilityMode = el.value as MediaVisibilityMode;
+    putSetting("mediaVisibilityMode", mediaVisibilityMode);
+    // 開いたままの一覧があれば、変更を即座に反映する。
+    if (unlockedListDialog.open) refreshUnlockedList();
+  };
+});
+
 // --- インスタンス変更ダイアログ --------------------------------------------
 
 const instanceDialog = $<HTMLDialogElement>("#instanceDialog");
@@ -2287,6 +2349,19 @@ if (splash) {
     if (savedSortMode === "unlocked" || savedSortMode === "posted") {
       unlockedSortMode = savedSortMode;
       unlockedSortModeSelect.value = savedSortMode;
+    }
+
+    const savedMediaVisibility = await getSetting<MediaVisibilityMode>("mediaVisibilityMode");
+    if (
+      savedMediaVisibility === "hide-all" ||
+      savedMediaVisibility === "hide-sensitive" ||
+      savedMediaVisibility === "show-all"
+    ) {
+      mediaVisibilityMode = savedMediaVisibility;
+      const radio = document.querySelector<HTMLInputElement>(
+        `input[name="mediaVisibility"][value="${savedMediaVisibility}"]`,
+      );
+      if (radio) radio.checked = true;
     }
 
     const savedMapView = await getSetting<{ lat: number; lon: number; zoom: number }>("mapView");

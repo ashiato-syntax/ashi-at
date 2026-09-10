@@ -118,6 +118,14 @@
                                     >Ashi@について</span
                                 >
                             </button>
+                            <button
+                                id="settingsToggle"
+                                type="button"
+                                aria-haspopup="dialog"
+                            >
+                                <span class="menu-item-icon"></span>
+                                <span class="menu-item-label">設定</span>
+                            </button>
                             <button id="resetAll" type="button" class="danger">
                                 <span class="menu-item-icon"></span>
                                 <span class="menu-item-label">リセット</span>
@@ -327,6 +335,43 @@
             ></button>
             <h2>下書き</h2>
             <ul id="draftList" class="draft-list"></ul>
+        </dialog>
+        <dialog id="settingsDialog">
+            <button
+                type="button"
+                class="dialog-close-x"
+                id="settingsCloseX"
+                aria-label="閉じる"
+            ></button>
+            <h2>設定</h2>
+            <fieldset class="settings-fieldset">
+                <legend>メディアの表示</legend>
+                <label
+                    ><input
+                        type="radio"
+                        name="mediaVisibility"
+                        value="hide-all"
+                    />
+                    メディアを全て隠す</label
+                >
+                <label
+                    ><input
+                        type="radio"
+                        name="mediaVisibility"
+                        value="hide-sensitive"
+                        checked
+                    />
+                    センシティブなメディアを隠す</label
+                >
+                <label
+                    ><input
+                        type="radio"
+                        name="mediaVisibility"
+                        value="show-all"
+                    />
+                    センシティブなメディアを隠さない</label
+                >
+            </fieldset>
         </dialog>
         <dialog id="instanceDialog">
             <h2>Misskeyインスタンス</h2>

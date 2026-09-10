@@ -376,7 +376,8 @@ dialog#aboutDialog,
 dialog#instanceDialog,
 dialog#infoDialog,
 dialog#confirmDialog,
-dialog#ashiatoActionDialog {
+dialog#ashiatoActionDialog,
+dialog#settingsDialog {
     border: none;
     border-radius: 12px;
     padding: 20px;
@@ -386,14 +387,17 @@ dialog#aboutDialog::backdrop,
 dialog#instanceDialog::backdrop,
 dialog#infoDialog::backdrop,
 dialog#confirmDialog::backdrop,
-dialog#ashiatoActionDialog::backdrop {
+dialog#ashiatoActionDialog::backdrop,
+dialog#settingsDialog::backdrop {
     background: rgba(0, 0, 0, 0.4);
 }
 dialog#aboutDialog h2,
-dialog#instanceDialog h2 {
+dialog#instanceDialog h2,
+dialog#settingsDialog h2 {
     margin-top: 0;
 }
-dialog#aboutDialog h2 {
+dialog#aboutDialog h2,
+dialog#settingsDialog h2 {
     padding-right: 36px; /* 右上の.dialog-close-xと重ならないように */
 }
 /* 「情報」ダイアログ(ashiatoActionDialog)。見出しの代わりに、情報行+詳細+
@@ -771,14 +775,13 @@ dialog#instanceDialog label {
     object-fit: contain;
     background: #000;
 }
-/* 閲覧注意(isSensitive)の添付。ぼかした上にベールを重ね、タップで解除する。 */
-.ashiato-media-sensitive img,
-.ashiato-media-sensitive video {
+/* モザイク(設定「メディアの表示」に応じて初期状態を決める。main.ts:shouldBlurMedia参照)。
+   すりガラス風にぼかし、veil(タップで表示)を重ねる。タップで解除すると、今度は
+   右上にeyeBtn(タップで再度モザイク)が出る。どちらもDOM上には常に存在し、
+   ashiato-media-blurredクラスの有無だけで表示/非表示を切り替える。 */
+.ashiato-media-blurred img,
+.ashiato-media-blurred video {
     filter: blur(24px);
-}
-.ashiato-media-sensitive.ashiato-media-revealed img,
-.ashiato-media-sensitive.ashiato-media-revealed video {
-    filter: none;
 }
 .ashiato-media-veil {
     position: absolute;
@@ -786,7 +789,7 @@ dialog#instanceDialog label {
     width: 100%;
     height: 100%;
     min-height: auto;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     padding: 8px;
@@ -800,8 +803,46 @@ dialog#instanceDialog label {
     text-align: center;
     box-shadow: none;
 }
-.ashiato-media-revealed .ashiato-media-veil {
+.ashiato-media-blurred .ashiato-media-veil {
+    display: flex;
+}
+/* モザイクを外した状態でだけ出す、右上の「かけ直す」ボタン。 */
+.ashiato-media-eye-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
     display: none;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    min-height: auto;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    box-shadow: none;
+}
+.ashiato-media-eye-btn .icon {
+    width: 16px;
+    height: 16px;
+}
+.ashiato-media-item:not(.ashiato-media-blurred) .ashiato-media-eye-btn {
+    display: flex;
+}
+/* 閲覧注意(isSensitive)タグ。モザイクの有無に関わらず左上に常に出す
+   (ライトボックス側には付けない)。 */
+.ashiato-media-sensitive-tag {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 600;
 }
 
 /* 画像ライトボックス。画面いっぱいに黒背景+中央に画像、複数枚あれば前後移動。
@@ -1171,6 +1212,29 @@ dialog#mediaLightbox::backdrop {
     display: flex;
     align-items: center;
     gap: 6px;
+    font-size: 0.9rem;
+}
+
+/* 設定ダイアログ内のラジオ選択。precision-fieldsetと違い選択肢の文言が長いため、
+   横並びではなく縦積みにする。 */
+.settings-fieldset {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 12px;
+}
+.settings-fieldset legend {
+    font-size: 0.8rem;
+    color: #666;
+    padding: 0 4px;
+}
+.settings-fieldset label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 0.9rem;
 }
 
