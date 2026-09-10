@@ -1237,6 +1237,12 @@ dialog#mediaLightbox::backdrop {
     gap: 8px;
     font-size: 0.9rem;
 }
+/* 設定ダイアログ下部の操作一覧(検索キャッシュを消す/リセット)。
+   「情報」ダイアログ(ashiatoActionDialog)と同じaction-sheetを再利用し、
+   アイコンは右揃えで統一する。 */
+dialog#settingsDialog .action-sheet {
+    margin-top: 16px;
+}
 
 /* 投稿UI・下書き一覧・あつめたあしあと一覧は、画面下部に貼り付く「下部シート」形式にする。
    地図の大部分が投稿UI等の裏に隠れてしまわないようにするため。

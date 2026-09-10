@@ -1,0 +1,1569 @@
+{
+  "dictionary_version": 1,
+  "iana_tzdb": "2026c",
+  "source": "zone1970.tab",
+  "index_base": 0,
+  "encoding": "Ashiato Base36",
+  "entries": [
+    {
+      "index": 0,
+      "id": "0",
+      "tzid": "Africa/Abidjan"
+    },
+    {
+      "index": 1,
+      "id": "1",
+      "tzid": "Africa/Algiers"
+    },
+    {
+      "index": 2,
+      "id": "2",
+      "tzid": "Africa/Bissau"
+    },
+    {
+      "index": 3,
+      "id": "3",
+      "tzid": "Africa/Cairo"
+    },
+    {
+      "index": 4,
+      "id": "4",
+      "tzid": "Africa/Casablanca"
+    },
+    {
+      "index": 5,
+      "id": "5",
+      "tzid": "Africa/Ceuta"
+    },
+    {
+      "index": 6,
+      "id": "6",
+      "tzid": "Africa/El_Aaiun"
+    },
+    {
+      "index": 7,
+      "id": "7",
+      "tzid": "Africa/Johannesburg"
+    },
+    {
+      "index": 8,
+      "id": "8",
+      "tzid": "Africa/Juba"
+    },
+    {
+      "index": 9,
+      "id": "9",
+      "tzid": "Africa/Khartoum"
+    },
+    {
+      "index": 10,
+      "id": "a",
+      "tzid": "Africa/Lagos"
+    },
+    {
+      "index": 11,
+      "id": "b",
+      "tzid": "Africa/Maputo"
+    },
+    {
+      "index": 12,
+      "id": "c",
+      "tzid": "Africa/Monrovia"
+    },
+    {
+      "index": 13,
+      "id": "d",
+      "tzid": "Africa/Nairobi"
+    },
+    {
+      "index": 14,
+      "id": "e",
+      "tzid": "Africa/Ndjamena"
+    },
+    {
+      "index": 15,
+      "id": "f",
+      "tzid": "Africa/Sao_Tome"
+    },
+    {
+      "index": 16,
+      "id": "g",
+      "tzid": "Africa/Tripoli"
+    },
+    {
+      "index": 17,
+      "id": "h",
+      "tzid": "Africa/Tunis"
+    },
+    {
+      "index": 18,
+      "id": "i",
+      "tzid": "Africa/Windhoek"
+    },
+    {
+      "index": 19,
+      "id": "j",
+      "tzid": "America/Adak"
+    },
+    {
+      "index": 20,
+      "id": "k",
+      "tzid": "America/Anchorage"
+    },
+    {
+      "index": 21,
+      "id": "l",
+      "tzid": "America/Araguaina"
+    },
+    {
+      "index": 22,
+      "id": "m",
+      "tzid": "America/Argentina/Buenos_Aires"
+    },
+    {
+      "index": 23,
+      "id": "n",
+      "tzid": "America/Argentina/Catamarca"
+    },
+    {
+      "index": 24,
+      "id": "o",
+      "tzid": "America/Argentina/Cordoba"
+    },
+    {
+      "index": 25,
+      "id": "p",
+      "tzid": "America/Argentina/Jujuy"
+    },
+    {
+      "index": 26,
+      "id": "q",
+      "tzid": "America/Argentina/La_Rioja"
+    },
+    {
+      "index": 27,
+      "id": "r",
+      "tzid": "America/Argentina/Mendoza"
+    },
+    {
+      "index": 28,
+      "id": "s",
+      "tzid": "America/Argentina/Rio_Gallegos"
+    },
+    {
+      "index": 29,
+      "id": "t",
+      "tzid": "America/Argentina/Salta"
+    },
+    {
+      "index": 30,
+      "id": "u",
+      "tzid": "America/Argentina/San_Juan"
+    },
+    {
+      "index": 31,
+      "id": "v",
+      "tzid": "America/Argentina/San_Luis"
+    },
+    {
+      "index": 32,
+      "id": "w",
+      "tzid": "America/Argentina/Tucuman"
+    },
+    {
+      "index": 33,
+      "id": "x",
+      "tzid": "America/Argentina/Ushuaia"
+    },
+    {
+      "index": 34,
+      "id": "y",
+      "tzid": "America/Asuncion"
+    },
+    {
+      "index": 35,
+      "id": "z",
+      "tzid": "America/Bahia"
+    },
+    {
+      "index": 36,
+      "id": "10",
+      "tzid": "America/Bahia_Banderas"
+    },
+    {
+      "index": 37,
+      "id": "11",
+      "tzid": "America/Barbados"
+    },
+    {
+      "index": 38,
+      "id": "12",
+      "tzid": "America/Belem"
+    },
+    {
+      "index": 39,
+      "id": "13",
+      "tzid": "America/Belize"
+    },
+    {
+      "index": 40,
+      "id": "14",
+      "tzid": "America/Boa_Vista"
+    },
+    {
+      "index": 41,
+      "id": "15",
+      "tzid": "America/Bogota"
+    },
+    {
+      "index": 42,
+      "id": "16",
+      "tzid": "America/Boise"
+    },
+    {
+      "index": 43,
+      "id": "17",
+      "tzid": "America/Cambridge_Bay"
+    },
+    {
+      "index": 44,
+      "id": "18",
+      "tzid": "America/Campo_Grande"
+    },
+    {
+      "index": 45,
+      "id": "19",
+      "tzid": "America/Cancun"
+    },
+    {
+      "index": 46,
+      "id": "1a",
+      "tzid": "America/Caracas"
+    },
+    {
+      "index": 47,
+      "id": "1b",
+      "tzid": "America/Cayenne"
+    },
+    {
+      "index": 48,
+      "id": "1c",
+      "tzid": "America/Chicago"
+    },
+    {
+      "index": 49,
+      "id": "1d",
+      "tzid": "America/Chihuahua"
+    },
+    {
+      "index": 50,
+      "id": "1e",
+      "tzid": "America/Ciudad_Juarez"
+    },
+    {
+      "index": 51,
+      "id": "1f",
+      "tzid": "America/Costa_Rica"
+    },
+    {
+      "index": 52,
+      "id": "1g",
+      "tzid": "America/Coyhaique"
+    },
+    {
+      "index": 53,
+      "id": "1h",
+      "tzid": "America/Cuiaba"
+    },
+    {
+      "index": 54,
+      "id": "1i",
+      "tzid": "America/Danmarkshavn"
+    },
+    {
+      "index": 55,
+      "id": "1j",
+      "tzid": "America/Dawson"
+    },
+    {
+      "index": 56,
+      "id": "1k",
+      "tzid": "America/Dawson_Creek"
+    },
+    {
+      "index": 57,
+      "id": "1l",
+      "tzid": "America/Denver"
+    },
+    {
+      "index": 58,
+      "id": "1m",
+      "tzid": "America/Detroit"
+    },
+    {
+      "index": 59,
+      "id": "1n",
+      "tzid": "America/Edmonton"
+    },
+    {
+      "index": 60,
+      "id": "1o",
+      "tzid": "America/Eirunepe"
+    },
+    {
+      "index": 61,
+      "id": "1p",
+      "tzid": "America/El_Salvador"
+    },
+    {
+      "index": 62,
+      "id": "1q",
+      "tzid": "America/Fort_Nelson"
+    },
+    {
+      "index": 63,
+      "id": "1r",
+      "tzid": "America/Fortaleza"
+    },
+    {
+      "index": 64,
+      "id": "1s",
+      "tzid": "America/Glace_Bay"
+    },
+    {
+      "index": 65,
+      "id": "1t",
+      "tzid": "America/Goose_Bay"
+    },
+    {
+      "index": 66,
+      "id": "1u",
+      "tzid": "America/Grand_Turk"
+    },
+    {
+      "index": 67,
+      "id": "1v",
+      "tzid": "America/Guatemala"
+    },
+    {
+      "index": 68,
+      "id": "1w",
+      "tzid": "America/Guayaquil"
+    },
+    {
+      "index": 69,
+      "id": "1x",
+      "tzid": "America/Guyana"
+    },
+    {
+      "index": 70,
+      "id": "1y",
+      "tzid": "America/Halifax"
+    },
+    {
+      "index": 71,
+      "id": "1z",
+      "tzid": "America/Havana"
+    },
+    {
+      "index": 72,
+      "id": "20",
+      "tzid": "America/Hermosillo"
+    },
+    {
+      "index": 73,
+      "id": "21",
+      "tzid": "America/Indiana/Indianapolis"
+    },
+    {
+      "index": 74,
+      "id": "22",
+      "tzid": "America/Indiana/Knox"
+    },
+    {
+      "index": 75,
+      "id": "23",
+      "tzid": "America/Indiana/Marengo"
+    },
+    {
+      "index": 76,
+      "id": "24",
+      "tzid": "America/Indiana/Petersburg"
+    },
+    {
+      "index": 77,
+      "id": "25",
+      "tzid": "America/Indiana/Tell_City"
+    },
+    {
+      "index": 78,
+      "id": "26",
+      "tzid": "America/Indiana/Vevay"
+    },
+    {
+      "index": 79,
+      "id": "27",
+      "tzid": "America/Indiana/Vincennes"
+    },
+    {
+      "index": 80,
+      "id": "28",
+      "tzid": "America/Indiana/Winamac"
+    },
+    {
+      "index": 81,
+      "id": "29",
+      "tzid": "America/Inuvik"
+    },
+    {
+      "index": 82,
+      "id": "2a",
+      "tzid": "America/Iqaluit"
+    },
+    {
+      "index": 83,
+      "id": "2b",
+      "tzid": "America/Jamaica"
+    },
+    {
+      "index": 84,
+      "id": "2c",
+      "tzid": "America/Juneau"
+    },
+    {
+      "index": 85,
+      "id": "2d",
+      "tzid": "America/Kentucky/Louisville"
+    },
+    {
+      "index": 86,
+      "id": "2e",
+      "tzid": "America/Kentucky/Monticello"
+    },
+    {
+      "index": 87,
+      "id": "2f",
+      "tzid": "America/La_Paz"
+    },
+    {
+      "index": 88,
+      "id": "2g",
+      "tzid": "America/Lima"
+    },
+    {
+      "index": 89,
+      "id": "2h",
+      "tzid": "America/Los_Angeles"
+    },
+    {
+      "index": 90,
+      "id": "2i",
+      "tzid": "America/Maceio"
+    },
+    {
+      "index": 91,
+      "id": "2j",
+      "tzid": "America/Managua"
+    },
+    {
+      "index": 92,
+      "id": "2k",
+      "tzid": "America/Manaus"
+    },
+    {
+      "index": 93,
+      "id": "2l",
+      "tzid": "America/Martinique"
+    },
+    {
+      "index": 94,
+      "id": "2m",
+      "tzid": "America/Matamoros"
+    },
+    {
+      "index": 95,
+      "id": "2n",
+      "tzid": "America/Mazatlan"
+    },
+    {
+      "index": 96,
+      "id": "2o",
+      "tzid": "America/Menominee"
+    },
+    {
+      "index": 97,
+      "id": "2p",
+      "tzid": "America/Merida"
+    },
+    {
+      "index": 98,
+      "id": "2q",
+      "tzid": "America/Metlakatla"
+    },
+    {
+      "index": 99,
+      "id": "2r",
+      "tzid": "America/Mexico_City"
+    },
+    {
+      "index": 100,
+      "id": "2s",
+      "tzid": "America/Miquelon"
+    },
+    {
+      "index": 101,
+      "id": "2t",
+      "tzid": "America/Moncton"
+    },
+    {
+      "index": 102,
+      "id": "2u",
+      "tzid": "America/Monterrey"
+    },
+    {
+      "index": 103,
+      "id": "2v",
+      "tzid": "America/Montevideo"
+    },
+    {
+      "index": 104,
+      "id": "2w",
+      "tzid": "America/New_York"
+    },
+    {
+      "index": 105,
+      "id": "2x",
+      "tzid": "America/Nome"
+    },
+    {
+      "index": 106,
+      "id": "2y",
+      "tzid": "America/Noronha"
+    },
+    {
+      "index": 107,
+      "id": "2z",
+      "tzid": "America/North_Dakota/Beulah"
+    },
+    {
+      "index": 108,
+      "id": "30",
+      "tzid": "America/North_Dakota/Center"
+    },
+    {
+      "index": 109,
+      "id": "31",
+      "tzid": "America/North_Dakota/New_Salem"
+    },
+    {
+      "index": 110,
+      "id": "32",
+      "tzid": "America/Nuuk"
+    },
+    {
+      "index": 111,
+      "id": "33",
+      "tzid": "America/Ojinaga"
+    },
+    {
+      "index": 112,
+      "id": "34",
+      "tzid": "America/Panama"
+    },
+    {
+      "index": 113,
+      "id": "35",
+      "tzid": "America/Paramaribo"
+    },
+    {
+      "index": 114,
+      "id": "36",
+      "tzid": "America/Phoenix"
+    },
+    {
+      "index": 115,
+      "id": "37",
+      "tzid": "America/Port-au-Prince"
+    },
+    {
+      "index": 116,
+      "id": "38",
+      "tzid": "America/Porto_Velho"
+    },
+    {
+      "index": 117,
+      "id": "39",
+      "tzid": "America/Puerto_Rico"
+    },
+    {
+      "index": 118,
+      "id": "3a",
+      "tzid": "America/Punta_Arenas"
+    },
+    {
+      "index": 119,
+      "id": "3b",
+      "tzid": "America/Rankin_Inlet"
+    },
+    {
+      "index": 120,
+      "id": "3c",
+      "tzid": "America/Recife"
+    },
+    {
+      "index": 121,
+      "id": "3d",
+      "tzid": "America/Regina"
+    },
+    {
+      "index": 122,
+      "id": "3e",
+      "tzid": "America/Resolute"
+    },
+    {
+      "index": 123,
+      "id": "3f",
+      "tzid": "America/Rio_Branco"
+    },
+    {
+      "index": 124,
+      "id": "3g",
+      "tzid": "America/Santarem"
+    },
+    {
+      "index": 125,
+      "id": "3h",
+      "tzid": "America/Santiago"
+    },
+    {
+      "index": 126,
+      "id": "3i",
+      "tzid": "America/Santo_Domingo"
+    },
+    {
+      "index": 127,
+      "id": "3j",
+      "tzid": "America/Sao_Paulo"
+    },
+    {
+      "index": 128,
+      "id": "3k",
+      "tzid": "America/Scoresbysund"
+    },
+    {
+      "index": 129,
+      "id": "3l",
+      "tzid": "America/Sitka"
+    },
+    {
+      "index": 130,
+      "id": "3m",
+      "tzid": "America/St_Johns"
+    },
+    {
+      "index": 131,
+      "id": "3n",
+      "tzid": "America/Swift_Current"
+    },
+    {
+      "index": 132,
+      "id": "3o",
+      "tzid": "America/Tegucigalpa"
+    },
+    {
+      "index": 133,
+      "id": "3p",
+      "tzid": "America/Thule"
+    },
+    {
+      "index": 134,
+      "id": "3q",
+      "tzid": "America/Tijuana"
+    },
+    {
+      "index": 135,
+      "id": "3r",
+      "tzid": "America/Toronto"
+    },
+    {
+      "index": 136,
+      "id": "3s",
+      "tzid": "America/Vancouver"
+    },
+    {
+      "index": 137,
+      "id": "3t",
+      "tzid": "America/Whitehorse"
+    },
+    {
+      "index": 138,
+      "id": "3u",
+      "tzid": "America/Winnipeg"
+    },
+    {
+      "index": 139,
+      "id": "3v",
+      "tzid": "America/Yakutat"
+    },
+    {
+      "index": 140,
+      "id": "3w",
+      "tzid": "Antarctica/Casey"
+    },
+    {
+      "index": 141,
+      "id": "3x",
+      "tzid": "Antarctica/Davis"
+    },
+    {
+      "index": 142,
+      "id": "3y",
+      "tzid": "Antarctica/Macquarie"
+    },
+    {
+      "index": 143,
+      "id": "3z",
+      "tzid": "Antarctica/Mawson"
+    },
+    {
+      "index": 144,
+      "id": "40",
+      "tzid": "Antarctica/Palmer"
+    },
+    {
+      "index": 145,
+      "id": "41",
+      "tzid": "Antarctica/Rothera"
+    },
+    {
+      "index": 146,
+      "id": "42",
+      "tzid": "Antarctica/Troll"
+    },
+    {
+      "index": 147,
+      "id": "43",
+      "tzid": "Antarctica/Vostok"
+    },
+    {
+      "index": 148,
+      "id": "44",
+      "tzid": "Asia/Almaty"
+    },
+    {
+      "index": 149,
+      "id": "45",
+      "tzid": "Asia/Amman"
+    },
+    {
+      "index": 150,
+      "id": "46",
+      "tzid": "Asia/Anadyr"
+    },
+    {
+      "index": 151,
+      "id": "47",
+      "tzid": "Asia/Aqtau"
+    },
+    {
+      "index": 152,
+      "id": "48",
+      "tzid": "Asia/Aqtobe"
+    },
+    {
+      "index": 153,
+      "id": "49",
+      "tzid": "Asia/Ashgabat"
+    },
+    {
+      "index": 154,
+      "id": "4a",
+      "tzid": "Asia/Atyrau"
+    },
+    {
+      "index": 155,
+      "id": "4b",
+      "tzid": "Asia/Baghdad"
+    },
+    {
+      "index": 156,
+      "id": "4c",
+      "tzid": "Asia/Baku"
+    },
+    {
+      "index": 157,
+      "id": "4d",
+      "tzid": "Asia/Bangkok"
+    },
+    {
+      "index": 158,
+      "id": "4e",
+      "tzid": "Asia/Barnaul"
+    },
+    {
+      "index": 159,
+      "id": "4f",
+      "tzid": "Asia/Beirut"
+    },
+    {
+      "index": 160,
+      "id": "4g",
+      "tzid": "Asia/Bishkek"
+    },
+    {
+      "index": 161,
+      "id": "4h",
+      "tzid": "Asia/Chita"
+    },
+    {
+      "index": 162,
+      "id": "4i",
+      "tzid": "Asia/Colombo"
+    },
+    {
+      "index": 163,
+      "id": "4j",
+      "tzid": "Asia/Damascus"
+    },
+    {
+      "index": 164,
+      "id": "4k",
+      "tzid": "Asia/Dhaka"
+    },
+    {
+      "index": 165,
+      "id": "4l",
+      "tzid": "Asia/Dili"
+    },
+    {
+      "index": 166,
+      "id": "4m",
+      "tzid": "Asia/Dubai"
+    },
+    {
+      "index": 167,
+      "id": "4n",
+      "tzid": "Asia/Dushanbe"
+    },
+    {
+      "index": 168,
+      "id": "4o",
+      "tzid": "Asia/Famagusta"
+    },
+    {
+      "index": 169,
+      "id": "4p",
+      "tzid": "Asia/Gaza"
+    },
+    {
+      "index": 170,
+      "id": "4q",
+      "tzid": "Asia/Hebron"
+    },
+    {
+      "index": 171,
+      "id": "4r",
+      "tzid": "Asia/Ho_Chi_Minh"
+    },
+    {
+      "index": 172,
+      "id": "4s",
+      "tzid": "Asia/Hong_Kong"
+    },
+    {
+      "index": 173,
+      "id": "4t",
+      "tzid": "Asia/Hovd"
+    },
+    {
+      "index": 174,
+      "id": "4u",
+      "tzid": "Asia/Irkutsk"
+    },
+    {
+      "index": 175,
+      "id": "4v",
+      "tzid": "Asia/Jakarta"
+    },
+    {
+      "index": 176,
+      "id": "4w",
+      "tzid": "Asia/Jayapura"
+    },
+    {
+      "index": 177,
+      "id": "4x",
+      "tzid": "Asia/Jerusalem"
+    },
+    {
+      "index": 178,
+      "id": "4y",
+      "tzid": "Asia/Kabul"
+    },
+    {
+      "index": 179,
+      "id": "4z",
+      "tzid": "Asia/Kamchatka"
+    },
+    {
+      "index": 180,
+      "id": "50",
+      "tzid": "Asia/Karachi"
+    },
+    {
+      "index": 181,
+      "id": "51",
+      "tzid": "Asia/Kathmandu"
+    },
+    {
+      "index": 182,
+      "id": "52",
+      "tzid": "Asia/Khandyga"
+    },
+    {
+      "index": 183,
+      "id": "53",
+      "tzid": "Asia/Kolkata"
+    },
+    {
+      "index": 184,
+      "id": "54",
+      "tzid": "Asia/Krasnoyarsk"
+    },
+    {
+      "index": 185,
+      "id": "55",
+      "tzid": "Asia/Kuching"
+    },
+    {
+      "index": 186,
+      "id": "56",
+      "tzid": "Asia/Macau"
+    },
+    {
+      "index": 187,
+      "id": "57",
+      "tzid": "Asia/Magadan"
+    },
+    {
+      "index": 188,
+      "id": "58",
+      "tzid": "Asia/Makassar"
+    },
+    {
+      "index": 189,
+      "id": "59",
+      "tzid": "Asia/Manila"
+    },
+    {
+      "index": 190,
+      "id": "5a",
+      "tzid": "Asia/Nicosia"
+    },
+    {
+      "index": 191,
+      "id": "5b",
+      "tzid": "Asia/Novokuznetsk"
+    },
+    {
+      "index": 192,
+      "id": "5c",
+      "tzid": "Asia/Novosibirsk"
+    },
+    {
+      "index": 193,
+      "id": "5d",
+      "tzid": "Asia/Omsk"
+    },
+    {
+      "index": 194,
+      "id": "5e",
+      "tzid": "Asia/Oral"
+    },
+    {
+      "index": 195,
+      "id": "5f",
+      "tzid": "Asia/Pontianak"
+    },
+    {
+      "index": 196,
+      "id": "5g",
+      "tzid": "Asia/Pyongyang"
+    },
+    {
+      "index": 197,
+      "id": "5h",
+      "tzid": "Asia/Qatar"
+    },
+    {
+      "index": 198,
+      "id": "5i",
+      "tzid": "Asia/Qostanay"
+    },
+    {
+      "index": 199,
+      "id": "5j",
+      "tzid": "Asia/Qyzylorda"
+    },
+    {
+      "index": 200,
+      "id": "5k",
+      "tzid": "Asia/Riyadh"
+    },
+    {
+      "index": 201,
+      "id": "5l",
+      "tzid": "Asia/Sakhalin"
+    },
+    {
+      "index": 202,
+      "id": "5m",
+      "tzid": "Asia/Samarkand"
+    },
+    {
+      "index": 203,
+      "id": "5n",
+      "tzid": "Asia/Seoul"
+    },
+    {
+      "index": 204,
+      "id": "5o",
+      "tzid": "Asia/Shanghai"
+    },
+    {
+      "index": 205,
+      "id": "5p",
+      "tzid": "Asia/Singapore"
+    },
+    {
+      "index": 206,
+      "id": "5q",
+      "tzid": "Asia/Srednekolymsk"
+    },
+    {
+      "index": 207,
+      "id": "5r",
+      "tzid": "Asia/Taipei"
+    },
+    {
+      "index": 208,
+      "id": "5s",
+      "tzid": "Asia/Tashkent"
+    },
+    {
+      "index": 209,
+      "id": "5t",
+      "tzid": "Asia/Tbilisi"
+    },
+    {
+      "index": 210,
+      "id": "5u",
+      "tzid": "Asia/Tehran"
+    },
+    {
+      "index": 211,
+      "id": "5v",
+      "tzid": "Asia/Thimphu"
+    },
+    {
+      "index": 212,
+      "id": "5w",
+      "tzid": "Asia/Tokyo"
+    },
+    {
+      "index": 213,
+      "id": "5x",
+      "tzid": "Asia/Tomsk"
+    },
+    {
+      "index": 214,
+      "id": "5y",
+      "tzid": "Asia/Ulaanbaatar"
+    },
+    {
+      "index": 215,
+      "id": "5z",
+      "tzid": "Asia/Urumqi"
+    },
+    {
+      "index": 216,
+      "id": "60",
+      "tzid": "Asia/Ust-Nera"
+    },
+    {
+      "index": 217,
+      "id": "61",
+      "tzid": "Asia/Vladivostok"
+    },
+    {
+      "index": 218,
+      "id": "62",
+      "tzid": "Asia/Yakutsk"
+    },
+    {
+      "index": 219,
+      "id": "63",
+      "tzid": "Asia/Yangon"
+    },
+    {
+      "index": 220,
+      "id": "64",
+      "tzid": "Asia/Yekaterinburg"
+    },
+    {
+      "index": 221,
+      "id": "65",
+      "tzid": "Asia/Yerevan"
+    },
+    {
+      "index": 222,
+      "id": "66",
+      "tzid": "Atlantic/Azores"
+    },
+    {
+      "index": 223,
+      "id": "67",
+      "tzid": "Atlantic/Bermuda"
+    },
+    {
+      "index": 224,
+      "id": "68",
+      "tzid": "Atlantic/Canary"
+    },
+    {
+      "index": 225,
+      "id": "69",
+      "tzid": "Atlantic/Cape_Verde"
+    },
+    {
+      "index": 226,
+      "id": "6a",
+      "tzid": "Atlantic/Faroe"
+    },
+    {
+      "index": 227,
+      "id": "6b",
+      "tzid": "Atlantic/Madeira"
+    },
+    {
+      "index": 228,
+      "id": "6c",
+      "tzid": "Atlantic/South_Georgia"
+    },
+    {
+      "index": 229,
+      "id": "6d",
+      "tzid": "Atlantic/Stanley"
+    },
+    {
+      "index": 230,
+      "id": "6e",
+      "tzid": "Australia/Adelaide"
+    },
+    {
+      "index": 231,
+      "id": "6f",
+      "tzid": "Australia/Brisbane"
+    },
+    {
+      "index": 232,
+      "id": "6g",
+      "tzid": "Australia/Broken_Hill"
+    },
+    {
+      "index": 233,
+      "id": "6h",
+      "tzid": "Australia/Darwin"
+    },
+    {
+      "index": 234,
+      "id": "6i",
+      "tzid": "Australia/Eucla"
+    },
+    {
+      "index": 235,
+      "id": "6j",
+      "tzid": "Australia/Hobart"
+    },
+    {
+      "index": 236,
+      "id": "6k",
+      "tzid": "Australia/Lindeman"
+    },
+    {
+      "index": 237,
+      "id": "6l",
+      "tzid": "Australia/Lord_Howe"
+    },
+    {
+      "index": 238,
+      "id": "6m",
+      "tzid": "Australia/Melbourne"
+    },
+    {
+      "index": 239,
+      "id": "6n",
+      "tzid": "Australia/Perth"
+    },
+    {
+      "index": 240,
+      "id": "6o",
+      "tzid": "Australia/Sydney"
+    },
+    {
+      "index": 241,
+      "id": "6p",
+      "tzid": "Europe/Andorra"
+    },
+    {
+      "index": 242,
+      "id": "6q",
+      "tzid": "Europe/Astrakhan"
+    },
+    {
+      "index": 243,
+      "id": "6r",
+      "tzid": "Europe/Athens"
+    },
+    {
+      "index": 244,
+      "id": "6s",
+      "tzid": "Europe/Belgrade"
+    },
+    {
+      "index": 245,
+      "id": "6t",
+      "tzid": "Europe/Berlin"
+    },
+    {
+      "index": 246,
+      "id": "6u",
+      "tzid": "Europe/Brussels"
+    },
+    {
+      "index": 247,
+      "id": "6v",
+      "tzid": "Europe/Bucharest"
+    },
+    {
+      "index": 248,
+      "id": "6w",
+      "tzid": "Europe/Budapest"
+    },
+    {
+      "index": 249,
+      "id": "6x",
+      "tzid": "Europe/Chisinau"
+    },
+    {
+      "index": 250,
+      "id": "6y",
+      "tzid": "Europe/Dublin"
+    },
+    {
+      "index": 251,
+      "id": "6z",
+      "tzid": "Europe/Gibraltar"
+    },
+    {
+      "index": 252,
+      "id": "70",
+      "tzid": "Europe/Helsinki"
+    },
+    {
+      "index": 253,
+      "id": "71",
+      "tzid": "Europe/Istanbul"
+    },
+    {
+      "index": 254,
+      "id": "72",
+      "tzid": "Europe/Kaliningrad"
+    },
+    {
+      "index": 255,
+      "id": "73",
+      "tzid": "Europe/Kirov"
+    },
+    {
+      "index": 256,
+      "id": "74",
+      "tzid": "Europe/Kyiv"
+    },
+    {
+      "index": 257,
+      "id": "75",
+      "tzid": "Europe/Lisbon"
+    },
+    {
+      "index": 258,
+      "id": "76",
+      "tzid": "Europe/London"
+    },
+    {
+      "index": 259,
+      "id": "77",
+      "tzid": "Europe/Madrid"
+    },
+    {
+      "index": 260,
+      "id": "78",
+      "tzid": "Europe/Malta"
+    },
+    {
+      "index": 261,
+      "id": "79",
+      "tzid": "Europe/Minsk"
+    },
+    {
+      "index": 262,
+      "id": "7a",
+      "tzid": "Europe/Moscow"
+    },
+    {
+      "index": 263,
+      "id": "7b",
+      "tzid": "Europe/Paris"
+    },
+    {
+      "index": 264,
+      "id": "7c",
+      "tzid": "Europe/Prague"
+    },
+    {
+      "index": 265,
+      "id": "7d",
+      "tzid": "Europe/Riga"
+    },
+    {
+      "index": 266,
+      "id": "7e",
+      "tzid": "Europe/Rome"
+    },
+    {
+      "index": 267,
+      "id": "7f",
+      "tzid": "Europe/Samara"
+    },
+    {
+      "index": 268,
+      "id": "7g",
+      "tzid": "Europe/Saratov"
+    },
+    {
+      "index": 269,
+      "id": "7h",
+      "tzid": "Europe/Simferopol"
+    },
+    {
+      "index": 270,
+      "id": "7i",
+      "tzid": "Europe/Sofia"
+    },
+    {
+      "index": 271,
+      "id": "7j",
+      "tzid": "Europe/Tallinn"
+    },
+    {
+      "index": 272,
+      "id": "7k",
+      "tzid": "Europe/Tirane"
+    },
+    {
+      "index": 273,
+      "id": "7l",
+      "tzid": "Europe/Ulyanovsk"
+    },
+    {
+      "index": 274,
+      "id": "7m",
+      "tzid": "Europe/Vienna"
+    },
+    {
+      "index": 275,
+      "id": "7n",
+      "tzid": "Europe/Vilnius"
+    },
+    {
+      "index": 276,
+      "id": "7o",
+      "tzid": "Europe/Volgograd"
+    },
+    {
+      "index": 277,
+      "id": "7p",
+      "tzid": "Europe/Warsaw"
+    },
+    {
+      "index": 278,
+      "id": "7q",
+      "tzid": "Europe/Zurich"
+    },
+    {
+      "index": 279,
+      "id": "7r",
+      "tzid": "Indian/Chagos"
+    },
+    {
+      "index": 280,
+      "id": "7s",
+      "tzid": "Indian/Maldives"
+    },
+    {
+      "index": 281,
+      "id": "7t",
+      "tzid": "Indian/Mauritius"
+    },
+    {
+      "index": 282,
+      "id": "7u",
+      "tzid": "Pacific/Apia"
+    },
+    {
+      "index": 283,
+      "id": "7v",
+      "tzid": "Pacific/Auckland"
+    },
+    {
+      "index": 284,
+      "id": "7w",
+      "tzid": "Pacific/Bougainville"
+    },
+    {
+      "index": 285,
+      "id": "7x",
+      "tzid": "Pacific/Chatham"
+    },
+    {
+      "index": 286,
+      "id": "7y",
+      "tzid": "Pacific/Easter"
+    },
+    {
+      "index": 287,
+      "id": "7z",
+      "tzid": "Pacific/Efate"
+    },
+    {
+      "index": 288,
+      "id": "80",
+      "tzid": "Pacific/Fakaofo"
+    },
+    {
+      "index": 289,
+      "id": "81",
+      "tzid": "Pacific/Fiji"
+    },
+    {
+      "index": 290,
+      "id": "82",
+      "tzid": "Pacific/Galapagos"
+    },
+    {
+      "index": 291,
+      "id": "83",
+      "tzid": "Pacific/Gambier"
+    },
+    {
+      "index": 292,
+      "id": "84",
+      "tzid": "Pacific/Guadalcanal"
+    },
+    {
+      "index": 293,
+      "id": "85",
+      "tzid": "Pacific/Guam"
+    },
+    {
+      "index": 294,
+      "id": "86",
+      "tzid": "Pacific/Honolulu"
+    },
+    {
+      "index": 295,
+      "id": "87",
+      "tzid": "Pacific/Kanton"
+    },
+    {
+      "index": 296,
+      "id": "88",
+      "tzid": "Pacific/Kiritimati"
+    },
+    {
+      "index": 297,
+      "id": "89",
+      "tzid": "Pacific/Kosrae"
+    },
+    {
+      "index": 298,
+      "id": "8a",
+      "tzid": "Pacific/Kwajalein"
+    },
+    {
+      "index": 299,
+      "id": "8b",
+      "tzid": "Pacific/Marquesas"
+    },
+    {
+      "index": 300,
+      "id": "8c",
+      "tzid": "Pacific/Nauru"
+    },
+    {
+      "index": 301,
+      "id": "8d",
+      "tzid": "Pacific/Niue"
+    },
+    {
+      "index": 302,
+      "id": "8e",
+      "tzid": "Pacific/Norfolk"
+    },
+    {
+      "index": 303,
+      "id": "8f",
+      "tzid": "Pacific/Noumea"
+    },
+    {
+      "index": 304,
+      "id": "8g",
+      "tzid": "Pacific/Pago_Pago"
+    },
+    {
+      "index": 305,
+      "id": "8h",
+      "tzid": "Pacific/Palau"
+    },
+    {
+      "index": 306,
+      "id": "8i",
+      "tzid": "Pacific/Pitcairn"
+    },
+    {
+      "index": 307,
+      "id": "8j",
+      "tzid": "Pacific/Port_Moresby"
+    },
+    {
+      "index": 308,
+      "id": "8k",
+      "tzid": "Pacific/Rarotonga"
+    },
+    {
+      "index": 309,
+      "id": "8l",
+      "tzid": "Pacific/Tahiti"
+    },
+    {
+      "index": 310,
+      "id": "8m",
+      "tzid": "Pacific/Tarawa"
+    },
+    {
+      "index": 311,
+      "id": "8n",
+      "tzid": "Pacific/Tongatapu"
+    }
+  ]
+}

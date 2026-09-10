@@ -6,6 +6,7 @@ import {
   type MisskeyNote,
 } from "./misskey.js";
 import { parseText, extractCandidates, buildMinimalCandidate } from "./parser.js";
+import { isAshiatoActiveNow } from "./ashiatoEval.js";
 import { parse as parseMfm, type MfmNode } from "mfm-js";
 import {
   createMap,
@@ -30,7 +31,7 @@ import {
   findPrefecturesInView,
   type PrefectureIndexEntry,
 } from "./prefectureIndex.js";
-import { lookupMunicipality } from "./municipalityLookup.js";
+import { lookupMunicipality, lookupPrefectureName } from "./municipalityLookup.js";
 import {
   makeRecord,
   getCursor,
@@ -166,8 +167,8 @@ $("#composeAshiatoMenuItem .menu-item-icon").append(createIcon("footprints"));
 $("#unlockedListToggle .menu-item-icon").append(createIcon("map-pinned"));
 $("#draftListToggle .menu-item-icon").append(createIcon("notebook-pen"));
 $("#changeInstance .menu-item-icon").append(createIcon("server"));
-$("#clearSearchCache .menu-item-icon").append(createIcon("trash-2"));
-$("#resetAll .menu-item-icon").append(createIcon("rotate-ccw"));
+$("#clearSearchCacheIcon").append(createIcon("trash-2"));
+$("#resetAllIcon").append(createIcon("rotate-ccw"));
 $("#aboutButton .menu-item-icon").append(createIcon("info"));
 $("#settingsToggle .menu-item-icon").append(createIcon("settings"));
 $("#ashiatoActionShowOnMapIcon").append(createIcon("map-pin"));
@@ -992,16 +993,18 @@ function registerRecord(record: AshiatoRecord): void {
 // 保留中のレコードを定期的に再チェックし、必要な経過時間(桁数依存)を過ぎたものを
 // 自動的にセルへ昇格させる(ページを開きっぱなしでも、手動で「探す」し直す
 // 必要が無いように)。
+// 併せて、GPSが有効な間は毎回checkCurrentPositionAgainstCellsも呼ぶ。Ashiato
+// Syntaxの時間条件(d/w/t/o等)は位置が変わらなくても時刻の経過だけでActive/Inactive
+// が切り替わりうるため、位置情報の更新を待たずにこの1分間隔のタイマーで
+// 定期的に再評価する。
 function promoteAgedRecords(): void {
-  let promoted = false;
   for (const [id, record] of pendingRecords) {
     if (isOldEnough(record.noteCreatedAt, record.geohash.length)) {
       pendingRecords.delete(id);
       addRecordToCell(record);
-      promoted = true;
     }
   }
-  if (promoted && gpsEnabled) checkCurrentPositionAgainstCells();
+  if (gpsEnabled) checkCurrentPositionAgainstCells();
 }
 
 setInterval(promoteAgedRecords, PENDING_PROMOTION_INTERVAL_MS);
@@ -1431,10 +1434,11 @@ function handlePositionError(error: GeolocationPositionError): void {
 }
 
 // 現在地(lastKnownPosition)と全セルを突き合わせて、未発見のものを判定する。
-// watchPositionのコールバック(位置そのものが変わった時)だけでなく、
-// GPS ON中に新しいAshiatoを読み込んだ(=セル自体が増減した)時にも呼ぶ必要がある
-// (「過去を探す」「最新を確認」、保留レコードの昇格など)。
-// 位置精度が悪いとき(isPrecisionBad)は、誤発見を避けるため判定自体を行わない。
+// 位置が一致しているだけでなく、Ashiato Syntaxの時間条件(isAshiatoActiveNow)も
+// 満たしていて初めて発見扱いにする。watchPositionのコールバック(位置そのものが
+// 変わった時)だけでなく、GPS ON中に新しいAshiatoを読み込んだ(=セル自体が
+// 増減した)時、および時間条件が変化しうる定期タイマー(promoteAgedRecords)からも
+// 呼ばれる。位置精度が悪いとき(isPrecisionBad)は、誤発見を避けるため判定自体を行わない。
 async function checkCurrentPositionAgainstCells(): Promise<void> {
   if (!lastKnownPosition || isPrecisionBad()) return;
   const { lat, lon } = lastKnownPosition;
@@ -1445,8 +1449,13 @@ async function checkCurrentPositionAgainstCells(): Promise<void> {
     if (locked.length === 0) continue;
     if (!isInsideGeohashCell(lat, lon, cell.geohash)) continue;
 
+    // 位置が一致していても、Ashiato Syntaxの時間条件(s/e/d/w/t/o/z/tz)を
+    // 満たしていなければ発見扱いにしない(ashiatoEval.ts参照)。
+    const activeNow = locked.filter((r) => isAshiatoActiveNow(r));
+    if (activeNow.length === 0) continue;
+
     const unlockedAt = Date.now();
-    for (const record of locked) {
+    for (const record of activeNow) {
       // DBへの書き込み(await)を待つ前に確定させる。GPSの更新が連続して
       // 届いた場合、この関数の呼び出しが重なることがあり、awaitの間に
       // 別の呼び出しが同じレコードを「まだロック中」として二重に処理して
@@ -1868,6 +1877,56 @@ async function ingestNotes(host: string, notes: MisskeyNote[]): Promise<AshiatoR
   return records;
 }
 
+// 「あなたが未発見のあしあとがn件あります」形式の検索結果メッセージを組み立てる。
+// 現在地(lastKnownPosition)が取得できていれば、その都道府県内の件数も添える。
+// suffixには「○○まで探しました。」等、呼び出し側で末尾に続けたい文をそのまま渡す
+// (fetchOlderのみ使用。fetchNewerは空文字列)。
+//
+// 件数はashiatoCells(表示用の画面内メモリ状態)からではなく、必ずgetAshiatoRecords()で
+// DBから直接数える。ashiatoCellsはaddRecordToCellの「同じidが既にあれば何もしない」
+// ガードに依存しており、検索キャッシュを消した直後に再検索すると、既に発見済み
+// (unlockedAtがDBには残っている)のレコードについて、再取得時に作られる
+// unlockedAt無しの新しいレコードオブジェクトがそのガードで弾かれるかどうかに
+// 挙動が左右されてしまう。DBを直接数えれば、putAshiatoRecords側の
+// 「既存のunlockedAt/readAtを引き継ぐ」マージ処理(cache.ts参照)の結果をそのまま
+// 信頼できるため、画面内メモリの状態とズレようがない。
+// なお「未読」(readAt無し)は発見済み(unlockedAtあり)に含まれるため、ここでは
+// unlockedAtの有無だけを見る(readAtは一切参照しない)。
+async function buildDiscoveryStatusMessage(suffix: string): Promise<string> {
+  const records = currentHost ? await getAshiatoRecords(currentHost, TAG) : [];
+  const undiscovered = records.filter((r) => !r.unlockedAt);
+
+  // 都道府県の逆引き(ネットワーク取得を伴いうる)は、同じgeohashについて
+  // 1回で済ませる。
+  const countByGeohash = new Map<string, number>();
+  for (const r of undiscovered) {
+    countByGeohash.set(r.geohash, (countByGeohash.get(r.geohash) ?? 0) + 1);
+  }
+
+  let prefectureClause = "";
+  if (lastKnownPosition) {
+    const prefName = await lookupPrefectureName(
+      prefectureIndex,
+      lastKnownPosition.lat,
+      lastKnownPosition.lon,
+    ).catch(() => null);
+
+    if (prefName) {
+      let inPrefecture = 0;
+      for (const [geohash, count] of countByGeohash) {
+        const { centerLat, centerLon } = decodeGeohash(geohash);
+        const cellPref = await lookupPrefectureName(prefectureIndex, centerLat, centerLon).catch(
+          () => null,
+        );
+        if (cellPref === prefName) inPrefecture += count;
+      }
+      prefectureClause = `${prefName}内に${inPrefecture}個。`;
+    }
+  }
+
+  return `あなたが未発見のあしあとが${undiscovered.length}件あります。${prefectureClause}${suffix}`;
+}
+
 // 過去方向(untilId): 「過去を探す」(初回・2回目以降とも同じボタン)
 async function fetchOlder(): Promise<void> {
   const btn = $<HTMLButtonElement>("#search");
@@ -1907,8 +1966,7 @@ async function fetchOlder(): Promise<void> {
       const oldestLabel = formatDateTime(oldestCreatedAt);
 
       setStatus(
-        `${ashiatoCells.size}件のあしあとがどこかにあります。` +
-          (oldestLabel ? `${oldestLabel}まで探しました。` : ""),
+        await buildDiscoveryStatusMessage(oldestLabel ? `${oldestLabel}まで探しました。` : ""),
       );
     } else {
       setStatus("これより古いAshiatoは見つかりませんでした。");
@@ -1961,7 +2019,7 @@ async function fetchNewer(): Promise<void> {
 
     setStatus(
       notes.length > 0
-        ? `${ashiatoCells.size}件のあしあとがどこかにあります。`
+        ? await buildDiscoveryStatusMessage("")
         : "新しいAshiatoはありませんでした。",
     );
   } catch (e) {
@@ -2003,7 +2061,7 @@ $<HTMLButtonElement>("#loadNewer").onclick = fetchNewer;
 $<HTMLButtonElement>("#toggleGps").onclick = () =>
   setGpsEnabled(!(gpsEnabled || watchId !== null));
 $<HTMLButtonElement>("#clearSearchCache").onclick = async () => {
-  closeMenu();
+  settingsDialog.close();
   const wantsToClear = await showConfirm(
     "検索キャッシュを削除しますか？(見つけたあしあとは残ります)",
     { okLabel: "削除する", danger: true },
@@ -2017,7 +2075,7 @@ $<HTMLButtonElement>("#clearSearchCache").onclick = async () => {
 // 削除後はアプリの状態(ashiatoCells等の変数)も含めて丸ごと作り直すのが確実なため、
 // 個別に状態をクリアするのではなくページをリロードする。
 $<HTMLButtonElement>("#resetAll").onclick = async () => {
-  closeMenu();
+  settingsDialog.close();
   const wantsToReset = await showConfirm(
     "すべてのキャッシュを削除しますか？\n\n見つけたあしあと・下書き・インスタンス設定など、保存されているデータがすべて消えます。この操作は取り消せません。",
     { okLabel: "削除する", danger: true },

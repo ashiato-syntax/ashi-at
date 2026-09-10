@@ -72,3 +72,31 @@ export async function lookupMunicipality(
   }
   return null;
 }
+
+/**
+ * 緯度経度が属する都道府県名だけを逆引きする(市区町村までは不要な場面向け)。
+ * lookupMunicipalityと同じく市区町村境界データを使った正確な点in多角形判定を行うため、
+ * 都道府県のバウンディングボックスだけで判定するより精度が高い(飛び地・矩形のはみ出し対策)。
+ * fetchMunicipalityGeoJsonのPromiseキャッシュを共有するため、同じ位置に対して
+ * lookupMunicipalityと両方呼んでも二重取得にはならない。
+ */
+export async function lookupPrefectureName(
+  prefectureIndex: PrefectureIndexEntry[],
+  lat: number,
+  lon: number,
+): Promise<string | null> {
+  const point = { minLat: lat, maxLat: lat, minLon: lon, maxLon: lon };
+  const candidates = findPrefecturesInView(prefectureIndex, point);
+
+  for (const pref of candidates) {
+    try {
+      const geojson = await fetchMunicipalityGeoJson(pref.code);
+      for (const feature of geojson.features) {
+        if (pointInGeometry(lon, lat, feature.geometry)) return pref.name;
+      }
+    } catch (error) {
+      console.warn(`municipalityLookup: ${pref.name}の境界取得に失敗:`, error);
+    }
+  }
+  return null;
+}

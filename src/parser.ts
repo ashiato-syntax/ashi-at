@@ -1,3 +1,5 @@
+import { isValidTzIndex } from "./ashiatoTz.js";
+
 const OPEN = "⟦",
   CLOSE = "⟧",
   MAX = 4096,
@@ -155,7 +157,9 @@ export function parseCandidate(c: string): ParseResult {
     }
     // z/s/e等と同様、ここで検証しておかないと不正な値がtry/catchの外
     // (このあとのmodel構築時のdec()呼び出し)で例外として漏れてしまう。
-    if (f.has("tz")) dec(f.get("tz")!);
+    // 仕様§28: tzインデックスがAshiato TZ Dictionaryの範囲外なのは意味検証エラー。
+    if (f.has("tz") && !isValidTzIndex(dec(f.get("tz")!)))
+      throw Error("tz index out of range.");
 
     if (f.has("s")) dec(f.get("s")!);
     if (f.has("e")) dec(f.get("e")!);

@@ -126,16 +126,6 @@
                                 <span class="menu-item-icon"></span>
                                 <span class="menu-item-label">設定</span>
                             </button>
-                            <button id="resetAll" type="button" class="danger">
-                                <span class="menu-item-icon"></span>
-                                <span class="menu-item-label">リセット</span>
-                            </button>
-                            <button id="clearSearchCache" type="button">
-                                <span class="menu-item-icon"></span>
-                                <span class="menu-item-label"
-                                    >検索キャッシュを消す</span
-                                >
-                            </button>
                             <button id="changeInstance" type="button">
                                 <span class="menu-item-icon"></span>
                                 <span class="menu-item-label"
@@ -372,6 +362,30 @@
                     センシティブなメディアを隠さない</label
                 >
             </fieldset>
+            <div class="action-sheet">
+                <button
+                    id="clearSearchCache"
+                    type="button"
+                    class="action-sheet-row"
+                >
+                    <span>検索キャッシュを消す</span>
+                    <span
+                        class="action-sheet-icon"
+                        id="clearSearchCacheIcon"
+                    ></span>
+                </button>
+                <button
+                    id="resetAll"
+                    type="button"
+                    class="action-sheet-row danger"
+                >
+                    <span>リセット</span>
+                    <span
+                        class="action-sheet-icon"
+                        id="resetAllIcon"
+                    ></span>
+                </button>
+            </div>
         </dialog>
         <dialog id="instanceDialog">
             <h2>Misskeyインスタンス</h2>
