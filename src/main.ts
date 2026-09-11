@@ -147,6 +147,7 @@ const $ = <T extends Element = HTMLElement>(s: string): T => document.querySelec
   areaOverlay = createAreaOverlay(map),
   precisionPreview = createPrecisionPreviewLayer(map),
   statusToast = $("#statusToast"),
+  statusIcon = $("#statusIcon"),
   statusText = $("#statusText"),
   statusCloseBtn = $<HTMLButtonElement>("#statusClose"),
   precisionWarning = $("#precisionWarning"),
@@ -160,17 +161,22 @@ const $ = <T extends Element = HTMLElement>(s: string): T => document.querySelec
 // メニューFAB・ハンバーガーメニュー各項目のアイコン(絵文字は端末フォント依存で
 // 意図した絵文字が無い環境だと崩れるため、lucide-staticのインラインSVGに置き換える)。
 $(".menu-fab-icon").append(createIcon("menu"));
-$("#togglePanelCollapse .toggle-panel-handle-icon").append(createIcon("chevron-down"));
+// フライアウトはボタンの左側に開くため、その向きを示す左向きシェブロンを使う
+// (展開時は180度回転して右向きになり、閉じる方向を示す)。
+$("#togglePanelCollapse .toggle-panel-handle-icon").append(createIcon("chevron-left"));
 $("#loadNewer .toolbar-btn-icon").append(createIcon("refresh-cw"));
 $("#search .toolbar-btn-icon").append(createIcon("history"));
 $("#composeAshiatoMenuItem .menu-item-icon").append(createIcon("footprints"));
 $("#unlockedListToggle .menu-item-icon").append(createIcon("map-pinned"));
 $("#draftListToggle .menu-item-icon").append(createIcon("notebook-pen"));
-$("#changeInstance .menu-item-icon").append(createIcon("server"));
+$("#changeInstanceIcon").append(createIcon("server"));
 $("#clearSearchCacheIcon").append(createIcon("trash-2"));
 $("#resetAllIcon").append(createIcon("rotate-ccw"));
 $("#aboutButton .menu-item-icon").append(createIcon("info"));
 $("#settingsToggle .menu-item-icon").append(createIcon("settings"));
+$("#mediaVisibilityIcon").append(createIcon("eye"));
+$("#composePrecisionIcon").append(createIcon("ruler"));
+$("#mediaVisibilityToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
 $("#ashiatoActionShowOnMapIcon").append(createIcon("map-pin"));
 $("#ashiatoActionOpenPostIcon").append(createIcon("external-link"));
 $("#ashiatoActionDeleteIcon").append(createIcon("trash-2"));
@@ -235,6 +241,7 @@ function setStatus(t: string, e = false): void {
   clearTimeout(statusHideTimer);
   statusText.textContent = t;
   statusToast.classList.toggle("error", e);
+  statusIcon.replaceChildren(createIcon(e ? "triangle-alert" : "info"));
   statusToast.hidden = false;
   statusCloseBtn.hidden = !e;
 
@@ -321,27 +328,42 @@ function showConfirm(
 
 closeOnBackdropClick(confirmDialog);
 
-// --- 下部シート(投稿UI/見つけたあしあと/下書き)のドラッグ操作 ---------------
-// シート上部の.sheet-handleをドラッグすると、シートの高さを直接調整できる
-// (CSSのmax-heightを上限、MIN_SHEET_HEIGHT_PXを下限にクランプする)。
-// 開閉のスライドアニメーション自体はstyle.css側(transform+@starting-style)で
-// 完結しているため、ここではclose()を呼ぶだけでよい。
+// --- 「つまんで高さ調整」ドラッグ操作の共通処理 -----------------------------
+// 下部シート(投稿UI/見つけたあしあと/下書き)・マップの吹き出し(同一地点の
+// 複数あしあと一覧)のどちらも、上部のハンドルをつまんで高さを直接調整でき、
 // 素早く下方向にフリックした場合、または一定以上(START_HEIGHT×
-// SHEET_CLOSE_HEIGHT_RATIO)まで小さくした場合は、指を離した時点でそのまま
-// 閉じる(dialog.close())。
-const MIN_SHEET_HEIGHT_PX = 120;
-const SHEET_FLICK_VELOCITY_PX_PER_MS = 0.6;
-const SHEET_CLOSE_HEIGHT_RATIO = 0.35;
+// DRAG_RESIZE_CLOSE_HEIGHT_RATIO)まで小さくした場合は、指を離した時点で
+// そのまま閉じる、という同じ操作感にする。高さの取得/反映方法と「閉じる」の
+// 実体(dialog.close() / map.closePopup())は対象ごとに異なるので、
+// DragResizeTargetとして注入する。
+const MIN_DRAG_RESIZE_HEIGHT_PX = 120;
+const DRAG_RESIZE_FLICK_VELOCITY_PX_PER_MS = 0.6;
+const DRAG_RESIZE_CLOSE_HEIGHT_RATIO = 0.35;
+// マップの吹き出し(showAshiatoCellPopup)をドラッグで広げられる上限。
+// Leaflet側のL.popup({maxHeight:260})はあくまで初期表示時の上限で、
+// ドラッグ操作はこちらの値(とウィンドウ高さ)を上限にする。
+const POPUP_DRAG_MAX_HEIGHT_PX = 480;
 
-function enableSheetDragResize(dialog: HTMLDialogElement): void {
-  const handle = dialog.querySelector<HTMLElement>(".sheet-handle");
-  if (!handle) return;
+interface DragResizeTarget {
+  handle: HTMLElement;
+  getHeightPx(): number;
+  setHeightPx(px: number): void;
+  getMaxHeightPx(): number;
+  onDismiss(): void; // フリック/縮めすぎで閉じる際に呼ぶ
+}
 
+function enableDragResize({
+  handle,
+  getHeightPx,
+  setHeightPx,
+  getMaxHeightPx,
+  onDismiss,
+}: DragResizeTarget): void {
   // hasPointerCapture()ではなくこのフラグでドラッグ中かどうかを判定する。
   // ブラウザによってはpointercancel発火前に暗黙的にpointer captureが
   // 解放されていることがあり、hasPointerCapture()に頼ると
   // pointercancel時にfinishDragが何もしないまま抜けてしまう
-  // (シートが中途半端な高さで固まって見える)ことがあるため。
+  // (中途半端な高さで固まって見える)ことがあるため。
   let dragging = false;
   let startY = 0;
   let startHeight = 0;
@@ -359,9 +381,8 @@ function enableSheetDragResize(dialog: HTMLDialogElement): void {
     lastY = e.clientY;
     lastT = e.timeStamp;
     velocity = 0;
-    startHeight = dialog.getBoundingClientRect().height;
-    // ドラッグで広げられる上限は、そのシートのCSS上のmax-heightまでとする。
-    maxHeightPx = parseFloat(getComputedStyle(dialog).maxHeight) || startHeight;
+    startHeight = getHeightPx();
+    maxHeightPx = getMaxHeightPx();
   });
 
   handle.addEventListener("pointermove", (e) => {
@@ -373,24 +394,42 @@ function enableSheetDragResize(dialog: HTMLDialogElement): void {
     lastY = e.clientY;
     lastT = e.timeStamp;
 
-    const newHeight = Math.min(maxHeightPx, Math.max(MIN_SHEET_HEIGHT_PX, startHeight - dy));
-    dialog.style.height = `${newHeight}px`;
+    const newHeight = Math.min(maxHeightPx, Math.max(MIN_DRAG_RESIZE_HEIGHT_PX, startHeight - dy));
+    setHeightPx(newHeight);
   });
 
   const finishDrag = () => {
     if (!dragging) return;
     dragging = false;
 
-    const currentHeight = dialog.getBoundingClientRect().height;
-    const isFastDownwardFlick = velocity > SHEET_FLICK_VELOCITY_PX_PER_MS;
-    const isTooShort = currentHeight < startHeight * SHEET_CLOSE_HEIGHT_RATIO;
+    const currentHeight = getHeightPx();
+    const isFastDownwardFlick = velocity > DRAG_RESIZE_FLICK_VELOCITY_PX_PER_MS;
+    const isTooShort = currentHeight < startHeight * DRAG_RESIZE_CLOSE_HEIGHT_RATIO;
 
-    if (isFastDownwardFlick || isTooShort) {
-      dialog.close();
-    }
+    if (isFastDownwardFlick || isTooShort) onDismiss();
   };
   handle.addEventListener("pointerup", finishDrag);
   handle.addEventListener("pointercancel", finishDrag);
+}
+
+// 下部シート(投稿UI/見つけたあしあと/下書き)用。CSSのmax-heightを上限にする。
+// 開閉のスライドアニメーション自体はstyle.css側(transform+@starting-style)で
+// 完結しているため、ここではclose()を呼ぶだけでよい。
+function enableSheetDragResize(dialog: HTMLDialogElement): void {
+  const handle = dialog.querySelector<HTMLElement>(".sheet-handle");
+  if (!handle) return;
+
+  enableDragResize({
+    handle,
+    getHeightPx: () => dialog.getBoundingClientRect().height,
+    setHeightPx: (px) => {
+      dialog.style.height = `${px}px`;
+    },
+    // ドラッグで広げられる上限は、そのシートのCSS上のmax-heightまでとする。
+    getMaxHeightPx: () =>
+      parseFloat(getComputedStyle(dialog).maxHeight) || dialog.getBoundingClientRect().height,
+    onDismiss: () => dialog.close(),
+  });
 
   // 次に開いたときは常にCSSで指定された既定の高さから始める
   // (前回ドラッグで変更した高さを持ち越さない)。
@@ -843,19 +882,21 @@ function buildMediaGrid(files: AshiatoFile[]): HTMLElement {
 
   if (files.length === 1 && files[0].type.startsWith("video/")) {
     grid.classList.add("ashiato-media-grid-single-video");
-    grid.append(buildMediaItem(files[0], [], -1));
+    grid.append(buildMediaItem(files[0], [], -1, 0, 1));
     return grid;
   }
 
   const images = files.filter((f) => !f.type.startsWith("video/"));
-  for (const file of files) {
-    grid.append(buildMediaItem(file, images, images.indexOf(file)));
-  }
+  files.forEach((file, index) => {
+    grid.append(buildMediaItem(file, images, images.indexOf(file), index, files.length));
+  });
   return grid;
 }
 
 // imagesForLightbox/lightboxIndexは、この1件が画像の場合の「ライトボックスに
 // 渡す画像だけの配列とその中でのインデックス」。動画の場合は使わない(-1)。
+// position/totalは添付ファイル全体(動画も含む)の中での位置と総数で、
+// 複数枚あることを示すバッジ(1/3等)の表示に使う。
 // モザイク(ぼかし)の状態はitemの"ashiato-media-blurred"クラスの有無だけで管理する。
 // veil(タップで表示)とeyeBtn(タップでモザイクをかけ直す)はどちらも常にDOM上に
 // 存在し、どちらを見せるかはCSS側でそのクラスの有無から切り替える
@@ -866,6 +907,8 @@ function buildMediaItem(
   file: AshiatoFile,
   imagesForLightbox: AshiatoFile[],
   lightboxIndex: number,
+  position: number,
+  total: number,
 ): HTMLElement {
   const item = document.createElement("div");
   item.className = "ashiato-media-item";
@@ -920,6 +963,15 @@ function buildMediaItem(
     item.classList.add("ashiato-media-blurred");
   };
   item.append(eyeBtn);
+
+  // 複数枚あるときだけ、何枚中の何枚目かを示すバッジを付ける(横スクロールで
+  // 1枚ずつしか見えないため、境界線の装飾だけでは複数枚あることに気づきにくい)。
+  if (total > 1) {
+    const counter = document.createElement("span");
+    counter.className = "ashiato-media-counter";
+    counter.textContent = `${position + 1}/${total}`;
+    item.append(counter);
+  }
 
   return item;
 }
@@ -1199,6 +1251,15 @@ function showAshiatoCellPopup(geohash: string): void {
   const container = document.createElement("div");
   container.className = "ashiato-popup-list";
 
+  // 下部シートと同じ「つまんで高さ調整」ハンドル(このあとのenableDragResize呼び出し参照)。
+  const handle = document.createElement("div");
+  handle.className = "sheet-handle";
+  handle.setAttribute("aria-hidden", "true");
+  const grip = document.createElement("span");
+  grip.className = "sheet-handle-grip";
+  handle.append(grip);
+  container.append(handle);
+
   const rowsForReadTracking: { row: HTMLElement; record: AshiatoRecord }[] = [];
   for (const record of records) {
     // ポップアップは閉じない(「…」を押しても地図上の吹き出しはそのまま残る)。
@@ -1229,9 +1290,26 @@ function showAshiatoCellPopup(geohash: string): void {
 
   // container.parentElement は Leaflet が用意する実際のスクロール領域
   // (.leaflet-popup-content。maxHeight超過時にoverflow-y:autoが付く、
-  // map.ts/L.popup呼び出し側のmaxHeight指定を参照)。このポップアップが
-  // 閉じられたら(他の吹き出しに差し替わった場合を含む)observerを解放する。
-  const disposeReadObserver = observeRowsForRead(container.parentElement!, rowsForReadTracking);
+  // map.ts/L.popup呼び出し側のmaxHeight指定を参照)。
+  const popupContent = container.parentElement!;
+
+  // 上部のハンドルをつまんで、吹き出しの高さを直接調整できるようにする。
+  // Leafletが決めたmaxHeight(260px)はあくまで初期表示時の上限で、
+  // ドラッグではPOPUP_DRAG_MAX_HEIGHT_PXまで広げられるようにする
+  // (viewportより大きくならないようウィンドウ高さでもクランプする)。
+  enableDragResize({
+    handle,
+    getHeightPx: () => popupContent.getBoundingClientRect().height,
+    setHeightPx: (px) => {
+      popupContent.style.height = `${px}px`;
+    },
+    getMaxHeightPx: () => Math.min(POPUP_DRAG_MAX_HEIGHT_PX, window.innerHeight * 0.7),
+    onDismiss: () => map.closePopup(),
+  });
+
+  // このポップアップが閉じられたら(他の吹き出しに差し替わった場合を含む)
+  // observerを解放する。
+  const disposeReadObserver = observeRowsForRead(popupContent, rowsForReadTracking);
   map.once("popupclose", (e) => {
     if (e.popup === popup) disposeReadObserver();
   });
@@ -1591,21 +1669,31 @@ mediaLightbox.addEventListener("click", (e) => {
   if (e.target === mediaLightbox) mediaLightbox.close();
 });
 
-// --- 「現在地」「エリア」「既読を隠す」をまとめたパネルの折りたたみ -------------
+// --- 「現在地」「エリア」「既読を隠す」のフライアウトの開閉 ---------------------
 // デフォルトは展開状態(index.html側のaria-expanded="true"、togglePanelRowsも
-// collapsedクラス無しが初期値)。状態は永続化しない(セッションごとに展開状態から始まる)。
-// 開閉はhidden属性ではなくcollapsedクラスの付け外しで行う
-// (grid-template-rowsのtransitionでアニメーションさせるため、要素自体は
-// 常にレイアウトに残しておく必要がある。style.css参照)。
+// hidden無しが初期値)。状態は永続化しない(セッションごとに展開状態から始まる)。
+// ハンバーガーメニュー(menuDropdown)と同じくhidden属性の付け外しで開閉する
+// (style.css側のopacity/transform + allow-discreteでフェード+スケールする)。
 
 const togglePanelCollapseBtn = $<HTMLButtonElement>("#togglePanelCollapse");
-const togglePanelRows = $("#togglePanelRows");
+const togglePanelRows = $<HTMLElement>("#togglePanelRows");
 
 togglePanelCollapseBtn.onclick = () => {
-  const willExpand = togglePanelRows.classList.contains("collapsed");
-  togglePanelRows.classList.toggle("collapsed", !willExpand);
-  togglePanelCollapseBtn.setAttribute("aria-expanded", String(willExpand));
+  const willOpen = togglePanelRows.hidden;
+  togglePanelRows.hidden = !willOpen;
+  togglePanelCollapseBtn.setAttribute("aria-expanded", String(willOpen));
 };
+
+// ボタンの高さをフライアウトの実測高さに揃え、1枚のカードのように見えるように
+// する(フライアウトはposition:absoluteのため、CSSだけでは高さを自動的に
+// 揃えられない)。ページ読み込み直後の1回だけの測定だと、フォントの読み込み
+// タイミングや画面幅によって実際の行の高さが後から変わるケースに追従できない
+// (PC表示でボタンだけ少し短くなる不具合の原因)ため、ResizeObserverで
+// フライアウトの実際の高さを継続的に監視し、変化するたびボタン側に反映する。
+new ResizeObserver(([entry]) => {
+  const height = entry.borderBoxSize[0]?.blockSize ?? entry.contentRect.height;
+  if (height > 0) togglePanelCollapseBtn.style.height = `${height}px`;
+}).observe(togglePanelRows);
 
 // --- 「エリア」トグル(Geohashセルの範囲描画) ------------------------------
 
@@ -1673,6 +1761,18 @@ $<HTMLButtonElement>("#settingsToggle").onclick = () => {
 $<HTMLButtonElement>("#settingsCloseX").onclick = () => settingsDialog.close();
 closeOnBackdropClick(settingsDialog);
 
+// 「メディアの表示」は選択肢が3つあって縦に長いため、既定では折りたたんでおき、
+// 必要なときだけ開く(style.css側のgrid-template-rowsの0fr/1frアニメーション。
+// 既定は折りたたみ)。
+const mediaVisibilityToggle = $<HTMLButtonElement>("#mediaVisibilityToggle");
+const mediaVisibilityRows = $("#mediaVisibilityRows");
+
+mediaVisibilityToggle.onclick = () => {
+  const willExpand = !mediaVisibilityRows.classList.contains("expanded");
+  mediaVisibilityRows.classList.toggle("expanded", willExpand);
+  mediaVisibilityToggle.setAttribute("aria-expanded", String(willExpand));
+};
+
 document.querySelectorAll<HTMLInputElement>('input[name="mediaVisibility"]').forEach((el) => {
   el.onchange = () => {
     mediaVisibilityMode = el.value as MediaVisibilityMode;
@@ -1688,7 +1788,6 @@ const instanceDialog = $<HTMLDialogElement>("#instanceDialog");
 const currentHostLabel = $("#currentHostLabel");
 
 $<HTMLButtonElement>("#changeInstance").onclick = () => {
-  closeMenu();
   instanceDialog.showModal();
 };
 $<HTMLButtonElement>("#instanceCancel").onclick = () => instanceDialog.close();
@@ -2061,7 +2160,6 @@ $<HTMLButtonElement>("#loadNewer").onclick = fetchNewer;
 $<HTMLButtonElement>("#toggleGps").onclick = () =>
   setGpsEnabled(!(gpsEnabled || watchId !== null));
 $<HTMLButtonElement>("#clearSearchCache").onclick = async () => {
-  settingsDialog.close();
   const wantsToClear = await showConfirm(
     "検索キャッシュを削除しますか？(見つけたあしあとは残ります)",
     { okLabel: "削除する", danger: true },
@@ -2075,7 +2173,6 @@ $<HTMLButtonElement>("#clearSearchCache").onclick = async () => {
 // 削除後はアプリの状態(ashiatoCells等の変数)も含めて丸ごと作り直すのが確実なため、
 // 個別に状態をクリアするのではなくページをリロードする。
 $<HTMLButtonElement>("#resetAll").onclick = async () => {
-  settingsDialog.close();
   const wantsToReset = await showConfirm(
     "すべてのキャッシュを削除しますか？\n\n見つけたあしあと・下書き・インスタンス設定など、保存されているデータがすべて消えます。この操作は取り消せません。",
     { okLabel: "削除する", danger: true },
@@ -2275,14 +2372,40 @@ async function refreshDraftList(): Promise<void> {
   for (const draft of drafts) {
     const li = document.createElement("li");
 
-    const meta = document.createElement("p");
-    meta.className = "draft-meta";
-    const place =
+    const header = document.createElement("div");
+    header.className = "draft-card-header";
+    const headerMain = document.createElement("div");
+    headerMain.className = "draft-card-header-main";
+    const placeIcon = document.createElement("span");
+    placeIcon.className = "action-sheet-icon";
+    placeIcon.append(createIcon("map-pin"));
+    const place = document.createElement("span");
+    place.className = "draft-place";
+    place.textContent =
       draft.municipalityLabel ?? `@${draft.lat.toFixed(4)}, ${draft.lon.toFixed(4)}`;
-    meta.textContent = `${formatDateTime(draft.createdAt)} — ${place}`;
 
-    // 精度はあとから変更できる(位置・作成時刻はそのまま)。
+    // 日時は地名の右隣に表示する。
+    const meta = document.createElement("span");
+    meta.className = "draft-meta";
+    meta.append(createIcon("clock"), document.createTextNode(formatDateTime(draft.createdAt) ?? ""));
+
+    headerMain.append(placeIcon, place, meta);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "draft-delete-btn";
+    deleteBtn.setAttribute("aria-label", "削除");
+    deleteBtn.append(createIcon("trash-2"));
+    header.append(headerMain, deleteBtn);
+
+    // 精度・「投稿する」は同じ行に並べる。
+    const footer = document.createElement("div");
+    footer.className = "draft-footer";
+
+    // 精度はあとから変更できる(位置・作成時刻はそのまま)。ラベルテキストの
+    // 代わりにアイコンだけを添えているため、スクリーンリーダー向けに明示する。
     const precisionSelect = document.createElement("select");
+    precisionSelect.setAttribute("aria-label", "判定エリアの広さ");
     for (const [value, label] of Object.entries(PRECISION_LABELS)) {
       const opt = document.createElement("option");
       opt.value = value;
@@ -2290,17 +2413,13 @@ async function refreshDraftList(): Promise<void> {
       opt.selected = String(draft.geohashLength) === value;
       precisionSelect.append(opt);
     }
-
-    const actions = document.createElement("div");
-    actions.className = "draft-actions";
+    const precision = document.createElement("label");
+    precision.className = "draft-precision";
+    precision.append(createIcon("ruler"), precisionSelect);
 
     const postBtn = document.createElement("button");
     postBtn.type = "button";
-    postBtn.className = "btn-primary";
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "btn-danger";
-    deleteBtn.textContent = "削除";
+    postBtn.className = "btn-primary draft-post-btn";
 
     // 残り時間は「下書きリストを開いた(=このリストを描画した)タイミング」で
     // 計算する。ダイアログを開いたままの秒単位カウントダウンはしない
@@ -2353,8 +2472,8 @@ async function refreshDraftList(): Promise<void> {
       refreshDraftList();
     };
 
-    actions.append(deleteBtn, postBtn);
-    li.append(meta, precisionSelect, actions);
+    footer.append(precision, postBtn);
+    li.append(header, footer);
     draftList.append(li);
   }
 }

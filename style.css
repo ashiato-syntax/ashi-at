@@ -36,6 +36,41 @@ select {
 button {
     cursor: pointer;
 }
+/* チェックボックスは、指定しないとブラウザ既定の青系になりテーマカラー
+   (緑)から浮いてしまうため、accent-colorで揃える。 */
+input[type="checkbox"] {
+    accent-color: #d46dad;
+}
+/* ラジオボタンは、accent-colorだけだと中の点はテーマカラーになっても
+   外枠がブラウザ既定の黒系のままになり、枠と点で色がちぐはぐに見える
+   (環境依存の見た目)。appearance:noneで完全に自前描画にし、枠・点とも
+   同じ色に揃える。他のボタン/リンクのアクセントカラーとは別の、
+   サーモンピンク寄りの色(#e47a94)を使う。 */
+input[type="radio"] {
+    appearance: none;
+    -webkit-appearance: none;
+    min-height: auto;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    padding: 0;
+    border: 2px solid #bbb;
+    border-radius: 50%;
+    background: #fff;
+    position: relative;
+    flex: none;
+    transition: border-color 0.15s ease;
+}
+input[type="radio"]:checked {
+    border-color: #e47a94;
+}
+input[type="radio"]:checked::after {
+    content: "";
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    background: #e47a94;
+}
 /* ネイティブの<select>の見た目(ブラウザデフォルトの矢印等)を、他の入力欄と
    揃った見た目にする。矢印はブラウザ組み込みのものを消し、シェブロンをCSSで描画する。 */
 select {
@@ -50,7 +85,7 @@ select {
 }
 input:focus-visible,
 select:focus-visible {
-    outline: 2px solid #1a73e8;
+    outline: 2px solid #d46dad;
     outline-offset: 1px;
 }
 button:disabled {
@@ -61,16 +96,16 @@ button.secondary {
     background: #fff;
     color: #333;
     border-color: #999;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 /* 「する」系の主操作(投稿する/適用 等)。塗りつぶさず枠線+文字色だけで強調する。 */
 button.btn-primary {
     background: #fff;
-    color: #1a73e8;
-    border-color: #1a73e8;
+    color: #d46dad;
+    border-color: #d46dad;
 }
 button.btn-primary:hover {
-    background: #eaf1fd;
+    background: #ffe4f0;
 }
 /* 削除等、破壊的な操作の決定ボタン。 */
 button.btn-danger {
@@ -82,34 +117,75 @@ button.btn-danger:hover {
     background: #fdecea;
 }
 
-.status-toast {
+/* ステータストースト・ボトムツールバーをまとめて縦に並べる見えないコンテナ。
+   トーストを画面上部(トグルパネル・ズームボタンの周辺)に置くと、どちらかが
+   状態変化するたびに位置がずれたり被ったりしていたため、画面下部の
+   ボトムツールバーのすぐ上に固定して表示する方式にした。ボトムツールバーの
+   高さは(折りたたみ等が無いため)常に一定なので、被る心配がない。 */
+.hud-bottom {
     position: absolute;
-    /* トグルパネル(右上、top:12px)の下に来るように。パネルの高さは展開時で
-       約141px(ハンドル24px+行3つ×38px+区切り線・枠線)なので、その下に
-       余裕を持たせている。畳んだ状態ではもっと上に余白ができるが、状態に
-       応じた動的な位置調整はしていない。 */
-    top: 165px;
-    left: 12px;
-    right: 12px;
+    left: 0;
+    right: 0;
+    bottom: 12px;
     z-index: 20;
     display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 0 12px;
+    pointer-events: none; /* 隙間部分は地図の操作を妨げない */
+}
+.hud-bottom > * {
+    pointer-events: auto;
+}
+.status-toast {
+    display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 8px;
     padding: 8px 12px;
     border-radius: 10px;
     background: #fff;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     font-size: 0.85rem;
     color: #222;
     opacity: 1;
-    transition: opacity 0.2s ease;
+    transform: translateY(0);
+    /* 出現/消滅時にふわっとスライド+フェードさせる。hidden属性の付け外し
+       (display:none⇔flex)自体もallow-discreteでtransitionの対象にする。 */
+    transition:
+        opacity 0.2s ease,
+        transform 0.2s ease,
+        display 0.2s ease allow-discrete;
 }
 .status-toast[hidden] {
     display: none;
+    opacity: 0;
+    transform: translateY(8px);
+}
+@starting-style {
+    .status-toast {
+        opacity: 0;
+        transform: translateY(8px);
+    }
 }
 .status-toast.error {
     color: #b00020;
+}
+.status-icon {
+    flex: none;
+    display: inline-flex;
+    color: #666;
+}
+.status-icon .icon {
+    width: 18px;
+    height: 18px;
+}
+.status-toast.error .status-icon {
+    color: #b00020;
+}
+#statusText {
+    flex: 1;
+    min-width: 0;
 }
 .status-close {
     min-height: auto;
@@ -169,7 +245,7 @@ button.btn-danger:hover {
     z-index: 26;
     padding: 10px 16px;
     text-align: center;
-    background: rgba(26, 115, 232, 0.92);
+    background: rgba(212, 109, 173, 0.92);
     color: #fff;
     font-size: 0.95rem;
     font-weight: 600;
@@ -190,20 +266,17 @@ button.btn-danger:hover {
 @keyframes discovery-banner-pulse {
     0%,
     100% {
-        box-shadow: 0 0 0 0 rgba(26, 115, 232, 0.5);
+        box-shadow: 0 0 0 0 rgba(212, 109, 173, 0.5);
     }
     50% {
-        box-shadow: 0 0 16px 4px rgba(26, 115, 232, 0.5);
+        box-shadow: 0 0 16px 4px rgba(212, 109, 173, 0.5);
     }
 }
 
-/* 画面下部に貼り付く操作列。左に検索系ボタン、右端に投稿/メニュー統合ボタン(menu-fab)。 */
+/* 画面下部に貼り付く操作列。左に検索系ボタン、右端に投稿/メニュー統合ボタン(menu-fab)。
+   .hud-bottom(ステータストーストとまとめて縦に並べるコンテナ)内の
+   一番下の行として配置するため、位置指定はコンテナ側に任せる。 */
 .bottom-toolbar {
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    z-index: 20;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -218,7 +291,7 @@ button.btn-danger:hover {
     white-space: nowrap;
     border: none;
     border-radius: 999px;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     color: #333; /* ハンバーガーメニュー(.menu-dropdown button)と同じ濃さに揃える */
 }
 .toolbar-btn {
@@ -232,6 +305,13 @@ button.btn-danger:hover {
     flex: none;
 }
 @media (min-width: 700px) {
+    /* 画面が広いと.search-buttons(flex:1)が左端から伸びきってしまい、
+       メニューボタンとの間に不自然な隙間ができるため、広い画面では
+       内容サイズのまま右(メニューボタンの左隣)に寄せる。 */
+    .bottom-toolbar .search-buttons {
+        flex: none;
+        margin-left: auto;
+    }
     .bottom-toolbar .search-buttons button {
         flex: none;
         min-width: 160px;
@@ -251,14 +331,17 @@ button.btn-danger:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #1a73e8;
+    /* スプラッシュのグラデーションと同系統(夜明けの空: 紺→ピンク→オレンジ)を、
+       常時見える主要ボタンにもうっすら効かせる。単色に比べて主張しすぎ
+       ないよう、角度・色幅は控えめにしている。 */
+    background: linear-gradient(135deg, #d46dad, #ff9e6d);
     color: #fff;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
     transition: transform 0.1s ease, background 0.1s ease, box-shadow 0.1s ease;
 }
 .menu-fab:active {
-    background: #1558b0;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    background: #ae5a8e;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     transform: scale(0.92);
 }
 .menu-fab-icon .icon {
@@ -306,7 +389,7 @@ button.btn-danger:hover {
     background: #fff;
     border: 1px solid #ddd;
     border-radius: 10px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     display: grid;
     min-width: 230px;
     overflow: hidden;
@@ -383,6 +466,23 @@ dialog#settingsDialog {
     padding: 20px;
     width: min(90vw, 420px);
 }
+/* 「メディアの表示」展開時など中身が伸びると、既定のdialog自身の
+   overflow:autoではスクロールバーが右上の角丸に重なって欠けて見えるため、
+   スクロールは内側の.settings-dialog-body側に持たせ、dialog自体は
+   角丸のまま(overflow:hidden)にしておく。 */
+dialog#settingsDialog {
+    overflow: hidden;
+}
+.settings-dialog-body {
+    max-height: 70vh;
+    overflow-y: auto;
+    /* インスタンス変更/メディアの表示/検索キャッシュ・リセットの各項目間を
+       gapで統一し、等間隔にする(以前は各要素側でmargin-topをバラバラに
+       指定していた)。 */
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
 dialog#aboutDialog::backdrop,
 dialog#instanceDialog::backdrop,
 dialog#infoDialog::backdrop,
@@ -395,6 +495,11 @@ dialog#aboutDialog h2,
 dialog#instanceDialog h2,
 dialog#settingsDialog h2 {
     margin-top: 0;
+}
+dialog#settingsDialog h2 {
+    /* 見出しの下も.settings-dialog-body内のgapと同じ12pxに揃え、
+       見出し〜項目間だけ広くならないようにする。 */
+    margin-bottom: 12px;
 }
 dialog#aboutDialog h2,
 dialog#settingsDialog h2 {
@@ -506,7 +611,7 @@ dialog#aboutDialog h3 {
     color: #777;
 }
 .about-credit-source a {
-    color: #1a73e8;
+    color: #d46dad;
 }
 dialog#aboutDialog #aboutClose {
     margin-top: 12px;
@@ -595,8 +700,12 @@ dialog#instanceDialog label {
     padding-bottom: 0;
 }
 .unlocked-list-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: #666;
-    margin: 8px 0;
+    text-align: center;
+    margin: 0;
 }
 
 /* あしあと1件分の行(見つけたあしあと一覧・マップ同一位置ポップアップ共通)。
@@ -669,8 +778,16 @@ dialog#instanceDialog label {
     flex: 1;
     min-width: 0;
 }
+/* flex:noneのまま(縮まない)だと、スペースを含まない長い表示名のときに
+   .ashiato-userごと行の外へはみ出し、一覧が横スクロールしてしまう。
+   表示名自体も縮められる/省略記号を出せるようにし、代わりに最大幅を
+   決めて@ハンドル側の表示スペースを奪いすぎないようにする。 */
 .ashiato-display-name {
-    flex: none;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-weight: 600;
     white-space: nowrap;
 }
@@ -756,6 +873,28 @@ dialog#instanceDialog label {
 }
 .ashiato-media-item img {
     cursor: pointer;
+}
+/* 複数枚ある投稿は、横スクロールで1枚ずつしか見えず単独の画像と見分けが
+   つきにくいため、画像に細い枠線を付けて「これは複数枚のうちの1枚」と
+   分かるようにする(枚数バッジ.ashiato-media-counterと合わせて使う)。
+   data-countは1〜4(buildMediaGrid参照)なので、1以外全てが対象。 */
+.ashiato-media-grid:not([data-count="1"]) .ashiato-media-item {
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+/* 何枚中の何枚目かを示す右下のバッジ。右上はeyeBtn(モザイクかけ直し)・
+   左上はsensitive-tagが占めているため、右下に置く。 */
+.ashiato-media-counter {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 600;
+    pointer-events: none;
 }
 /* 動画1件だけの投稿は、クロップせず自然な比率のまま全幅で表示する
    (シーク・音声ON/OFFはブラウザ標準のvideo controlsに任せる)。
@@ -947,7 +1086,7 @@ dialog#mediaLightbox::backdrop {
 .leaflet-touch .leaflet-bar.leaflet-control-zoom {
     border: none;
     border-radius: 12px;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     overflow: hidden;
 }
 .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-in,
@@ -981,63 +1120,78 @@ dialog#mediaLightbox::backdrop {
     position: relative;
     z-index: 0;
 }
-/* 「現在地」「エリア」「既読を隠す」をまとめる1枚のカード。以前はトグルごとに
-   独立したピル型ボタンをtop固定値で縦に並べていたため、ラベルの文字数で
-   幅がバラバラになり、見た目の一体感が無かった。1つのカードにまとめることで
-   幅を揃え、設定画面のような見た目にする。 */
+/* 右上の設定パネル。ボタン(.toggle-panel-handle)は常に同じ大きさ・同じ位置の
+   縦長ボタン(ズームボタンと同程度の比率)のまま動かず、「現在地」「エリア」
+   「既読を隠す」の一覧はハンバーガーメニュー(.menu-dropdown)と同じ、ふわっと
+   浮かんで出てくるフライアウトとして開閉する。
+   以前はハンドル自体を「展開時は全幅の見出しバー・折りたたみ時は正方形」と
+   伸縮させていたが、1つの要素に伸縮・正方形化・アイコン回転を全部持たせると
+   動きが互いに干渉してうるさく見えたため、役割を分離した。 */
 .toggle-panel {
     position: absolute;
     top: 12px;
     right: 12px;
     z-index: 20;
-    display: flex;
-    flex-direction: column;
-    background: #fff;
-    border: 1px solid #bbb;
-    border-radius: 12px;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
-    overflow: hidden;
 }
-/* パネル上部の開閉ハンドル。折りたたみ時はこれだけが残る。 */
 .toggle-panel-handle {
+    /* 細めの縦長ボタン。高さはトグル一覧(フライアウト)の実測高さに
+       main.ts側で揃える(下のheight:80pxはJS実行前の初期表示用フォールバック)。
+       開閉に関わらず常にこの高さのまま変わらない。 */
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 24px;
-    padding: 4px;
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
+    width: 32px;
+    height: 80px;
+    border: 1px solid #bbb;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     color: #888;
 }
 .toggle-panel-handle-icon .icon {
-    width: 16px;
-    height: 16px;
-    transition: transform 0.15s ease;
+    width: 20px;
+    height: 20px;
+    transition: transform 0.18s ease;
 }
-/* 展開中は上向き(「畳める」ことを示す)、折りたたみ中は元の下向きのまま。 */
+/* フライアウトはボタンの左に開くため、アイコンは左向き(chevron-left、
+   main.ts参照)を基準にする。展開中は180度回転して右向きになり、
+   閉じる方向(ボタン側)を示す。 */
 .toggle-panel-handle[aria-expanded="true"] .icon {
     transform: rotate(180deg);
 }
-/* 開閉をgrid-template-rowsの0fr/1frで滑らかにアニメーションさせる定番の手法。
-   高さがautoの要素はtransitionできないため、grid行の比率(fr単位)を
-   transitionし、中身は.toggle-panel-rows-inner側のoverflow:hiddenで
-   はみ出た分をクリップする。main.tsではhidden属性の代わりに
-   collapsed classを付け外しするだけでよい(要素自体は常にレイアウトに残る)。 */
+/* フライアウト本体。menu-dropdownと同じフェード+わずかな移動+スケールで
+   開閉するが、ボタンの左側に、ボタンと上端を揃えて広がるようにしている。 */
 .toggle-panel-rows {
-    display: grid;
-    grid-template-rows: 1fr;
-    transition: grid-template-rows 0.2s ease;
-}
-.toggle-panel-rows.collapsed {
-    grid-template-rows: 0fr;
-}
-.toggle-panel-rows-inner {
+    position: absolute;
+    top: 0;
+    right: calc(100% + 6px);
+    background: #fff;
+    border: 1px solid #bbb;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-top: 1px solid #eee;
+    min-width: 140px;
+    transform-origin: top right;
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    transition:
+        opacity 0.18s ease,
+        transform 0.18s ease,
+        display 0.18s ease allow-discrete;
+}
+@starting-style {
+    .toggle-panel-rows {
+        opacity: 0;
+        transform: translateX(8px) scale(0.96);
+    }
+}
+.toggle-panel-rows[hidden] {
+    display: none;
+    opacity: 0;
+    transform: translateX(8px) scale(0.96);
 }
 .toggle-panel-row {
     display: flex;
@@ -1058,6 +1212,9 @@ dialog#mediaLightbox::backdrop {
 .toggle-panel-row.unavailable {
     opacity: 0.5;
     cursor: not-allowed;
+}
+.gps-toggle-label {
+    white-space: nowrap;
 }
 .gps-toggle-track {
     width: 34px;
@@ -1080,7 +1237,8 @@ dialog#mediaLightbox::backdrop {
     transition: transform 0.15s ease;
 }
 .toggle-panel-row[aria-pressed="true"] .gps-toggle-track {
-    background: #4285f4;
+    /* ラジオボタンと同じ、少し青みのある色に揃える。 */
+    background: #e47a94;
 }
 .toggle-panel-row[aria-pressed="true"] .gps-toggle-knob {
     transform: translateX(14px);
@@ -1090,12 +1248,44 @@ dialog#mediaLightbox::backdrop {
     display: grid;
     max-width: 300px; /* 元は220px。あしあとリストの横幅が狭すぎたため拡大 */
 }
-/* 件数が多い時、LeafletがpopupにmaxHeight指定で自前のスクロールバーを付ける
-   (map.js/main.js側のL.popup({maxHeight:...})参照)。投稿内容に被らないよう
-   スクロールバー分の余白を確保する。 */
 .leaflet-popup-content {
-    padding-right: 4px;
-    scrollbar-gutter: stable;
+    /* Leafletは開いた時点でL.popup({maxHeight})を超えている場合だけ
+       overflow-y:autoを自前で付けるため、それ未満の高さで開いた後に
+       ハンドルのドラッグで縮めると(overflow指定が無いまま)中身が
+       枠の外にはみ出して見えてしまう。常にautoにしておき、ドラッグで
+       縮めたときも確実にクリップ/スクロールされるようにする。
+       overflow-yをautoにすると既定visibleのoverflow-xも自動的にautoに
+       なってしまう(CSS仕様上、片方だけvisibleのままには出来ない)ため、
+       横スクロールが出ないようoverflow-xは明示的にhiddenにする。 */
+    overflow-y: auto;
+    overflow-x: hidden;
+    /* スクロールバー(right)の分だけ右側の実質幅が狭くなり、中央揃えの
+       摘まむバー(.sheet-handle)が「左端〜スクロールバー」の中点にずれて
+       見えてしまう。both-edgesで左右対称にガター分の幅を確保し、
+       paddingも左右揃えることで、見た目の中心がずれないようにする。 */
+    padding: 0 4px;
+    scrollbar-gutter: stable both-edges;
+    /* Leaflet標準では margin: 13px 24px 13px 20px と左右が非対称なため、
+       中央揃えの摘まむバー(.sheet-handle)が吹き出し全体の中心から
+       少しずれて見える。左右を揃えて真ん中に来るようにする。 */
+    margin-left: 20px;
+    margin-right: 20px;
+}
+/* 下部シート用の.sheet-handleは、dialogの余白(padding:20px)へ食い込ませる
+   前提の負のmarginを持つが、この吹き出し(.leaflet-popup-content)には
+   そのような余白が無い(Leaflet側はmarginで間隔を取っている)ため、
+   同じ負のmarginを使うとスクロール領域の外(上端の外)へはみ出して見えなく
+   なったり、横方向にはみ出して余計なスクロールを生んだりしてしまう。
+   吹き出し内では負のmarginを使わない見た目に上書きする。 */
+.ashiato-popup-list > .sheet-handle {
+    margin: 0 0 4px;
+    /* .leaflet-popup-content(overflow-y:auto)の中に一緒に入っているため、
+       何もしないと投稿をスクロールしたときにハンドルも流れて消えてしまう。
+       常につまめるよう、スクロールしても上端に留まるようにする。 */
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 1;
 }
 /* 見つけたあしあと一覧(.unlocked-list li)と同様、行の境目に区切り線を入れる。 */
 .ashiato-popup-list > .ashiato-row {
@@ -1134,6 +1324,8 @@ dialog#mediaLightbox::backdrop {
 .mfm-emoji-inline {
     height: 1.2em;
     width: auto;
+    max-width: 100%; /* 極端に横長のカスタム絵文字が本文プレビューの横幅を
+                        押し広げ、横スクロールの原因になるのを防ぐ */
     vertical-align: text-bottom;
     display: inline-block;
 }
@@ -1162,7 +1354,7 @@ dialog#mediaLightbox::backdrop {
     border: none;
     background: none;
     font-size: 0.75rem;
-    color: #4285f4;
+    color: #d46dad;
     text-align: left;
     cursor: pointer;
 }
@@ -1185,6 +1377,13 @@ dialog#mediaLightbox::backdrop {
 .splash h1 {
     margin: 0;
     font-size: 2.2rem;
+    /* 夜明けの空をイメージした3色グラデーション(紺→ピンク→オレンジ)。
+       常時表示ではなく起動時のスプラッシュだけなので、主張が強めでも
+       うるさく感じにくい。 */
+    background: linear-gradient(135deg, #6e2b6e, #d46dad, #ffab73);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
 }
 .splash .subtitle {
     font-size: 1rem;
@@ -1194,19 +1393,30 @@ dialog#mediaLightbox::backdrop {
     pointer-events: none;
 }
 
+/* 下書きカード(.draft-list li)と同じ、枠線+角丸+薄い影のカードの見た目に揃える。 */
 .precision-fieldset {
-    border: 1px solid #ddd;
-    border-radius: 8px;
+    border: 1px solid #eee;
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 16px;
+    gap: 10px 16px;
     margin: 0 0 12px;
-    padding: 10px 12px;
+    padding: 12px;
 }
+/* 下書きカードの見出し(地図ピンアイコン+地名)と同じ、アイコン付きの見出し
+   スタイル。flex-basis:100%で常に単独の行にし、選択肢はその下に並べる。 */
 .precision-fieldset legend {
-    font-size: 0.8rem;
-    color: #666;
-    padding: 0 4px;
+    display: flex;
+    flex-basis: 100%;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    font-weight: 600;
+    color: #222;
+}
+.precision-fieldset legend .action-sheet-icon {
+    color: #888;
 }
 .precision-fieldset label {
     display: flex;
@@ -1237,11 +1447,60 @@ dialog#mediaLightbox::backdrop {
     gap: 8px;
     font-size: 0.9rem;
 }
-/* 設定ダイアログ下部の操作一覧(検索キャッシュを消す/リセット)。
-   「情報」ダイアログ(ashiatoActionDialog)と同じaction-sheetを再利用し、
-   アイコンは右揃えで統一する。 */
-dialog#settingsDialog .action-sheet {
-    margin-top: 16px;
+/* 設定ダイアログ下部の操作一覧(インスタンス変更/検索キャッシュを消す/リセット)。
+   「情報」ダイアログ(ashiatoActionDialog)と同じaction-sheetを再利用するが、
+   こちらはアイコンを左揃えにする(HTML側もアイコン→テキストの順)。
+   項目間の間隔は.settings-dialog-body側のgapで揃えるため、ここでは
+   margin-topを持たない。 */
+dialog#settingsDialog .action-sheet-row {
+    justify-content: flex-start;
+}
+
+/* 「メディアの表示」セクション。選択肢が3つあり縦に長いため、既定では
+   折りたたんでおき、必要なときだけ開く(main.ts:mediaVisibilityToggle参照)。
+   grid-template-rowsの0fr/1frアニメーション手法(高さがautoの要素は
+   transitionできないため、grid行の比率をtransitionし、はみ出た分は
+   .settings-collapsible-rows-inner側のoverflow:hiddenでクリップする)。 */
+.settings-collapsible-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 4px;
+    font: inherit;
+    font-weight: 600;
+    color: #333;
+}
+.settings-collapsible-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.settings-collapsible-toggle-icon .icon {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.15s ease;
+}
+.settings-collapsible-toggle[aria-expanded="true"] .icon {
+    transform: rotate(180deg);
+}
+.settings-collapsible-rows {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.2s ease;
+}
+.settings-collapsible-rows.expanded {
+    grid-template-rows: 1fr;
+}
+.settings-collapsible-rows-inner {
+    overflow: hidden;
+}
+.settings-collapsible-rows-inner .settings-fieldset {
+    margin-top: 8px;
 }
 
 /* 投稿UI・下書き一覧・あつめたあしあと一覧は、画面下部に貼り付く「下部シート」形式にする。
@@ -1262,7 +1521,7 @@ dialog#draftListDialog {
     border: none;
     border-radius: 16px 16px 0 0;
     padding: 20px;
-    box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 -1px 6px rgba(0, 0, 0, 0.12);
     /* 開閉時に下から生える/下へ消えるアニメーション。close()を呼ぶだけで
        (JS側で待つ必要なく)スライドして消えるよう、CSSのみで完結させる。
        [open]が外れるとtransformが下方向に戻り、display/overlayは
@@ -1337,6 +1596,10 @@ dialog#composeDialog {
 dialog#unlockedListDialog,
 dialog#draftListDialog {
     max-height: 88vh;
+    /* 中身が空/少ないときにダイアログ自体が中身の高さまで縮んでしまわないよう、
+       最小高さを決めておく。flex:1の.unlocked-list/.draft-listがこの高さの
+       残り分を埋めるため、0件時でも空メッセージの表示領域が確保される。 */
+    min-height: 60vh;
     /* 中の.unlocked-list/.draft-listが自前でスクロールするため、ダイアログ自体は
        スクロールさせない(外側と内側でスクロールバーが2本出るのを防ぐ)。
        h2やコントロール行は高さそのまま、リスト部分(flex:1)だけが伸縮して
@@ -1422,22 +1685,113 @@ dialog#draftListDialog[open] {
 }
 .draft-list li {
     border: 1px solid #eee;
-    border-radius: 8px;
-    padding: 10px;
+    border-radius: 10px;
+    padding: 12px;
     display: grid;
     gap: 8px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
-.draft-meta {
-    margin: 0;
-    font-size: 0.85rem;
-    color: #555;
-}
-.draft-actions {
+/* 場所(発見時の地図上の位置)を、見つけたあしあと一覧の投稿者名と同じ見た目の
+   重みで見出しとして目立たせる。削除ボタンは右上に配置する。 */
+.draft-card-header {
     display: flex;
+    align-items: center;
     gap: 8px;
 }
-.draft-actions button {
+.draft-card-header-main {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
     flex: 1;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+.draft-card-header .action-sheet-icon {
+    color: #888;
+    align-self: center;
+}
+.draft-place {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+/* 日時は地名の右隣に添える(見出し行の付属情報)。 */
+.draft-meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    font-size: 0.8rem;
+    color: #888;
+}
+.draft-meta .icon {
+    width: 14px;
+    height: 14px;
+}
+/* 精度セレクトと「投稿する」を同じ行に並べる。精度は他の入力欄と揃った
+   四角いボックスのままだとカード内で浮いて見えるため、ラベルアイコン付きの
+   コンパクトなピル型に縮める。 */
+.draft-footer {
+    display: flex;
+    align-items: center;
+    /* 「投稿する」の最小幅(230px)+精度ピルが、狭い画面ではカード幅に
+       収まらないことがある。折り返しを許可し、収まらない場合は精度ピルの
+       行の下にボタンだけの行が来るようにして、横スクロールを防ぐ。 */
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.draft-precision {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    color: #888;
+}
+.draft-precision .icon {
+    width: 16px;
+    height: 16px;
+    flex: none;
+}
+.draft-precision select {
+    width: auto;
+    min-height: 34px;
+    padding: 4px 26px 4px 10px;
+    background-position: right 6px center;
+    background-size: 14px;
+    font-size: 0.85rem;
+    border-radius: 999px;
+}
+/* あしあとを投稿UIの「投稿する」ボタンと横幅の見た目を揃えるため、残り幅を
+   埋めるflex:1にはせず、ボタン自身の内容サイズのまま行の右端に寄せる。
+   「投稿する」/「投稿できません(あとn分)」でテキスト長が変わっても
+   ボタンの横幅自体は変わらないよう、長いほうの文言に合わせた最小幅を固定する。 */
+.draft-post-btn {
+    flex: none;
+    margin-left: auto;
+    min-width: 230px;
+    white-space: nowrap;
+}
+/* 削除はアイコンのみの控えめなボタンにし、地名の見出し行の右上に置く
+   (見つけたあしあと一覧の「…」ボタンと同じ見た目の言語)。 */
+.draft-delete-btn {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    min-width: 32px;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    color: #999;
+}
+.draft-delete-btn:hover {
+    background: rgba(176, 0, 32, 0.08);
+    color: #b00020;
+}
+.draft-delete-btn .icon {
+    width: 16px;
+    height: 16px;
 }
 
 .pref-label {

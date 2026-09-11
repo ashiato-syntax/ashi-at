@@ -23,6 +23,9 @@ import chevronLeft from "lucide-static/icons/chevron-left.svg?raw";
 import chevronRight from "lucide-static/icons/chevron-right.svg?raw";
 import eye from "lucide-static/icons/eye.svg?raw";
 import settings from "lucide-static/icons/settings.svg?raw";
+import clock from "lucide-static/icons/clock.svg?raw";
+import ruler from "lucide-static/icons/ruler.svg?raw";
+import triangleAlert from "lucide-static/icons/triangle-alert.svg?raw";
 
 const ICONS = {
   footprints,
@@ -46,6 +49,9 @@ const ICONS = {
   "chevron-right": chevronRight,
   eye,
   settings,
+  clock,
+  ruler,
+  "triangle-alert": triangleAlert,
 } as const;
 
 export type IconName = keyof typeof ICONS;

@@ -22,20 +22,6 @@
         <main id="app" inert>
             <div class="map-wrap">
                 <section id="map" aria-label="Ashiato map"></section>
-                <div id="statusToast" class="status-toast" role="status">
-                    <span id="statusText">準備中…</span>
-                    <button
-                        id="statusClose"
-                        type="button"
-                        class="status-close"
-                        aria-label="閉じる"
-                        hidden
-                    ></button>
-                </div>
-                <div id="precisionWarning" class="precision-warning" hidden>
-                    現在地の精度が低いです
-                </div>
-                <div id="discoveryBanner" class="discovery-banner" hidden></div>
                 <div class="toggle-panel">
                     <button
                         id="togglePanelCollapse"
@@ -47,123 +33,132 @@
                         <span class="toggle-panel-handle-icon"></span>
                     </button>
                     <div id="togglePanelRows" class="toggle-panel-rows">
-                        <div class="toggle-panel-rows-inner">
-                            <button
-                                id="toggleGps"
-                                type="button"
-                                class="toggle-panel-row"
-                                aria-pressed="false"
-                            >
-                                <span class="gps-toggle-label">現在地</span>
-                                <span class="gps-toggle-track"
-                                    ><span class="gps-toggle-knob"></span
-                                ></span>
-                            </button>
-                            <button
-                                id="toggleArea"
-                                type="button"
-                                class="toggle-panel-row"
-                                aria-pressed="false"
-                            >
-                                <span class="gps-toggle-label">エリア</span>
-                                <span class="gps-toggle-track"
-                                    ><span class="gps-toggle-knob"></span
-                                ></span>
-                            </button>
-                            <button
-                                id="toggleHideRead"
-                                type="button"
-                                class="toggle-panel-row"
-                                aria-pressed="false"
-                            >
-                                <span class="gps-toggle-label">既読を隠す</span>
-                                <span class="gps-toggle-track"
-                                    ><span class="gps-toggle-knob"></span
-                                ></span>
-                            </button>
-                        </div>
+                        <button
+                            id="toggleGps"
+                            type="button"
+                            class="toggle-panel-row"
+                            aria-pressed="false"
+                        >
+                            <span class="gps-toggle-label">現在地</span>
+                            <span class="gps-toggle-track"
+                                ><span class="gps-toggle-knob"></span
+                            ></span>
+                        </button>
+                        <button
+                            id="toggleArea"
+                            type="button"
+                            class="toggle-panel-row"
+                            aria-pressed="false"
+                        >
+                            <span class="gps-toggle-label">エリア</span>
+                            <span class="gps-toggle-track"
+                                ><span class="gps-toggle-knob"></span
+                            ></span>
+                        </button>
+                        <button
+                            id="toggleHideRead"
+                            type="button"
+                            class="toggle-panel-row"
+                            aria-pressed="false"
+                        >
+                            <span class="gps-toggle-label">既読を隠す</span>
+                            <span class="gps-toggle-track"
+                                ><span class="gps-toggle-knob"></span
+                            ></span>
+                        </button>
                     </div>
                 </div>
-                <div class="bottom-toolbar">
-                    <div class="search-buttons">
-                        <button id="loadNewer" type="button" class="toolbar-btn">
-                            <span class="toolbar-btn-icon"></span>
-                            <span>最新を確認</span>
-                        </button>
-                        <button id="search" type="button" class="toolbar-btn">
-                            <span class="toolbar-btn-icon"></span>
-                            <span>過去を探す</span>
-                        </button>
-                    </div>
-                    <div class="menu">
+                <div id="precisionWarning" class="precision-warning" hidden>
+                    現在地の精度が低いです
+                </div>
+                <div id="discoveryBanner" class="discovery-banner" hidden></div>
+                <div class="hud-bottom">
+                    <div id="statusToast" class="status-toast" role="status">
+                        <span id="statusIcon" class="status-icon"></span>
+                        <span id="statusText">準備中…</span>
                         <button
-                            id="menuToggle"
+                            id="statusClose"
                             type="button"
-                            class="menu-fab"
-                            aria-haspopup="true"
-                            aria-expanded="false"
-                            aria-label="メニュー"
-                        >
-                            <span class="menu-fab-icon"></span>
-                            <span id="menuBadge" class="badge-dot" hidden></span>
-                        </button>
-                        <div id="menuDropdown" class="menu-dropdown" hidden>
-                            <p
-                                id="currentHostLabel"
-                                class="menu-current-host"
-                            ></p>
-                            <button id="aboutButton" type="button">
-                                <span class="menu-item-icon"></span>
-                                <span class="menu-item-label"
-                                    >Ashi@について</span
-                                >
+                            class="status-close"
+                            aria-label="閉じる"
+                            hidden
+                        ></button>
+                    </div>
+                    <div class="bottom-toolbar">
+                        <div class="search-buttons">
+                            <button id="loadNewer" type="button" class="toolbar-btn">
+                                <span class="toolbar-btn-icon"></span>
+                                <span>最新を確認</span>
                             </button>
+                            <button id="search" type="button" class="toolbar-btn">
+                                <span class="toolbar-btn-icon"></span>
+                                <span>過去を探す</span>
+                            </button>
+                        </div>
+                        <div class="menu">
                             <button
-                                id="settingsToggle"
+                                id="menuToggle"
                                 type="button"
-                                aria-haspopup="dialog"
+                                class="menu-fab"
+                                aria-haspopup="true"
+                                aria-expanded="false"
+                                aria-label="メニュー"
                             >
-                                <span class="menu-item-icon"></span>
-                                <span class="menu-item-label">設定</span>
+                                <span class="menu-fab-icon"></span>
+                                <span id="menuBadge" class="badge-dot" hidden></span>
                             </button>
-                            <button id="changeInstance" type="button">
-                                <span class="menu-item-icon"></span>
-                                <span class="menu-item-label"
-                                    >インスタンスを変更</span
+                            <div id="menuDropdown" class="menu-dropdown" hidden>
+                                <p
+                                    id="currentHostLabel"
+                                    class="menu-current-host"
+                                ></p>
+                                <button id="aboutButton" type="button">
+                                    <span class="menu-item-icon"></span>
+                                    <span class="menu-item-label"
+                                        >Ashi@について</span
+                                    >
+                                </button>
+                                <button
+                                    id="settingsToggle"
+                                    type="button"
+                                    aria-haspopup="dialog"
                                 >
-                            </button>
-                            <button
-                                id="draftListToggle"
-                                type="button"
-                                aria-haspopup="dialog"
-                            >
-                                <span class="menu-item-icon"></span>
-                                <span class="menu-item-label">下書き</span>
-                            </button>
-                            <button
-                                id="unlockedListToggle"
-                                type="button"
-                                aria-haspopup="dialog"
-                            >
-                                <span class="menu-item-icon"></span>
-                                <span class="menu-item-label"
-                                    >見つけたあしあと</span
+                                    <span class="menu-item-icon"></span>
+                                    <span class="menu-item-label">設定</span>
+                                </button>
+                                <button
+                                    id="draftListToggle"
+                                    type="button"
+                                    aria-haspopup="dialog"
                                 >
-                                <span
-                                    id="unlockedBadge"
-                                    class="badge-dot"
-                                    hidden
-                                ></span>
-                            </button>
-                            <button
-                                id="composeAshiatoMenuItem"
-                                type="button"
-                            >
-                                <span class="menu-item-icon"></span>
-                                <span class="menu-item-label"
-                                    >あしあとを投稿</span
+                                    <span class="menu-item-icon"></span>
+                                    <span class="menu-item-label">下書き</span>
+                                </button>
+                                <button
+                                    id="unlockedListToggle"
+                                    type="button"
+                                    aria-haspopup="dialog"
                                 >
-                            </button>
+                                    <span class="menu-item-icon"></span>
+                                    <span class="menu-item-label"
+                                        >見つけたあしあと</span
+                                    >
+                                    <span
+                                        id="unlockedBadge"
+                                        class="badge-dot"
+                                        hidden
+                                    ></span>
+                                </button>
+                                <button
+                                    id="composeAshiatoMenuItem"
+                                    type="button"
+                                >
+                                    <span class="menu-item-icon"></span>
+                                    <span class="menu-item-label"
+                                        >あしあとを投稿</span
+                                    >
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -284,7 +279,10 @@
             ></button>
             <h2>あしあとを投稿</h2>
             <fieldset class="precision-fieldset">
-                <legend>判定エリアの広さ</legend>
+                <legend>
+                    <span class="action-sheet-icon" id="composePrecisionIcon"></span>
+                    <span>判定エリアの広さ</span>
+                </legend>
                 <label
                     ><input
                         type="radio"
@@ -334,57 +332,88 @@
                 aria-label="閉じる"
             ></button>
             <h2>設定</h2>
-            <fieldset class="settings-fieldset">
-                <legend>メディアの表示</legend>
-                <label
-                    ><input
-                        type="radio"
-                        name="mediaVisibility"
-                        value="hide-all"
-                    />
-                    メディアを全て隠す</label
-                >
-                <label
-                    ><input
-                        type="radio"
-                        name="mediaVisibility"
-                        value="hide-sensitive"
-                        checked
-                    />
-                    センシティブなメディアを隠す</label
-                >
-                <label
-                    ><input
-                        type="radio"
-                        name="mediaVisibility"
-                        value="show-all"
-                    />
-                    センシティブなメディアを隠さない</label
-                >
-            </fieldset>
-            <div class="action-sheet">
-                <button
-                    id="clearSearchCache"
-                    type="button"
-                    class="action-sheet-row"
-                >
-                    <span>検索キャッシュを消す</span>
-                    <span
-                        class="action-sheet-icon"
-                        id="clearSearchCacheIcon"
-                    ></span>
-                </button>
-                <button
-                    id="resetAll"
-                    type="button"
-                    class="action-sheet-row danger"
-                >
-                    <span>リセット</span>
-                    <span
-                        class="action-sheet-icon"
-                        id="resetAllIcon"
-                    ></span>
-                </button>
+            <div class="settings-dialog-body">
+                <div class="action-sheet">
+                    <button id="changeInstance" type="button" class="action-sheet-row">
+                        <span
+                            class="action-sheet-icon"
+                            id="changeInstanceIcon"
+                        ></span>
+                        <span>インスタンスを変更</span>
+                    </button>
+                </div>
+                <div class="settings-collapsible">
+                    <button
+                        type="button"
+                        id="mediaVisibilityToggle"
+                        class="settings-collapsible-toggle"
+                        aria-expanded="false"
+                    >
+                        <span class="settings-collapsible-toggle-label">
+                            <span
+                                class="action-sheet-icon"
+                                id="mediaVisibilityIcon"
+                            ></span>
+                            <span>メディアの表示</span>
+                        </span>
+                        <span class="settings-collapsible-toggle-icon"></span>
+                    </button>
+                    <div id="mediaVisibilityRows" class="settings-collapsible-rows">
+                        <div class="settings-collapsible-rows-inner">
+                            <fieldset class="settings-fieldset">
+                                <label
+                                    ><input
+                                        type="radio"
+                                        name="mediaVisibility"
+                                        value="hide-all"
+                                    />
+                                    メディアを全て隠す</label
+                                >
+                                <label
+                                    ><input
+                                        type="radio"
+                                        name="mediaVisibility"
+                                        value="hide-sensitive"
+                                        checked
+                                    />
+                                    センシティブなメディアを隠す</label
+                                >
+                                <label
+                                    ><input
+                                        type="radio"
+                                        name="mediaVisibility"
+                                        value="show-all"
+                                    />
+                                    センシティブなメディアを隠さない</label
+                                >
+                            </fieldset>
+                        </div>
+                    </div>
+                </div>
+                <div class="action-sheet">
+                    <button
+                        id="clearSearchCache"
+                        type="button"
+                        class="action-sheet-row"
+                    >
+                        <span
+                            class="action-sheet-icon"
+                            id="clearSearchCacheIcon"
+                        ></span>
+                        <span>検索キャッシュを消す</span>
+                    </button>
+                    <button
+                        id="resetAll"
+                        type="button"
+                        class="action-sheet-row danger"
+                    >
+                        <span
+                            class="action-sheet-icon"
+                            id="resetAllIcon"
+                        ></span>
+                        <span>リセット</span>
+                    </button>
+                </div>
             </div>
         </dialog>
         <dialog id="instanceDialog">

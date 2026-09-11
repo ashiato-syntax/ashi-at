@@ -15,17 +15,21 @@ const JAPAN_BOUNDS = L.latLngBounds([17, 122], [46, 154]);
 // ここでは都道府県ポリゴンの塗りつぶしだけを指定する。
 const LAND_FILL_COLOR = "#F7F2EC";
 
-// 都道府県境界線に使う一点鎖線(長い破線, 隙間, 点, 隙間 の繰り返し)。
-// 「点」はlineCap:'round'(Path options既定値)により短い線分が丸い点として描画される。
+// 都道府県境界線の一点鎖線(長い破線, 隙間, 点, 隙間 の繰り返し)
+// 「点」はlineCap:'round'(Path options既定値)により短い線分が丸い点として描画される
 const PREFECTURE_DASH_ARRAY = "10,4,1,4";
-
-// 市区町村境界線に使う二点鎖線(長い破線, 隙間, 点, 隙間, 点, 隙間 の繰り返し)。
-const MUNICIPALITY_DASH_ARRAY = "10,4,1,4,1,4";
-
-// 都道府県境界線の色・太さ。二点鎖線レイヤーと、海岸線を実線で見せるための
-// 重ね描きレイヤーの両方で同じ値を使う(色・太さがずれると重ね描きの意味が無くなるため)。
+// 都道府県境界線の色・太さ。
 const PREFECTURE_BOUNDARY_COLOR = "#707070";
 const PREFECTURE_BOUNDARY_WEIGHT = 1.0;
+
+// 市区町村境界線(実線)の色・太さ。
+const MUNICIPALITY_BOUNDARY_COLOR = "#B9B9B9";
+const MUNICIPALITY_BOUNDARY_WEIGHT = 0.7;
+
+// 政令指定都市内部の区どうしの境界は、色は市区町村境界と同じまま、
+// 点線(dashArray)だけで見分けられるようにしている。
+const WARD_DASH_ARRAY = "1,3";
+const WARD_BOUNDARY_COLOR = "#B9B9B9";
 
 function ringsOf(geometry: Geometry): Position[][] {
   if (geometry.type === "Polygon") return geometry.coordinates;
@@ -60,7 +64,7 @@ interface BoundaryNeighbor {
 // 1. 対象の辺だけで頂点の隣接グラフを作り、分岐点・端点(隣接する辺が
 //    ちょうど2本ではない頂点)を起点に、辺を1本ずつ辿って繋ぎ合わせる。
 //    バラバラの2頂点の線分としてではなく1本の連続した線にすることで、
-//    二点鎖線のリズム(破線→点→点の繰り返し)が繋ぎ目でリセットされず
+//    dashArrayによる破線・点線のリズムが繋ぎ目でリセットされず
 //    綺麗に続くようにする。
 // 2. どの分岐点・端点にも繋がらない閉ループ(飛び地を囲む境界線など、
 //    次数2の頂点だけで構成される辺の輪)は最後にまとめて処理する。
@@ -233,6 +237,7 @@ function extractMunicipalityBoundaryChains(
 
 // Geohashの桁数(精度)ごとの色。精度が細かい(=判定エリアが狭い)ほど暖色にして目立たせる。
 // 5桁=緑, 6桁=黄色, 7桁=赤。Ashi@が扱うのはこの3種類の桁数のみ。
+// (UIのテーマカラーがマゼンタになったため、緑に戻せるようになった)
 const ASHIATO_COLORS_BY_LENGTH: Record<number, string> = {
   5: "#4caf50",
   6: "#fbc02d",
@@ -364,7 +369,7 @@ export async function loadPrefectureBoundaries(map: L.Map): Promise<BoundaryResu
     color: PREFECTURE_BOUNDARY_COLOR,
     weight: PREFECTURE_BOUNDARY_WEIGHT,
     interactive: false,
-    dashArray: PREFECTURE_DASH_ARRAY, // 一点鎖線(長い破線→点の繰り返し)
+    dashArray: PREFECTURE_DASH_ARRAY,
   }).addTo(map);
 
   const labelLayer = buildPrefectureLabelLayer(data);
@@ -447,11 +452,6 @@ export function fetchMunicipalityGeoJson(
   return municipalityGeoJsonCache.get(prefCode)!;
 }
 
-// 市区町村境界の色・太さ。政令指定都市の区どうしの境界(wardBoundaryColor)は
-// それ以外の境界(通常の市区町村境界、政令市の外縁を含む)より薄い色にする。
-const MUNICIPALITY_BOUNDARY_COLOR = "#AAAAAA";
-const WARD_BOUNDARY_COLOR = "#CCCCCC"; // 上記より薄い色
-const MUNICIPALITY_BOUNDARY_WEIGHT = 0.8;
 
 export interface MunicipalityBoundaryResult {
   boundaryLayer: L.LayerGroup;
@@ -479,7 +479,6 @@ export async function loadMunicipalityBoundaries(
     color: MUNICIPALITY_BOUNDARY_COLOR,
     weight: MUNICIPALITY_BOUNDARY_WEIGHT,
     interactive: false,
-    dashArray: MUNICIPALITY_DASH_ARRAY, // 二点鎖線(都道府県境界は一点鎖線)
   });
 
   // 政令指定都市内部の区どうしの境界だけ、外縁より薄い色で重ねる。
@@ -488,7 +487,7 @@ export async function loadMunicipalityBoundaries(
     color: WARD_BOUNDARY_COLOR,
     weight: MUNICIPALITY_BOUNDARY_WEIGHT,
     interactive: false,
-    dashArray: MUNICIPALITY_DASH_ARRAY,
+    dashArray: WARD_DASH_ARRAY,
   });
 
   const boundaryLayer = L.layerGroup([cityBoundaryLine, wardBoundaryLine]).addTo(map);
@@ -851,14 +850,18 @@ export interface CurrentLocationLayer {
   hide(): void;
 }
 
+// 現在地マーカー+精度円の色。テーマカラーがマゼンタになったので、
+// あしあとの丸(5桁=緑, 6桁=黄, 7桁=赤)とも被らない青に戻せる。
+const CURRENT_LOCATION_COLOR = "#4285f4";
+
 // 現在地マーカー+精度円。専用paneに乗せ、Ashiatoより手前に表示する
 export function createCurrentLocationLayer(map: L.Map): CurrentLocationLayer {
   const accuracyCircle = L.circle([0, 0], {
     radius: 0,
     pane: "currentLocationPane",
-    color: "#4285f4",
+    color: CURRENT_LOCATION_COLOR,
     weight: 1,
-    fillColor: "#4285f4",
+    fillColor: CURRENT_LOCATION_COLOR,
     fillOpacity: 0.15,
     interactive: false,
   });
@@ -868,7 +871,7 @@ export function createCurrentLocationLayer(map: L.Map): CurrentLocationLayer {
     pane: "currentLocationPane",
     color: "#fff",
     weight: 2,
-    fillColor: "#4285f4",
+    fillColor: CURRENT_LOCATION_COLOR,
     fillOpacity: 1,
     interactive: false,
   });
