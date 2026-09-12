@@ -18,6 +18,8 @@ import termsMd from "./docs/利用規約.md?raw";
 import privacyMd from "./docs/プライバシーポリシー.md?raw";
 import licenseMd from "./docs/ライセンス情報.md?raw";
 import composeWarningMd from "./docs/投稿前の注意.md?raw";
+import resetConfirmMd from "./docs/リセット確認.md?raw";
+import clearSearchCacheConfirmMd from "./docs/検索キャッシュ削除確認.md?raw";
 import {
   createMap,
   addAshiatoGroup,
@@ -40,7 +42,7 @@ import {
   findPrefecturesInView,
   type PrefectureIndexEntry,
 } from "./prefectureIndex.js";
-import { lookupMunicipality, lookupPrefectureName } from "./municipalityLookup.js";
+import { lookupMunicipality } from "./municipalityLookup.js";
 import {
   makeRecord,
   getCursor,
@@ -1449,10 +1451,14 @@ function showDiscoveryBanner(count: number): void {
 
 // GPSトグルON/OFF・現在地の有無・位置精度いずれの変化でも、投稿メニュー項目
 // (新規投稿・新規下書きの入口)の有効/無効を再計算する。
+// GPSトグルがOFFの間はあえて無効化しない(押せる状態のままにしておき、
+// クリック時に「現在地をONにしてください」と案内する。ボタンがずっと
+// グレーアウトしたままだと、押しても反応がなく理由も分からないため)。
 // トグルはタップした瞬間に見た目上ON表示になる(setGpsEnabled参照)が、
-// 実際に現在地(lastKnownPosition)が取れるまでは投稿できない。
+// 実際に現在地(lastKnownPosition)が取れるまでは投稿できないので、その間は
+// 無効化しておく。
 function updateComposeAvailability(): void {
-  composeAshiatoMenuItem.disabled = !gpsEnabled || !lastKnownPosition || isPrecisionBad();
+  composeAshiatoMenuItem.disabled = gpsEnabled && (!lastKnownPosition || isPrecisionBad());
 }
 
 // 起動時、そもそもGeolocation APIが無い端末なら見た目で分かるようにしておく
@@ -1460,8 +1466,6 @@ if (!("geolocation" in navigator)) {
   gpsToggleBtn.classList.add("unavailable");
   gpsToggleBtn.title = "この端末では位置情報が使えません";
 }
-// GPSトグルは初期状態でOFFなので、投稿メニュー項目も初期状態は無効。
-composeAshiatoMenuItem.disabled = true;
 
 function setGpsEnabled(enabled: boolean): void {
   if (enabled && !("geolocation" in navigator)) {
@@ -2185,60 +2189,6 @@ async function ingestNotes(host: string, notes: MisskeyNote[]): Promise<AshiatoR
   return records;
 }
 
-// 「あなたが未発見のあしあとがn件あります」形式の検索結果メッセージを組み立てる。
-// 現在地(lastKnownPosition)が取得できていれば、その都道府県内の件数も添える。
-// suffixには「○○まで探しました。」等、呼び出し側で末尾に続けたい文をそのまま渡す
-// (fetchOlderのみ使用。fetchNewerは空文字列)。
-//
-// 件数はashiatoCells(表示用の画面内メモリ状態)からではなく、必ずgetAshiatoRecords()で
-// DBから直接数える。ashiatoCellsはaddRecordToCellの「同じidが既にあれば何もしない」
-// ガードに依存しており、検索キャッシュを消した直後に再検索すると、既に発見済み
-// (unlockedAtがDBには残っている)のレコードについて、再取得時に作られる
-// unlockedAt無しの新しいレコードオブジェクトがそのガードで弾かれるかどうかに
-// 挙動が左右されてしまう。DBを直接数えれば、putAshiatoRecords側の
-// 「既存のunlockedAt/readAtを引き継ぐ」マージ処理(cache.ts参照)の結果をそのまま
-// 信頼できるため、画面内メモリの状態とズレようがない。
-// なお「未読」(readAt無し)は発見済み(unlockedAtあり)に含まれるため、ここでは
-// unlockedAtの有無だけを見る(readAtは一切参照しない)。
-// 4桁・5桁(現地探索の対象外、requiresOnSiteDiscovery参照)は「見つけたあしあと」
-// に含まれない=そもそも「未発見」という概念の対象外のため、この件数にも含めない。
-async function buildDiscoveryStatusMessage(suffix: string): Promise<string> {
-  const records = currentHost ? await getAshiatoRecords(currentHost, TAG) : [];
-  const undiscovered = records.filter(
-    (r) => !r.unlockedAt && requiresOnSiteDiscovery(r.geohash.length),
-  );
-
-  // 都道府県の逆引き(ネットワーク取得を伴いうる)は、同じgeohashについて
-  // 1回で済ませる。
-  const countByGeohash = new Map<string, number>();
-  for (const r of undiscovered) {
-    countByGeohash.set(r.geohash, (countByGeohash.get(r.geohash) ?? 0) + 1);
-  }
-
-  let prefectureClause = "";
-  if (lastKnownPosition) {
-    const prefName = await lookupPrefectureName(
-      prefectureIndex,
-      lastKnownPosition.lat,
-      lastKnownPosition.lon,
-    ).catch(() => null);
-
-    if (prefName) {
-      let inPrefecture = 0;
-      for (const [geohash, count] of countByGeohash) {
-        const { centerLat, centerLon } = decodeGeohash(geohash);
-        const cellPref = await lookupPrefectureName(prefectureIndex, centerLat, centerLon).catch(
-          () => null,
-        );
-        if (cellPref === prefName) inPrefecture += count;
-      }
-      prefectureClause = `（${prefName}内に${inPrefecture}個）`;
-    }
-  }
-
-  return `あなたが未発見のあしあとが${undiscovered.length}件あります ${prefectureClause}${suffix}`;
-}
-
 // 過去方向(untilId): 「過去を探す」(初回・2回目以降とも同じボタン)
 async function fetchOlder(): Promise<void> {
   const btn = $<HTMLButtonElement>("#search");
@@ -2277,9 +2227,7 @@ async function fetchOlder(): Promise<void> {
       }, null);
       const oldestLabel = formatDateTime(oldestCreatedAt);
 
-      setStatus(
-        await buildDiscoveryStatusMessage(oldestLabel ? `-${oldestLabel}まで探しました` : ""),
-      );
+      setStatus(oldestLabel ? `${oldestLabel}まで探しました` : `${notes.length}件のAshiatoを検索しました`);
     } else {
       setStatus("これより古いAshiatoは見つかりませんでした");
     }
@@ -2331,7 +2279,7 @@ async function fetchNewer(): Promise<void> {
 
     setStatus(
       notes.length > 0
-        ? await buildDiscoveryStatusMessage("")
+        ? `${notes.length}件の新しいAshiatoを検索しました`
         : "新しいAshiatoはありませんでした",
     );
   } catch (e) {
@@ -2367,10 +2315,12 @@ $<HTMLButtonElement>("#search").onclick = fetchOlder;
 $<HTMLButtonElement>("#loadNewer").onclick = fetchNewer;
 $<HTMLButtonElement>("#toggleGps").onclick = () => setGpsEnabled(!gpsEnabled);
 $<HTMLButtonElement>("#clearSearchCache").onclick = async () => {
-  const wantsToClear = await showConfirm(
-    "検索キャッシュを削除しますか？\n(見つけたあしあとは残ります)",
-    { okLabel: "削除する", danger: true },
-  );
+  const clearSearchCacheWarning = document.createElement("div");
+  renderMarkdownDocInto(clearSearchCacheWarning, clearSearchCacheConfirmMd);
+  const wantsToClear = await showConfirm(clearSearchCacheWarning, {
+    okLabel: "削除する",
+    danger: true,
+  });
   if (!wantsToClear) return;
   await handleClearSearchCache();
 };
@@ -2380,10 +2330,9 @@ $<HTMLButtonElement>("#clearSearchCache").onclick = async () => {
 // 削除後はアプリの状態(ashiatoCells等の変数)も含めて丸ごと作り直すのが確実なため、
 // 個別に状態をクリアするのではなくページをリロードする。
 $<HTMLButtonElement>("#resetAll").onclick = async () => {
-  const wantsToReset = await showConfirm(
-    "すべてのキャッシュを削除しますか？\n\n見つけたあしあと・下書き・インスタンス設定など、保存されているデータがすべて消えます。この操作は取り消せません。",
-    { okLabel: "削除する", danger: true },
-  );
+  const resetWarning = document.createElement("div");
+  renderMarkdownDocInto(resetWarning, resetConfirmMd);
+  const wantsToReset = await showConfirm(resetWarning, { okLabel: "削除する", danger: true });
   if (!wantsToReset) return;
 
   await resetAllCache();
@@ -2484,9 +2433,15 @@ document.querySelectorAll<HTMLInputElement>('input[name="precision"]').forEach((
 
 $<HTMLButtonElement>("#composeAshiatoMenuItem").onclick = () => {
   closeMenu();
+  // GPSがOFFの間はボタンをあえて無効化していない(updateComposeAvailability参照)
+  // ため、ここで案内を出す。
+  if (!gpsEnabled) {
+    setStatus("現在地をONにしてください", true);
+    return;
+  }
   // ボタン自体を無効化済み(updateComposeAvailability参照。GPS ON かつ
   // 現在地取得済みでないと押せない)だが、念のため。
-  if (!gpsEnabled || !lastKnownPosition || isPrecisionBad()) return;
+  if (!lastKnownPosition || isPrecisionBad()) return;
 
   composePosition = { ...lastKnownPosition };
   updateComposeButtons();
@@ -2622,7 +2577,7 @@ async function refreshDraftList(): Promise<void> {
         const remainingMs =
           DRAFT_POST_DELAY_MS_BY_LENGTH[draft.geohashLength] - (Date.now() - draft.createdAt);
         const remainingMin = Math.max(1, Math.ceil(remainingMs / 60000));
-        postBtn.textContent = `投稿できません(あと${remainingMin}分)`;
+        postBtn.textContent = `あと${remainingMin}分`;
       }
     }
     renderPostButton();

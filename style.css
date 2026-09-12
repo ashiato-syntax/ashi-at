@@ -448,6 +448,13 @@ button.btn-danger:hover {
 .menu-dropdown button.danger:hover {
     background: #fdecea;
 }
+.menu-dropdown button.accent {
+    color: #d46dad; /* .iconのstroke=currentColorにも効く。テーマカラー(menu-fabのグラデーション始点)に合わせる */
+    font-weight: 700;
+}
+.menu-dropdown button.accent:hover {
+    background: #fbeef7;
+}
 .menu-item-icon {
     display: inline-flex;
     flex: none;
@@ -710,11 +717,15 @@ dialog#instanceDialog label {
    自動で正しく揃えてくれる(以前の手作りの「・」+text-indent方式は、マーカー幅を
    数値で仮定する必要があり、ズレの原因になっていた)。 */
 .dialog-message ul,
-.dialog-message ol {
+.dialog-message ol,
+.dialog-message p {
     /* .dialog-message自体のwhite-space:pre-line(プレーンテキストの\n\n用)は
-       Markdown由来のリストには不要かつ余計な改行の原因になりうるため、
+       Markdown由来のリスト・段落には不要かつ余計な改行の原因になりうるため、
        通常の折り返しに戻す。 */
     white-space: normal;
+}
+.dialog-message ul,
+.dialog-message ol {
     margin: 8px 0 0;
     padding-left: 1.3em;
 }
@@ -722,6 +733,12 @@ dialog#instanceDialog label {
     margin-bottom: 8px;
 }
 .dialog-message li:last-child {
+    margin-bottom: 0;
+}
+.dialog-message p {
+    margin: 0 0 8px;
+}
+.dialog-message p:last-child {
     margin-bottom: 0;
 }
 /* Ashiato Syntax文字列等、コードのように扱いたい部分(Markdownのバッククォート)。
