@@ -228,15 +228,15 @@ let gpsEnabled = false;
 let statusHideTimer: ReturnType<typeof setTimeout> | undefined;
 
 // 通常メッセージ・エラーメッセージいずれも、一定時間で自動的に消える
-// (地図の面積を占有し続けないように)。エラーは見落とし防止のため
-// ×ボタンでも明示的に閉じられるが、自動消去自体は行う。
+// (地図の面積を占有し続けないように)が、読み終えたら即座に閉じたい場合も
+// あるため、×ボタンでも明示的に閉じられるようにしておく。
 function setStatus(t: string, e = false): void {
   clearTimeout(statusHideTimer);
   statusText.textContent = t;
   statusToast.classList.toggle("error", e);
   statusIcon.replaceChildren(createIcon(e ? "triangle-alert" : "info"));
   statusToast.hidden = false;
-  statusCloseBtn.hidden = !e;
+  statusCloseBtn.hidden = false;
 
   statusHideTimer = setTimeout(
     () => {
