@@ -45,17 +45,6 @@
                             ></span>
                         </button>
                         <button
-                            id="toggleArea"
-                            type="button"
-                            class="toggle-panel-row"
-                            aria-pressed="false"
-                        >
-                            <span class="gps-toggle-label">エリア</span>
-                            <span class="gps-toggle-track"
-                                ><span class="gps-toggle-knob"></span
-                            ></span>
-                        </button>
-                        <button
                             id="toggleHideRead"
                             type="button"
                             class="toggle-panel-row"
@@ -66,6 +55,47 @@
                                 ><span class="gps-toggle-knob"></span
                             ></span>
                         </button>
+                        <div class="toggle-panel-row">
+                            <span class="gps-toggle-label-group">
+                                <span class="gps-toggle-label">表示レイヤー</span>
+                                <button
+                                    id="precisionFilterInfo"
+                                    type="button"
+                                    class="toggle-info-btn"
+                                    aria-label="表示レイヤーについて"
+                                ></button>
+                            </span>
+                            <div class="precision-filter-chips">
+                                <button
+                                    type="button"
+                                    class="precision-filter-chip"
+                                    data-length="4"
+                                    aria-pressed="true"
+                                    aria-label="約20kmの範囲の表示切り替え"
+                                ></button>
+                                <button
+                                    type="button"
+                                    class="precision-filter-chip"
+                                    data-length="5"
+                                    aria-pressed="true"
+                                    aria-label="約4kmの範囲の表示切り替え"
+                                ></button>
+                                <button
+                                    type="button"
+                                    class="precision-filter-chip"
+                                    data-length="6"
+                                    aria-pressed="true"
+                                    aria-label="約1kmの範囲の表示切り替え"
+                                ></button>
+                                <button
+                                    type="button"
+                                    class="precision-filter-chip"
+                                    data-length="7"
+                                    aria-pressed="true"
+                                    aria-label="約150mの範囲の表示切り替え"
+                                ></button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div id="precisionWarning" class="precision-warning" hidden>
@@ -281,8 +311,12 @@
             <fieldset class="precision-fieldset">
                 <legend>
                     <span class="action-sheet-icon" id="composePrecisionIcon"></span>
-                    <span>判定エリアの広さ</span>
+                    <span>エリアサイズ</span>
                 </legend>
+                <label
+                    ><input type="radio" name="precision" value="4" />
+                    約20km</label
+                >
                 <label
                     ><input
                         type="radio"

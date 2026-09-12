@@ -42,7 +42,7 @@ export interface Cursor {
   updatedAt?: number;
 }
 
-export type GeohashLength = 5 | 6 | 7;
+export type GeohashLength = 4 | 5 | 6 | 7;
 
 export interface Draft {
   id: string;
@@ -54,9 +54,10 @@ export interface Draft {
 }
 
 // map.jsのaddAshiatoGroup()が返す、地図上に実際に描画されている状態のハンドル。
+// セルの範囲そのものを矩形で表示する(中心の丸マーカーは廃止)。
 export interface AshiatoGroupHandle {
-  visualLayers: L.CircleMarker[];
-  hitArea: L.CircleMarker;
+  visualLayers: L.Rectangle[];
+  hitArea: L.Rectangle;
   geohashLength: number;
 }
 
@@ -65,6 +66,6 @@ export interface AshiatoGroupHandle {
 export interface AshiatoCell {
   geohash: string;
   records: Map<string, AshiatoRecord>;
-  visualLayers: L.CircleMarker[] | null;
-  hitArea: L.CircleMarker | null;
+  visualLayers: L.Rectangle[] | null;
+  hitArea: L.Rectangle | null;
 }

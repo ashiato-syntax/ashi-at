@@ -488,7 +488,7 @@ export async function deleteDraft(id: string): Promise<void> {
 
 /**
  * 下書きの精度だけを後から変更する(get→マージ→put)。
- * createdAtは変更しない(30分ルールの起点を精度変更で動かさないため)。
+ * createdAtは変更しない(投稿可能になるまでの遅延ルールの起点を精度変更で動かさないため)。
  */
 export async function updateDraftPrecision(id: string, geohashLength: GeohashLength): Promise<void> {
   try {

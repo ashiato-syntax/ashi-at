@@ -1,7 +1,7 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { decodeGeohash, encodeGeohash } from "./geohash.js";
-import type { AshiatoCell, AshiatoGroupHandle } from "./types.js";
+import type { AshiatoGroupHandle } from "./types.js";
 import type { FeatureCollection, Geometry, Position } from "geojson";
 import { createIcon } from "./icons.js";
 
@@ -236,9 +236,10 @@ function extractMunicipalityBoundaryChains(
 }
 
 // Geohashの桁数(精度)ごとの色。精度が細かい(=判定エリアが狭い)ほど暖色にして目立たせる。
-// 5桁=緑, 6桁=黄色, 7桁=赤。Ashi@が扱うのはこの3種類の桁数のみ。
+// 4桁=青, 5桁=緑, 6桁=黄色, 7桁=赤。Ashi@が扱うのはこの4種類の桁数のみ。
 // (UIのテーマカラーがマゼンタになったため、緑に戻せるようになった)
 const ASHIATO_COLORS_BY_LENGTH: Record<number, string> = {
+  4: "#00acc1",
   5: "#4caf50",
   6: "#fbc02d",
   7: "#e53935",
@@ -278,17 +279,15 @@ export function createMap(el: string | HTMLElement): L.Map {
   map.createPane("prefecturePane");
   map.getPane("prefecturePane")!.style.zIndex = "420";
 
-  // 「エリア」トグルで表示するGeohashセルの範囲。境界線より前面、あしあと本体より背面。
-  map.createPane("areaOverlayPane");
-  map.getPane("areaOverlayPane")!.style.zIndex = "650";
-
   // 投稿UI表示中、選択中の精度でのGeohashセル範囲をプレビュー表示するペイン。
-  // areaOverlayPaneより前面、あしあと本体より背面。
+  // 境界線より前面、あしあと本体より背面。
   map.createPane("precisionPreviewPane");
   map.getPane("precisionPreviewPane")!.style.zIndex = "660";
 
   // あしあとは、Geohashの桁数が細かい(=判定エリアが狭い)ほど前面に描画する。
-  // 前面から順に 7桁 > 6桁 > 5桁。
+  // 前面から順に 7桁 > 6桁 > 5桁 > 4桁。
+  map.createPane("ashiatoPane4");
+  map.getPane("ashiatoPane4")!.style.zIndex = "670";
   map.createPane("ashiatoPane5");
   map.getPane("ashiatoPane5")!.style.zIndex = "680";
   map.createPane("ashiatoPane6");
@@ -296,8 +295,10 @@ export function createMap(el: string | HTMLElement): L.Map {
   map.createPane("ashiatoPane7");
   map.getPane("ashiatoPane7")!.style.zIndex = "700";
 
-  // タップ判定も、見た目の重なり順(7→6→5)と一致させるため桁数ごとに分ける。
+  // タップ判定も、見た目の重なり順(7→6→5→4)と一致させるため桁数ごとに分ける。
   // (どの桁数のペインよりも前面)
+  map.createPane("ashiatoHitPane4");
+  map.getPane("ashiatoHitPane4")!.style.zIndex = "705";
   map.createPane("ashiatoHitPane5");
   map.getPane("ashiatoHitPane5")!.style.zIndex = "710";
   map.createPane("ashiatoHitPane6");
@@ -665,6 +666,10 @@ function combinedCentroid(geometries: Geometry[]): [number, number] | null {
   return [sumLat / totalArea, sumLon / totalArea];
 }
 
+// あしあとセルの境界線(outline)を、塗りの矩形よりどれだけ内側に描くか
+// (セルの縦横それぞれの長さに対する割合)。addAshiatoGroup参照。
+const INSET_FRACTION = 0.05;
+
 // 表示対象レコードが全て既読かどうかで、マーカーの見た目を変えるためのCSSクラス。
 // 全て既読ならフェード(薄く・明滅なし)、1件でも未読が残っていればゆっくり明滅させる
 // (実際のスタイル・アニメーションはstyle.css参照)。
@@ -672,59 +677,79 @@ function readStateClassName(allRead: boolean): string {
   return allRead ? "ashiato-marker-read" : "ashiato-marker-unread";
 }
 
-// 1つのgeohashセルにつき1グループ(円1〜2個)を描画する。
-// count(そのセルに紐づく「表示対象」Ashiatoレコード数)が2件以上のときは、外側の輪+内側の点
-// による二重丸にして、「同じ場所に複数のAshiatoがある」ことを視覚的に示す。
-// クリック判定(hitArea)は常に1つ(グループ全体で1つのタップ対象)。
-// 色・ペインはgeohashの桁数(5/6/7)に応じて決まる(呼び出し側でこの桁数のみに絞り込み済み)。
+// 1つのgeohashセルにつき、セルの範囲そのものを矩形で描画する(中心に丸マーカーを
+// 打つ方式は、実際の当たり判定エリアの広さと見た目が一致せず紛らわしいため廃止した)。
+// 塗りの矩形自体には枠線(stroke)を持たせない: 同じ色(同じ桁数)のセルが隣接
+// すると、境界線上に引かれる不透明な枠線が互いの半透明な塗りにまたがって
+// 重なり、そこだけ色が濃い帯のように見えてしまう(crispEdgesでアンチエイリア
+// シングの重なりを抑えても、この枠線由来の濃さは解消しなかったため)。
+// 代わりに、一回り内側に隙間を空けた細い枠線だけの矩形(outline)を別途重ねる。
+// 隣接セルの境界線同士が同じ位置に来ないため、枠線が重なって濃くなることが
+// 構造的に起こらないまま、セルの境界がなんとなく分かるようにしている。
+// 件数(1件/複数件)による濃淡の違いも廃止し、常に同じ不透明度にする
+// (複数件かどうかはポップアップを開けば分かるため、地図上での色分けは
+// 桁数(色)と既読状態(フェード/明滅)だけで表す)。
+// クリック判定(hitArea)もセル全体の矩形にする(以前の中心の小さな円に比べて
+// タップ領域が実際のセルの広さと一致し、押しやすくなる)。
+// 色・ペインはgeohashの桁数(4〜7)に応じて決まる(呼び出し側でこの桁数のみに絞り込み済み)。
 // allReadは、表示対象レコードが全て既読(readAtあり)かどうか(呼び出し側で判定済み)。
 export function addAshiatoGroup(
   map: L.Map,
   geohash: string,
-  count: number,
   allRead: boolean,
   onOpen: () => void,
 ): AshiatoGroupHandle {
   const b = decodeGeohash(geohash);
-  const centerLat = (b.minLat + b.maxLat) / 2;
-  const centerLon = (b.minLon + b.maxLon) / 2;
-  const latlng: [number, number] = [centerLat, centerLon];
+  const bounds: L.LatLngBoundsExpression = [
+    [b.minLat, b.minLon],
+    [b.maxLat, b.maxLon],
+  ];
   const geohashLength = geohash.length;
   const pane = `ashiatoPane${geohashLength}`;
   const hitPane = `ashiatoHitPane${geohashLength}`;
   const color = ashiatoColor(geohashLength);
   const className = readStateClassName(allRead);
 
-  const outer = L.circleMarker(latlng, {
-    color,
-    radius: count > 1 ? 6 : 4,
-    weight: count > 1 ? 2 : 3,
-    fill: count === 1, // 複数件のときは外側は輪だけ(内側の点と区別するため塗りつぶさない)
+  const rect = L.rectangle(bounds, {
+    stroke: false,
+    fillColor: color,
+    fillOpacity: 0.25,
     interactive: false,
     pane,
     className,
   });
 
-  const visualLayers: L.CircleMarker[] = [outer];
-
-  if (count > 1) {
-    const inner = L.circleMarker(latlng, {
+  // セルの境界がなんとなく分かるよう、塗りの矩形より一回り内側に細い枠線だけの
+  // 矩形を重ねる。縦横それぞれ独立にINSET_FRACTION分小さくすると、縦横比が
+  // 偏ったセルで内側への寄り具合が不揃いに見えるため、短辺(縦横のうち短い方)
+  // を基準にした1つのinset値を縦横共通で使う。
+  // 隣接セルの境界線同士が同じ位置に来ない(必ず隙間ができる)ため、
+  // 枠線を境界ぴったりに引いていた以前の実装で起きていた「隣接セル同士の
+  // 枠線が重なって濃く見える」問題を、位置的に起こりようがない形で防げる。
+  const inset = Math.min(b.maxLat - b.minLat, b.maxLon - b.minLon) * INSET_FRACTION;
+  const outline = L.rectangle(
+    [
+      [b.minLat + inset, b.minLon + inset],
+      [b.maxLat - inset, b.maxLon - inset],
+    ],
+    {
       color,
-      radius: 2,
+      weight: 1.5,
+      fill: false,
       interactive: false,
       pane,
       className,
-    });
-    visualLayers.push(inner);
-  }
+    },
+  );
 
-  // タップ判定用(見た目の円の数に関わらず1つ)
-  const hitArea = L.circleMarker(latlng, {
-    color,
-    radius: 8,
+  const visualLayers: L.Rectangle[] = [rect, outline];
+
+  // タップ判定用。見た目の矩形と同じ範囲・同じ形にすることで、
+  // 実際のセル(当たり判定エリア)の広さそのものがタップ領域になる。
+  const hitArea = L.rectangle(bounds, {
     stroke: false,
     fill: true,
-    fillOpacity: 0.5,
+    fillOpacity: 0,
     interactive: true,
     pane: hitPane,
     className,
@@ -747,57 +772,6 @@ export function removeAshiatoGroup(
 }
 
 
-export interface AreaOverlay {
-  setEnabled(value: boolean): void;
-  refresh(cells: AshiatoCell[]): void;
-}
-
-// 「エリア」トグル用: あしあとのGeohashセルの範囲そのものを、あしあと本体と同じ色で描画する。
-// setEnabled/refreshどちらからでも再描画され、無効時は常に空(クリア)。
-export function createAreaOverlay(map: L.Map): AreaOverlay {
-  const group = L.layerGroup().addTo(map);
-  let enabled = false;
-  let currentCells: AshiatoCell[] = [];
-
-  function render() {
-    group.clearLayers();
-    if (!enabled) return;
-
-    for (const cell of currentCells) {
-      // 地図に円が出ていない(=発見済みが1件も無い)セルは対象外
-      if (!cell.visualLayers) continue;
-
-      const b = decodeGeohash(cell.geohash);
-      const color = ashiatoColor(cell.geohash.length);
-      L.rectangle(
-        [
-          [b.minLat, b.minLon],
-          [b.maxLat, b.maxLon],
-        ],
-        {
-          pane: "areaOverlayPane",
-          color,
-          weight: 1.5,
-          fillColor: color,
-          fillOpacity: 0.15,
-          interactive: false,
-        },
-      ).addTo(group);
-    }
-  }
-
-  return {
-    setEnabled(value: boolean) {
-      enabled = value;
-      render();
-    },
-    // cellsは呼び出し側(main.js)のashiatoCellsの現在値のスナップショットを渡す想定。
-    refresh(cells: AshiatoCell[]) {
-      currentCells = cells;
-      render();
-    },
-  };
-}
 
 export interface PrecisionPreviewLayer {
   show(lat: number, lon: number, geohashLength: number): string;
@@ -806,7 +780,7 @@ export interface PrecisionPreviewLayer {
 
 // 投稿UI表示中、選択中の精度でのGeohashセル範囲をプレビュー表示する。
 // areaOverlay(既存の「エリア」トグル)とは独立(投稿UI固有)。
-// あしあと本体の色(5桁=緑, 6桁=黄, 7桁=赤)と紛らわしくならないよう、
+// あしあと本体の色(4桁=青緑, 5桁=緑, 6桁=黄, 7桁=赤)と紛らわしくならないよう、
 // あしあとでは使っていない紫系で統一して表示する。
 // show()はプレビュー用に計算したgeohash文字列を返す(呼び出し側で投稿本文の
 // 組み立てに使い回せるように)。
@@ -851,7 +825,7 @@ export interface CurrentLocationLayer {
 }
 
 // 現在地マーカー+精度円の色。テーマカラーがマゼンタになったので、
-// あしあとの丸(5桁=緑, 6桁=黄, 7桁=赤)とも被らない青に戻せる。
+// あしあとの丸(4桁=青緑, 5桁=緑, 6桁=黄, 7桁=赤)とも被らない青に戻せる。
 const CURRENT_LOCATION_COLOR = "#4285f4";
 
 // 現在地マーカー+精度円。専用paneに乗せ、Ashiatoより手前に表示する

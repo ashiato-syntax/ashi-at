@@ -110,8 +110,8 @@ button.btn-primary:hover {
 /* 削除等、破壊的な操作の決定ボタン。 */
 button.btn-danger {
     background: #fff;
-    color: #b00020;
-    border-color: #b00020;
+    color: #c62828;
+    border-color: #c62828;
 }
 button.btn-danger:hover {
     background: #fdecea;
@@ -169,7 +169,7 @@ button.btn-danger:hover {
     }
 }
 .status-toast.error {
-    color: #b00020;
+    color: #c62828;
 }
 .status-icon {
     flex: none;
@@ -181,7 +181,7 @@ button.btn-danger:hover {
     height: 18px;
 }
 .status-toast.error .status-icon {
-    color: #b00020;
+    color: #c62828;
 }
 #statusText {
     flex: 1;
@@ -198,6 +198,12 @@ button.btn-danger:hover {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+/* .status-close(class、詳細度0,1,0)がUA標準の[hidden]{display:none}
+   (同じく詳細度0,1,0)と同点になり、hidden属性を付けても表示され続けて
+   しまう(.action-sheet-rowと同種の問題)。[hidden]を併記して確実に勝たせる。 */
+.status-close[hidden] {
+    display: none;
 }
 .status-close .icon {
     width: 16px;
@@ -289,7 +295,8 @@ button.btn-danger:hover {
 .bottom-toolbar .search-buttons button {
     flex: 1;
     white-space: nowrap;
-    border: none;
+    /* トグルパネルの開閉ボタン(.toggle-panel-handle)と同じ枠線+影に揃える。 */
+    border: 1px solid #bbb;
     border-radius: 999px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     color: #333; /* ハンバーガーメニュー(.menu-dropdown button)と同じ濃さに揃える */
@@ -348,7 +355,9 @@ button.btn-danger:hover {
     width: 26px;
     height: 26px;
 }
-/* メニューFAB右上の未読バッジ(緑の点)。ボタンの丸からはみ出さないよう内側に置く。 */
+/* メニューFAB右上の未読バッジ(桜の花びら色の点)。ボタンの丸からはみ出さないよう
+   内側に置く。ボタン自体が濃いピンク〜オレンジのグラデーションのため、それより
+   明るい(ほぼ白に近い)桜色にした上で、白の縁取りで輪郭をはっきりさせる。 */
 .badge-dot {
     position: absolute;
     top: 8px;
@@ -356,7 +365,8 @@ button.btn-danger:hover {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #34c759;
+    background: #ffb3d1;
+    box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.9);
     animation: unread-glow 1.8s ease-in-out infinite;
 }
 .badge-dot[hidden] {
@@ -365,10 +375,14 @@ button.btn-danger:hover {
 @keyframes unread-glow {
     0%,
     100% {
-        box-shadow: 0 0 2px 0 rgba(52, 199, 89, 0.7);
+        box-shadow:
+            0 0 0 1.5px rgba(255, 255, 255, 0.9),
+            0 0 2px 0 rgba(255, 179, 209, 0.8);
     }
     50% {
-        box-shadow: 0 0 7px 3px rgba(52, 199, 89, 0.9);
+        box-shadow:
+            0 0 0 1.5px rgba(255, 255, 255, 0.9),
+            0 0 7px 3px rgba(255, 179, 209, 0.95);
     }
 }
 
@@ -429,7 +443,7 @@ button.btn-danger:hover {
     background: #f5f5f5;
 }
 .menu-dropdown button.danger {
-    color: #b00020; /* .iconのstroke=currentColorにも効く */
+    color: #c62828; /* .iconのstroke=currentColorにも効く */
 }
 .menu-dropdown button.danger:hover {
     background: #fdecea;
@@ -521,6 +535,13 @@ dialog#settingsDialog h2 {
     gap: 12px;
     padding: 12px 4px;
 }
+/* .action-sheet-row(class、詳細度0,1,0)がUA標準の[hidden]{display:none}
+   (これも詳細度0,1,0)と同点になり、hidden属性を付けても表示され続けて
+   しまう(dialog#mediaLightboxで起きたのと同種の問題)。[hidden]を併記して
+   詳細度で確実に勝たせ、非表示にできるようにする。 */
+.action-sheet-row[hidden] {
+    display: none;
+}
 button.action-sheet-row {
     width: 100%;
     border: none;
@@ -533,7 +554,7 @@ button.action-sheet-row:hover {
     background: #f5f5f5;
 }
 .action-sheet-row.danger {
-    color: #b00020;
+    color: #c62828;
 }
 button.action-sheet-row.danger:hover {
     background: #fdecea;
@@ -625,6 +646,15 @@ dialog#instanceDialog label {
     margin: 0;
     line-height: 1.6;
     white-space: pre-line; /* alert/confirmに含まれる\n\nを改行として表示 */
+}
+/* 「表示レイヤー」の色分け説明等、色名の代わりに実際の色を見せるための色見本。 */
+.color-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    margin-right: 4px;
+    vertical-align: -1px;
 }
 .dialog-actions {
     display: flex;
@@ -959,7 +989,7 @@ dialog#instanceDialog label {
     padding: 0;
     border: none;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.15);
     color: #fff;
     box-shadow: none;
 }
@@ -1084,7 +1114,8 @@ dialog#mediaLightbox::backdrop {
    しまう。.leaflet-touchの文脈を含めた分だけ詳細度を上げて確実に上書きする。 */
 .leaflet-bar.leaflet-control-zoom,
 .leaflet-touch .leaflet-bar.leaflet-control-zoom {
-    border: none;
+    /* トグルパネルの開閉ボタン(.toggle-panel-handle)と同じ枠線+影に揃える。 */
+    border: 1px solid #bbb;
     border-radius: 12px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     overflow: hidden;
@@ -1216,6 +1247,31 @@ dialog#mediaLightbox::backdrop {
 .gps-toggle-label {
     white-space: nowrap;
 }
+.gps-toggle-label-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+/* ラベルの補足説明を開く、控えめなアイコンだけのボタン(閉じるボタン等と同じ言語)。 */
+.toggle-info-btn {
+    min-height: auto;
+    min-width: auto;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    color: #999;
+}
+.toggle-info-btn .icon {
+    width: 16px;
+    height: 16px;
+}
 .gps-toggle-track {
     width: 34px;
     height: 20px;
@@ -1244,58 +1300,146 @@ dialog#mediaLightbox::backdrop {
     transform: translateX(14px);
 }
 
+/* 桁数ごとの表示フィルター。縦にトグルを積み増さず、1行に収まる1本のセグメント
+   コントロールにする(丸いチップが個別に浮いて見えないよう、他の設定行の
+   スイッチと同じ「地に足のついた」平坦な見た目に揃える)。
+   各セグメントの色(--chip-color)はashiatoColor()からJS側で設定する
+   (map.tsの色分けと常に一致させるため、CSS側にhexを重複して持たない)。 */
+.precision-filter-chips {
+    display: flex;
+    flex: none;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.precision-filter-chip {
+    width: 26px;
+    height: 24px;
+    padding: 0;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 0;
+    /* OFF状態でも「これは何色のレイヤーか」が分かるよう、単なるグレーではなく
+       自身の色(--chip-color)を薄めた色にする。 */
+    background: color-mix(in srgb, var(--chip-color, #999) 18%, white);
+    color: color-mix(in srgb, var(--chip-color, #999) 55%, white);
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1;
+    box-shadow: none;
+    transition:
+        background 0.15s ease,
+        color 0.15s ease;
+}
+.precision-filter-chip:not(:last-child) {
+    border-right: 1px solid #ddd;
+}
+.precision-filter-chip[aria-pressed="true"] {
+    /* フルの彩度で塗りつぶすとケバく見えるため、少し白を混ぜた背景+
+       濃いめの文字色に留める。 */
+    background: color-mix(in srgb, var(--chip-color, #999) 70%, white);
+    color: color-mix(in srgb, var(--chip-color, #999) 100%, black);
+}
+
 .ashiato-popup-list {
-    display: grid;
+    display: flex;
+    flex-direction: column;
+    /* #map .leaflet-popup-content(flexコンテナ)の高さいっぱいに広がる。
+       中の.ashiato-popup-rowsだけがスクロールする(下記参照)。 */
+    flex: 1;
+    min-height: 0;
     max-width: 300px; /* 元は220px。あしあとリストの横幅が狭すぎたため拡大 */
 }
-.leaflet-popup-content {
-    /* Leafletは開いた時点でL.popup({maxHeight})を超えている場合だけ
-       overflow-y:autoを自前で付けるため、それ未満の高さで開いた後に
-       ハンドルのドラッグで縮めると(overflow指定が無いまま)中身が
-       枠の外にはみ出して見えてしまう。常にautoにしておき、ドラッグで
-       縮めたときも確実にクリップ/スクロールされるようにする。
-       overflow-yをautoにすると既定visibleのoverflow-xも自動的にautoに
-       なってしまう(CSS仕様上、片方だけvisibleのままには出来ない)ため、
-       横スクロールが出ないようoverflow-xは明示的にhiddenにする。 */
-    overflow-y: auto;
-    overflow-x: hidden;
-    /* スクロールバー(right)の分だけ右側の実質幅が狭くなり、中央揃えの
-       摘まむバー(.sheet-handle)が「左端〜スクロールバー」の中点にずれて
-       見えてしまう。both-edgesで左右対称にガター分の幅を確保し、
-       paddingも左右揃えることで、見た目の中心がずれないようにする。 */
+#map .leaflet-popup-content {
+    /* 縦方向はflexで.ashiato-popup-listに高さを委譲する(この箱自体は
+       スクロールさせない。理由は.ashiato-popup-rows参照)。
+       Leafletは開いた時点でL.popup({maxHeight})を超えている場合だけ、
+       この要素に明示的なheightを付ける(それ未満なら高さautoのまま)ため、
+       overflow:hiddenにしておけば、ドラッグで縮めたときも中身が枠の外に
+       はみ出さずクリップされる。 */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     padding: 0 4px;
-    scrollbar-gutter: stable both-edges;
-    /* Leaflet標準では margin: 13px 24px 13px 20px と左右が非対称なため、
-       中央揃えの摘まむバー(.sheet-handle)が吹き出し全体の中心から
-       少しずれて見える。左右を揃えて真ん中に来るようにする。 */
-    margin-left: 20px;
-    margin-right: 20px;
+    /* なお、leaflet.css側の.leaflet-popup-content { margin: 13px 24px 13px 20px; }
+       と詳細度が同点(クラス1つ)のため、セレクタ先頭に#map(このルール自体の
+       セレクタ参照)を付けて詳細度を上げないと、後から結合されるleaflet.css側の
+       marginに上書きされて全く効かない(closeButtonの件と同じ理由)。 */
+    margin-left: 8px;
+    margin-right: 8px;
+}
+/* Leaflet既定の吹き出し×ボタンは、他のダイアログの.dialog-close-x(32pxの
+   丸背景+アイコン)に比べて小さな文字リンクのままで見た目が揃っていない
+   ため、同じサイズ感(丸背景+同じくらいの太さ)に上書きする。
+   leaflet.css側のセレクタが.leaflet-container a.leaflet-popup-close-button
+   (詳細度: クラス2つ+要素1つ)で、単に同じ形のセレクタで揃えるだけだと
+   詳細度が同点になり、CSSの読み込み順序(leaflet.cssはJSのimportで後から
+   差し込まれる)次第でこちらが負けることがある。地図のコンテナ自身のid
+   (#map、createMap呼び出し先)を頭に付け、確実にこちらを優先させる。 */
+#map a.leaflet-popup-close-button {
+    top: 5px;
+    right: 5px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: transparent; /* ホバー/フォーカス時だけ丸背景を出す */
+    color: #666;
+    z-index: 2; /* 念のため、この吹き出し内の他の要素より確実に手前に出す */
+}
+/* Leaflet既定の"×"文字グリフの代わりに、main.ts側でlucideのxアイコンへ
+   差し替えている(他のダイアログの.dialog-close-x .iconと同じ見た目に揃える)。 */
+#map a.leaflet-popup-close-button .icon {
+    width: 18px;
+    height: 18px;
+}
+#map a.leaflet-popup-close-button:hover,
+#map a.leaflet-popup-close-button:focus-visible {
+    background: rgba(0, 0, 0, 0.12);
+    color: #666;
 }
 /* 下部シート用の.sheet-handleは、dialogの余白(padding:20px)へ食い込ませる
    前提の負のmarginを持つが、この吹き出し(.leaflet-popup-content)には
    そのような余白が無い(Leaflet側はmarginで間隔を取っている)ため、
-   同じ負のmarginを使うとスクロール領域の外(上端の外)へはみ出して見えなく
-   なったり、横方向にはみ出して余計なスクロールを生んだりしてしまう。
-   吹き出し内では負のmarginを使わない見た目に上書きする。 */
+   同じ負のmarginを使うとはみ出して見えなくなったり、横方向にはみ出して
+   余計なスクロールを生んだりしてしまう。吹き出し内では負のmarginを
+   使わない見た目に上書きする。 */
 .ashiato-popup-list > .sheet-handle {
     margin: 0 0 4px;
-    /* .leaflet-popup-content(overflow-y:auto)の中に一緒に入っているため、
-       何もしないと投稿をスクロールしたときにハンドルも流れて消えてしまう。
-       常につまめるよう、スクロールしても上端に留まるようにする。 */
-    position: sticky;
-    top: 0;
-    background: #fff;
-    z-index: 1;
+}
+/* 投稿一覧だけをスクロールさせる領域。以前は.leaflet-popup-content自体を
+   スクロールさせ、ハンドルはposition:stickyで常に先頭に固定していたが、
+   ネイティブのスクロールバーは要素の高さいっぱいに(スクロール位置に
+   関わらず常に)描画されるため、ハンドルを含む箱ごとスクロールさせると
+   スクロールバー自体がハンドル・閉じるボタンの高さまで伸びてしまい、
+   閉じるボタンと重なって干渉していた。ハンドルをこの領域の外(親の
+   .ashiato-popup-list側)に置き、投稿一覧だけをこの要素でスクロールさせる
+   ことで、スクロールバーの表示範囲もこの投稿一覧の高さ分だけになり、
+   ハンドル・閉じるボタンの高さには一切かからなくなる。 */
+.ashiato-popup-rows {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable both-edges;
+    /* scrollbar-gutterだけでは投稿の内容(特に右端の「…」ボタン)とスクロール
+       バーの間の余白が心もとなく感じられるため、右側に明示的な余白も足す。 */
+    padding-right: 6px;
 }
 /* 見つけたあしあと一覧(.unlocked-list li)と同様、行の境目に区切り線を入れる。 */
-.ashiato-popup-list > .ashiato-row {
+.ashiato-popup-rows > .ashiato-row {
     padding: 8px 0;
     border-bottom: 1px solid #eee;
 }
-.ashiato-popup-list > .ashiato-row:first-child {
+.ashiato-popup-rows > .ashiato-row:first-child {
     padding-top: 0;
 }
-.ashiato-popup-list > .ashiato-row:last-child {
+.ashiato-popup-rows > .ashiato-row:last-child {
     border-bottom: none;
     padding-bottom: 0;
 }
@@ -1303,6 +1447,14 @@ dialog#mediaLightbox::backdrop {
 /* マップ上のあしあとの丸(Leafletが生成するSVGのpath要素、map.ts:addAshiatoGroup参照)。
    表示対象レコードが全て既読ならフェードして目立たなくし、1件でも未読が
    残っていればゆっくり明滅させて気づきやすくする。 */
+/* 同じ色(同じ桁数)のセルが隣接していると、境界線上でお互いの半透明な
+   塗りがアンチエイリアシングにより重なり、その部分だけ色が濃く見えて
+   しまうことがある(SVGの既知の挙動)。crispEdgesでアンチエイリアスを
+   切り、境界をくっきりさせることでこの重なりを解消する。 */
+.ashiato-marker-read,
+.ashiato-marker-unread {
+    shape-rendering: crispEdges;
+}
 .ashiato-marker-read {
     opacity: 0.35;
 }
@@ -1380,13 +1532,14 @@ dialog#mediaLightbox::backdrop {
     /* 夜明けの空をイメージした3色グラデーション(紺→ピンク→オレンジ)。
        常時表示ではなく起動時のスプラッシュだけなので、主張が強めでも
        うるさく感じにくい。 */
-    background: linear-gradient(135deg, #6e2b6e, #d46dad, #ffab73);
+    background: linear-gradient(135deg, #a73a8a, #d46a81, #ffab73);
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;
 }
 .splash .subtitle {
     font-size: 1rem;
+    color: #666;
 }
 .splash.hide {
     opacity: 0;
@@ -1648,8 +1801,8 @@ dialog#draftListDialog[open] {
    以前あった大きな「閉じる」「キャンセル」ボタンの代わり。 */
 .dialog-close-x {
     position: absolute;
-    top: 12px;
-    right: 12px;
+    top: 5px;
+    right: 5px;
     min-height: auto;
     min-width: auto;
     width: 32px;
@@ -1657,7 +1810,7 @@ dialog#draftListDialog[open] {
     padding: 0;
     border: none;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.06);
+    background: transparent; /* ホバー/フォーカス時だけ丸背景を出す */
     box-shadow: none;
     color: #666;
     display: flex;
@@ -1668,7 +1821,8 @@ dialog#draftListDialog[open] {
     width: 18px;
     height: 18px;
 }
-.dialog-close-x:hover {
+.dialog-close-x:hover,
+.dialog-close-x:focus-visible {
     background: rgba(0, 0, 0, 0.12);
 }
 
@@ -1677,6 +1831,10 @@ dialog#draftListDialog[open] {
     margin: 0;
     padding: 0 6px 0 0; /* スクロールバーが投稿内容に被らないよう余白を確保 */
     display: grid;
+    /* align-contentの既定(normal)はgridではstretch相当になり、件数が少ないと
+       残りの高さを各行(li)に均等配分してカードが縦に間延びしてしまう。
+       各行を内容の高さのまま上詰めにする。 */
+    align-content: start;
     gap: 12px;
     flex: 1; /* ダイアログ(flex column)内で残りの高さいっぱいに広がる */
     min-height: 0; /* flexアイテムの既定min-height:autoによる縮小阻害を防ぐ */
@@ -1733,9 +1891,8 @@ dialog#draftListDialog[open] {
 .draft-footer {
     display: flex;
     align-items: center;
-    /* 「投稿する」の最小幅(230px)+精度ピルが、狭い画面ではカード幅に
-       収まらないことがある。折り返しを許可し、収まらない場合は精度ピルの
-       行の下にボタンだけの行が来るようにして、横スクロールを防ぐ。 */
+    /* 極端に幅が狭い画面向けの保険。draft-post-btnの横幅は「あしあとを投稿」の
+       投稿ボタンと揃えた固定値のため、通常幅では精度ピルと並んでも余裕がある。 */
     flex-wrap: wrap;
     gap: 8px;
 }
@@ -1760,15 +1917,30 @@ dialog#draftListDialog[open] {
     font-size: 0.85rem;
     border-radius: 999px;
 }
-/* あしあとを投稿UIの「投稿する」ボタンと横幅の見た目を揃えるため、残り幅を
-   埋めるflex:1にはせず、ボタン自身の内容サイズのまま行の右端に寄せる。
-   「投稿する」/「投稿できません(あとn分)」でテキスト長が変わっても
-   ボタンの横幅自体は変わらないよう、長いほうの文言に合わせた最小幅を固定する。 */
+/* 「あしあとを投稿」の投稿ボタン(#composePost)と横幅を揃える。composePostは
+   dialog#composeDialogの中で.dialog-actions(gap:10px)内の2つのbutton
+   (flex:1)が均等分割した幅になっている。composeDialog/draftListDialogは
+   幅・paddingのCSSルールを共有している(このファイル内で常に同じセレクタ
+   グループにまとめている)ため、その計算結果をそのままここでも再現する:
+   - 幅100%区間(789行未満): dialog内側幅=100vw-40px(padding20px*2)、
+     それを2等分(gap10pxを差し引いて)= 50vw - 25px
+   - 幅90%/max-width480px区間(min-width:700px〜): 700px以上では常に
+     90vw>480pxになるため実際の幅は常に480pxに固定される。内側幅=480-40=440px、
+     2等分(gap10px差し引き)= (440-10)/2 = 215px
+   flex:1(残り幅を埋める)にはせず固定値にすることで、精度ピルの有無に
+   左右されず常に同じ横幅になる。 */
 .draft-post-btn {
     flex: none;
     margin-left: auto;
-    min-width: 230px;
+    width: calc(50vw - 25px);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+@media (min-width: 700px) {
+    .draft-post-btn {
+        width: 215px;
+    }
 }
 /* 削除はアイコンのみの控えめなボタンにし、地名の見出し行の右上に置く
    (見つけたあしあと一覧の「…」ボタンと同じ見た目の言語)。 */
@@ -1786,8 +1958,8 @@ dialog#draftListDialog[open] {
     color: #999;
 }
 .draft-delete-btn:hover {
-    background: rgba(176, 0, 32, 0.08);
-    color: #b00020;
+    background: rgba(198, 40, 40, 0.08);
+    color: #c62828;
 }
 .draft-delete-btn .icon {
     width: 16px;

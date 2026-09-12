@@ -15,7 +15,6 @@ import {
   loadPrefectureBoundaries,
   loadMunicipalityBoundaries,
   createCurrentLocationLayer,
-  createAreaOverlay,
   createPrecisionPreviewLayer,
   ashiatoColor,
   type MunicipalityBoundaryResult,
@@ -80,29 +79,45 @@ const PAGE_SIZE = 30;
 
 // Ashi@で扱うgeohashの桁数(精度)。これ以外の精度の「あしあと」は対象外として無視する
 // (地図表示にも「見つけたあしあと」にも一切出さない)。
-const MIN_GEOHASH_LENGTH = 5;
+const MIN_GEOHASH_LENGTH = 4;
 const MAX_GEOHASH_LENGTH = 7;
 
-// 投稿からこの時間が経過するまでは、その「あしあと」を発見判定の対象にしない
-// (セルにすら登録しないので、現在地判定も一切かからない)。桁数が細かい(=判定エリアが
-// 狭い)ほど投稿者の居場所が絞り込まれやすいが、5桁(約4km)は十分広いため15分、
-// 6桁・7桁(約1km/約150m)は30分とする。
-// PENDING_PROMOTION_INTERVAL_MSごとに保留分を再チェックし、経過後は
-// 手動で「探す」し直さなくても自動的に対象へ昇格する。
-const MIN_NOTE_AGE_MS_BY_LENGTH: Record<GeohashLength, number> = {
-  5: 15 * 60 * 1000, // 15分
-  6: 30 * 60 * 1000, // 30分
-  7: 30 * 60 * 1000, // 30分
+// 4桁(約20km)・5桁(約4km)はエリアが広すぎて「現地に行って発見する」体験に
+// そぐわないため、現地探索(GPSでの発見判定=unlockedAt付与)の対象外とする。
+// 地図上には検索結果に含まれた時点で常に表示するが、「見つけたあしあと」
+// (収集物としての一覧・バッジ・未読管理)には一切含めない。これらのレコードは
+// unlockedAtを常にnullのまま保ち(=決して「発見」扱いにしない)、地図描画側の
+// 表示判定だけをunlockedAtの有無とは別に行う(rebuildCellVisual/
+// showAshiatoCellPopup参照)。6桁・7桁は従来通りGPSでの現地探索が必要。
+// (投稿自体はどの桁数でも常に現在地からのみ可能で、この区別は投稿側には影響しない)
+function requiresOnSiteDiscovery(geohashLength: number): boolean {
+  return geohashLength >= 6;
+}
+
+// 投稿機能: geohashの桁数(判定エリアの狭さ)に応じて、下書き保存から投稿できる
+// ようになるまでの遅延時間を設ける(プライバシー配慮。投稿者の現在地が即座に
+// 特定されないようにするため)。桁数が細かい(=判定エリアが狭い)ほど投稿者の
+// 居場所が絞り込まれやすいため、4桁(約20km)・5桁(約4km)は遅延なし(直接投稿可)、
+// 6桁(約1km)は下書き保存から20分、7桁(約150m)は40分経過するまで投稿できない
+// ようにする(isDraftPostable/updateComposeButtonsの両方でこの定数を参照すること)。
+const DRAFT_POST_DELAY_MS_BY_LENGTH: Record<GeohashLength, number> = {
+  4: 0,
+  5: 0,
+  6: 20 * 60 * 1000, // 20分
+  7: 40 * 60 * 1000, // 40分
 };
+
+// Ashiato Syntaxの時間条件(d/w/t/o等)は位置が変わらなくても時刻の経過だけで
+// Active/Inactiveが切り替わりうるため、位置情報の更新を待たずにこの間隔で
+// 定期的に再評価する(reevaluateActiveConditions参照)。
 const PENDING_PROMOTION_INTERVAL_MS = 60 * 1000; // 1分ごとに再チェック
 
-// 投稿機能: この精度(Geohash桁数)は「高精度」とみなし、プライバシー配慮のため
-// 作成からDRAFT_HIGH_PRECISION_DELAY_MSが経過するまで投稿できないようにする
-// (isDraftPostable/updateComposeButtonsの両方でこの定数を参照すること)。
-const HIGH_PRECISION_GEOHASH_LENGTH: GeohashLength = 7;
-const DRAFT_HIGH_PRECISION_DELAY_MS = 30 * 60 * 1000; // 30分
-
-const PRECISION_LABELS: Record<GeohashLength, string> = { 5: "約4km", 6: "約1km", 7: "約150m" };
+const PRECISION_LABELS: Record<GeohashLength, string> = {
+  4: "約20km",
+  5: "約4km",
+  6: "約1km",
+  7: "約150m",
+};
 
 // 「見つけたあしあと」一覧・ポップアップに表示する本文プレビューの
 // 安全弁としての最大文字数。表示上の省略はCSS(.mfm-preview)での高さクリップ
@@ -128,23 +143,8 @@ function isSupportedGeohashLength(geohash: string): boolean {
   );
 }
 
-// noteCreatedAtが無い/不正な場合は、安全側に倒して「まだ扱わない」扱いにする。
-// 必要な経過時間はgeohashの桁数によって異なる(MIN_NOTE_AGE_MS_BY_LENGTH参照)ため、
-// 呼び出し側は対象レコードのgeohash桁数を渡すこと(isSupportedGeohashLengthで
-// 5〜7桁に絞り込み済みのレコードのみがここに来る想定)。
-function isOldEnough(noteCreatedAt: string | null, geohashLength: number): boolean {
-  if (!noteCreatedAt) return false;
-  const postedAt = new Date(noteCreatedAt).getTime();
-  if (Number.isNaN(postedAt)) return false;
-  const threshold =
-    MIN_NOTE_AGE_MS_BY_LENGTH[geohashLength as GeohashLength] ??
-    MIN_NOTE_AGE_MS_BY_LENGTH[MAX_GEOHASH_LENGTH as GeohashLength];
-  return Date.now() - postedAt >= threshold;
-}
-
 const $ = <T extends Element = HTMLElement>(s: string): T => document.querySelector<T>(s)!,
   map = createMap("map"),
-  areaOverlay = createAreaOverlay(map),
   precisionPreview = createPrecisionPreviewLayer(map),
   statusToast = $("#statusToast"),
   statusIcon = $("#statusIcon"),
@@ -173,6 +173,7 @@ $("#changeInstanceIcon").append(createIcon("server"));
 $("#clearSearchCacheIcon").append(createIcon("trash-2"));
 $("#resetAllIcon").append(createIcon("rotate-ccw"));
 $("#aboutButton .menu-item-icon").append(createIcon("info"));
+$("#precisionFilterInfo").append(createIcon("info"));
 $("#settingsToggle .menu-item-icon").append(createIcon("settings"));
 $("#mediaVisibilityIcon").append(createIcon("eye"));
 $("#composePrecisionIcon").append(createIcon("ruler"));
@@ -221,10 +222,6 @@ let cursor: Cursor | null = null;
 // ロック中(未発見)のレコードもrecordsには保持する(GPS判定に必要)が、
 // 発見済みが1件も無い間はvisualLayers/hitArea/colorはnullのまま(=地図に描画しない)。
 const ashiatoCells = new Map<string, AshiatoCell>();
-
-// geohashの桁数条件は満たすが、投稿からまだMIN_NOTE_AGE_MS経っていないレコード。
-// promoteAgedRecords()が定期的にチェックし、条件を満たしたらashiatoCellsへ昇格させる。
-const pendingRecords = new Map<string, AshiatoRecord>();
 
 const currentLocationLayer = createCurrentLocationLayer(map);
 let watchId: number | null = null;
@@ -284,18 +281,24 @@ const confirmOkBtn = $<HTMLButtonElement>("#confirmOk");
 const confirmCancelBtn = $<HTMLButtonElement>("#confirmCancel");
 
 function showConfirm(
-  message: string,
+  message: string | Node,
   {
     okLabel = "OK",
     cancelLabel = "キャンセル",
     danger = false,
-  }: { okLabel?: string; cancelLabel?: string; danger?: boolean } = {},
+    hideCancel = false,
+  }: { okLabel?: string; cancelLabel?: string; danger?: boolean; hideCancel?: boolean } = {},
 ): Promise<boolean> {
   return new Promise((resolve) => {
-    confirmMessage.textContent = message;
+    // 色見本(span)等を差し込みたい呼び出し側向けに、Nodeもそのまま受け付ける。
+    if (typeof message === "string") confirmMessage.textContent = message;
+    else confirmMessage.replaceChildren(message);
     confirmOkBtn.textContent = okLabel;
     confirmOkBtn.className = danger ? "btn-danger" : "btn-primary";
     confirmCancelBtn.textContent = cancelLabel;
+    // 純粋な案内(OKしか意味を持たない)ではキャンセルボタンを出さない
+    // (showInfo相当の用途で使う場合、呼び出し側がhideCancel:trueを渡す)。
+    confirmCancelBtn.hidden = hideCancel;
 
     // resultは「OKが押されたか」を保持するだけの変数。close()の実行順に
     // 依存しないよう、close()を呼ぶ前に必ずresultを確定させてから閉じる。
@@ -792,10 +795,11 @@ function renderAshiatoRow(
   if (isUnread) {
     const dot = document.createElement("span");
     dot.className = "unread-dot";
-    // マップ上の丸と同じ配色(Geohashの桁数=精度で色分け)に揃える。
+    // メニューボタンの通知バッジ(.badge-dot、style.css参照)と同じ色に揃える
+    // (「未読がある」という同じ意味の印なので、同じ色で統一する)。
     // .unread-dotのbackground/box-shadowはcurrentColorを参照しているため、
     // ここでcolorを指定するだけで明滅の色も追従する(style.css参照)。
-    dot.style.color = ashiatoColor(record.geohash.length);
+    dot.style.color = "#ffb3d1";
     dot.setAttribute("aria-label", "未読");
     header.append(dot);
   }
@@ -835,9 +839,13 @@ function renderAshiatoRow(
   const footer = document.createElement("div");
   footer.className = "ashiato-row-footer";
 
+  // 4桁・5桁(現地探索の対象外、requiresOnSiteDiscovery参照)は「発見」という
+  // 概念自体が無いため、レイアウト(space-between)維持のため空のspanのままにする。
   const discovered = document.createElement("span");
   discovered.className = "ashiato-discovered";
-  discovered.textContent = `発見: ${formatDateTime(record.unlockedAt) ?? "不明"}`;
+  discovered.textContent = requiresOnSiteDiscovery(record.geohash.length)
+    ? `発見: ${formatDateTime(record.unlockedAt) ?? "不明"}`
+    : "";
   footer.append(discovered);
 
   const moreBtn = document.createElement("button");
@@ -983,10 +991,14 @@ function clearCellVisual(cell: AshiatoCell): void {
   if (cell.hitArea) removeAshiatoGroup(map, { visualLayers: cell.visualLayers!, hitArea: cell.hitArea });
 }
 
-// セルの見た目(円)を、現在のrecords件数・状態に合わせて作り直す。
+// セルの見た目(矩形)を、現在のrecords件数・状態に合わせて作り直す。
 // ロック中(未発見)のレコードは地図上に一切表示しない方針のため、
-// 表示対象は「発見済み(unlockedAtあり)」のレコードだけに絞る。
-// 発見済みレコードが1件も無いセルは、円そのものを描画しない
+// 表示対象は「発見済み(unlockedAtあり)」のレコードに絞る。ただし4桁・5桁は
+// 現地探索の対象外(requiresOnSiteDiscovery参照)で、そもそもunlockedAtを
+// 持たない設計のため、それらは常に表示対象に含める。
+// 桁数ごとの表示フィルター(visiblePrecisionLengths)でオフにされている
+// 桁数も除外する。
+// 表示対象が1件も無いセルは、矩形そのものを描画しない
 // (GPS判定用の内部データとしてはcell.recordsに保持し続ける)。
 function rebuildCellVisual(cell: AshiatoCell): void {
   clearCellVisual(cell);
@@ -995,7 +1007,11 @@ function rebuildCellVisual(cell: AshiatoCell): void {
 
   const visibleRecords = [...cell.records.values()].filter(
     (r) =>
-      (SHOW_LOCKED_ASHIATO_FOR_DEBUG || r.unlockedAt) && (!hideReadEnabled || !r.readAt),
+      visiblePrecisionLengths.has(r.geohash.length) &&
+      (SHOW_LOCKED_ASHIATO_FOR_DEBUG ||
+        r.unlockedAt ||
+        !requiresOnSiteDiscovery(r.geohash.length)) &&
+      (!hideReadEnabled || !r.readAt),
   );
 
   if (visibleRecords.length > 0) {
@@ -1003,15 +1019,12 @@ function rebuildCellVisual(cell: AshiatoCell): void {
     const { visualLayers, hitArea } = addAshiatoGroup(
       map,
       cell.geohash,
-      visibleRecords.length,
       allRead,
       () => handleCellClick(cell.geohash),
     );
     cell.visualLayers = visualLayers;
     cell.hitArea = hitArea;
   }
-
-  areaOverlay.refresh([...ashiatoCells.values()]);
 }
 
 // レコードを対応するセルに追加する。セルが無ければ新設する。
@@ -1028,38 +1041,15 @@ function addRecordToCell(record: AshiatoRecord): void {
   rebuildCellVisual(cell);
 }
 
-// geohashの桁数条件は満たしているレコードを、状態に応じて登録する。
-// - 既に発見済み(unlockedAt)、または投稿からMIN_NOTE_AGE_MS_BY_LENGTH(桁数依存)分
-//   経過済み: 即座にセルへ登録する(これ以降、現在地判定(GPS)の対象になる)
-// - まだ経っていない: pendingRecordsで保留する(セルには一切登録しない=
-//   現在地判定も一切かからない)。promoteAgedRecords()が定期的に昇格させる。
-function registerRecord(record: AshiatoRecord): void {
-  if (record.unlockedAt || isOldEnough(record.noteCreatedAt, record.geohash.length)) {
-    pendingRecords.delete(record.id);
-    addRecordToCell(record);
-  } else {
-    pendingRecords.set(record.id, record);
-  }
-}
-
-// 保留中のレコードを定期的に再チェックし、必要な経過時間(桁数依存)を過ぎたものを
-// 自動的にセルへ昇格させる(ページを開きっぱなしでも、手動で「探す」し直す
-// 必要が無いように)。
-// 併せて、GPSが有効な間は毎回checkCurrentPositionAgainstCellsも呼ぶ。Ashiato
+// GPSが有効な間、この間隔でcheckCurrentPositionAgainstCellsを呼び直す。Ashiato
 // Syntaxの時間条件(d/w/t/o等)は位置が変わらなくても時刻の経過だけでActive/Inactive
 // が切り替わりうるため、位置情報の更新を待たずにこの1分間隔のタイマーで
 // 定期的に再評価する。
-function promoteAgedRecords(): void {
-  for (const [id, record] of pendingRecords) {
-    if (isOldEnough(record.noteCreatedAt, record.geohash.length)) {
-      pendingRecords.delete(id);
-      addRecordToCell(record);
-    }
-  }
+function reevaluateActiveConditions(): void {
   if (gpsEnabled) checkCurrentPositionAgainstCells();
 }
 
-setInterval(promoteAgedRecords, PENDING_PROMOTION_INTERVAL_MS);
+setInterval(reevaluateActiveConditions, PENDING_PROMOTION_INTERVAL_MS);
 
 // 「見つけたあしあと」一覧の並び順。"unlocked"=発見日順、"posted"=投稿日順。
 // いずれも新しい方が上(降順固定)。起動時にsettingsから復元する(initSortMode参照)。
@@ -1097,7 +1087,7 @@ function updateUnreadBadge(): void {
 // (=表示された瞬間)に即既読化すると未読ドットを目にする間もなく消えてしまうため、
 // 「ちゃんと表示された」とみなせるだけの猶予を設ける。この間にスクロールで
 // 画面外に出た場合はタイマーを取り消し、既読にしない。
-const READ_DWELL_MS = 1000;
+const READ_DWELL_MS = 800;
 
 // 「開いただけ」ではなく「実際にスクロールされて画面内に表示された」行だけを
 // 既読にする(可視性ベースの既読判定)。rootは実際のスクロール領域
@@ -1181,6 +1171,8 @@ function observeRowsForRead(
 
 // 「見つけたあしあと」ダイアログの中身を、アンロック済みのものだけ・
 // 選択中の並び順で再構築する。ロック中(未発見)のものはここには載せない。
+// 4桁・5桁(現地探索の対象外)は常にunlockedAtを持たない設計のため、
+// 自然にこの一覧にも含まれない(見つけずに見れるので「見つけた」扱いにしない)。
 // 各行の「…」ボタンから、詳細確認・地図表示・SNSを開く・削除をまとめた
 // アクションシート(openAshiatoActions)を開く。
 function refreshUnlockedList(): void {
@@ -1227,8 +1219,9 @@ function refreshUnlockedList(): void {
 }
 
 // セルをクリックしたときの入口。
-// ポップアップ等に出すのは発見済み(unlockedAt)のレコードのみ
-// (ロック中のものは地図に表示していないため、そもそもクリックしようがない)。
+// ポップアップ等に出すのは、発見済み(unlockedAt)のレコード、または現地探索の
+// 対象外(4桁・5桁、requiresOnSiteDiscovery参照)のレコードのみ
+// (それ以外のロック中のものは地図に表示していないため、そもそもクリックしようがない)。
 // レコードが1件なら直接開封フローへ、複数件ならポップアップで一覧を出し、
 // 選んだものだけ開封フローへ進む。
 function handleCellClick(geohash: string): void {
@@ -1243,7 +1236,7 @@ function showAshiatoCellPopup(geohash: string): void {
   if (!cell) return;
 
   const records = [...cell.records.values()]
-    .filter((r) => r.unlockedAt)
+    .filter((r) => r.unlockedAt || !requiresOnSiteDiscovery(r.geohash.length))
     .sort((a, b) => sortKeyFor(b, "posted") - sortKeyFor(a, "posted"));
   if (records.length === 0) return; // 通常は来ないはずだが念のため
 
@@ -1260,6 +1253,13 @@ function showAshiatoCellPopup(geohash: string): void {
   handle.append(grip);
   container.append(handle);
 
+  // 投稿一覧だけをスクロールさせる領域(ハンドルはこの外に置く)。理由は
+  // style.css .ashiato-popup-rows のコメント参照
+  // (スクロールバーが閉じるボタンと重ならないようにするため)。
+  const rowsWrapper = document.createElement("div");
+  rowsWrapper.className = "ashiato-popup-rows";
+  container.append(rowsWrapper);
+
   const rowsForReadTracking: { row: HTMLElement; record: AshiatoRecord }[] = [];
   for (const record of records) {
     // ポップアップは閉じない(「…」を押しても地図上の吹き出しはそのまま残る)。
@@ -1268,7 +1268,7 @@ function showAshiatoCellPopup(geohash: string): void {
       openAshiatoActions(record);
     });
     rowsForReadTracking.push({ row, record });
-    container.append(row);
+    rowsWrapper.append(row);
   }
   updateUnreadBadge();
 
@@ -1280,17 +1280,39 @@ function showAshiatoCellPopup(geohash: string): void {
   // つぶれてしまい、maxWidthだけでは広がらない(実際に描画される幅は
   // minWidthとの兼ね合いで決まる)。minWidthで下限を明示して確実に
   // 横幅を確保する。
-  const popup = L.popup({ minWidth: 280, maxWidth: 320, maxHeight: 260 })
+  const popup = L.popup({ minWidth: 268, maxWidth: 308, maxHeight: 260 })
     .setLatLng([centerLat, centerLon])
     .setContent(container)
     .openOn(map);
 
+  const popupEl = popup.getElement();
+
+  // Leaflet既定の×ボタンはブラウザフォントの"×"文字のままで、他のダイアログの
+  // .dialog-close-xで使っているアイコン(lucideのxアイコン)と見た目が違うため、
+  // 同じアイコンに差し替えて揃える。
+  const closeBtn = popupEl?.querySelector<HTMLAnchorElement>(".leaflet-popup-close-button");
+  if (closeBtn) {
+    closeBtn.textContent = "";
+    closeBtn.append(createIcon("x"));
+  }
+
+  // 吹き出しの影を、Leaflet既定の黒系(rgba(0,0,0,0.4))ではなく、このセルの
+  // 色(ashiatoColor)に揃える。hex末尾に16進数のアルファ(約40%=66)を足すだけで
+  // 変換できるので、rgba()への変換処理は不要。
+  const shadowColor = `${ashiatoColor(geohash.length)}80`;
+  const shadow = `0 3px 14px ${shadowColor}`;
+  const wrapperEl = popupEl?.querySelector<HTMLElement>(".leaflet-popup-content-wrapper");
+  const tipEl = popupEl?.querySelector<HTMLElement>(".leaflet-popup-tip");
+  if (wrapperEl) wrapperEl.style.boxShadow = shadow;
+  if (tipEl) tipEl.style.boxShadow = shadow;
+
   // openOn()でDOMに接続・表示された直後なので、ここで初めて高さが正しく測れる。
   applyPreviewOverflowChecks(container);
 
-  // container.parentElement は Leaflet が用意する実際のスクロール領域
-  // (.leaflet-popup-content。maxHeight超過時にoverflow-y:autoが付く、
-  // map.ts/L.popup呼び出し側のmaxHeight指定を参照)。
+  // container.parentElement は Leaflet が用意する.leaflet-popup-content
+  // (maxHeight超過時にheightが明示的に付く、L.popup呼び出し側のmaxHeight
+  // 指定を参照)。ドラッグでの高さ調整はこの要素に対して行う(実際に
+  // スクロールする領域はrowsWrapper側。style.css .ashiato-popup-rows参照)。
   const popupContent = container.parentElement!;
 
   // 上部のハンドルをつまんで、吹き出しの高さを直接調整できるようにする。
@@ -1308,26 +1330,35 @@ function showAshiatoCellPopup(geohash: string): void {
   });
 
   // このポップアップが閉じられたら(他の吹き出しに差し替わった場合を含む)
-  // observerを解放する。
-  const disposeReadObserver = observeRowsForRead(popupContent, rowsForReadTracking);
+  // observerを解放する。実際にスクロールする領域はrowsWrapper
+  // (.ashiato-popup-rows)なので、可視判定のrootもそちらにする。
+  const disposeReadObserver = observeRowsForRead(rowsWrapper, rowsForReadTracking);
   map.once("popupclose", (e) => {
     if (e.popup === popup) disposeReadObserver();
   });
 }
 
-// あしあと1件分の「…」ボタンから呼ばれるアクションシート。地図/一覧いずれの行から
-// 呼ばれた場合も対象は常に発見済み(unlockedAtがある)レコードのみ。
+// あしあと1件分の「…」ボタンから呼ばれるアクションシート。地図/一覧いずれの行からも
+// 呼ばれうる(発見済み(unlockedAtがある)レコードか、現地探索の対象外(4桁・5桁、
+// requiresOnSiteDiscovery参照)のレコードのいずれか)。
 // 情報(投稿者・投稿日時・発見日時・当たり判定エリア)を表示した上で、
 // マップ表示・SNSを開く・「見つけたあしあと」からの削除の3アクションを提供する。
+// 「発見日時」の行と削除アクションは、現地探索の対象(=本当に「発見」した)
+// レコードにのみ意味があるため、現地探索の対象外のレコードでは出さない。
 function openAshiatoActions(record: AshiatoRecord): void {
+  const isCollectible = requiresOnSiteDiscovery(record.geohash.length);
+
   ashiatoActionInfo.replaceChildren();
   const infoRows: [string, string][] = [
     ["投稿者", formatUserLabel(record)],
     ["場所", "取得中…"],
     ["投稿", formatDateTime(record.noteCreatedAt) ?? "不明"],
-    ["発見", formatDateTime(record.unlockedAt) ?? "不明"],
-    ["当たり判定エリア", cellSizeText(record.geohash)],
+    ...(isCollectible
+      ? ([["発見", formatDateTime(record.unlockedAt) ?? "不明"]] as [string, string][])
+      : []),
+    ["エリアサイズ", cellSizeText(record.geohash)],
   ];
+  ashiatoActionDeleteBtn.hidden = !isCollectible;
   let placeDd: HTMLElement | null = null;
   for (const [label, value] of infoRows) {
     const dt = document.createElement("dt");
@@ -1386,8 +1417,7 @@ function openAshiatoActions(record: AshiatoRecord): void {
         target.unlockedAt = null;
         target.readAt = null;
       }
-      rebuildCellVisual(cell); // ロック中に戻るので円は消える(セルは保持)
-      areaOverlay.refresh([...ashiatoCells.values()]);
+      rebuildCellVisual(cell); // ロック中に戻るので矩形は消える(セルは保持)
     }
 
     refreshUnlockedList();
@@ -1412,7 +1442,7 @@ let lastKnownAccuracy: number | null = null;
 // 位置精度がこの半径(メートル)を超えたら「精度が悪い」とみなす。
 // この状態では、あしあとの発見(当たり判定)・新規投稿・新規下書きを行わない
 // (下書き済みのあしあとの投稿はisDraftPostableのルールのみに従い、ここでは制限しない)。
-const BAD_ACCURACY_RADIUS_M = 200;
+const BAD_ACCURACY_RADIUS_M = 500;
 
 function isPrecisionBad(): boolean {
   return gpsEnabled && lastKnownAccuracy !== null && lastKnownAccuracy > BAD_ACCURACY_RADIUS_M;
@@ -1523,7 +1553,12 @@ async function checkCurrentPositionAgainstCells(): Promise<void> {
   let discoveredCount = 0;
 
   for (const cell of ashiatoCells.values()) {
-    const locked = [...cell.records.values()].filter((r) => !r.unlockedAt);
+    // 4桁・5桁(現地探索の対象外、requiresOnSiteDiscovery参照)は、たとえ現在地が
+    // セル内に入っていてもGPSでの発見処理そのものを行わない(=unlockedAtを
+    // 決して付与しない。「見つけたあしあと」に絶対含めないため)。
+    const locked = [...cell.records.values()].filter(
+      (r) => !r.unlockedAt && requiresOnSiteDiscovery(r.geohash.length),
+    );
     if (locked.length === 0) continue;
     if (!isInsideGeohashCell(lat, lon, cell.geohash)) continue;
 
@@ -1695,15 +1730,46 @@ new ResizeObserver(([entry]) => {
   if (height > 0) togglePanelCollapseBtn.style.height = `${height}px`;
 }).observe(togglePanelRows);
 
-// --- 「エリア」トグル(Geohashセルの範囲描画) ------------------------------
+// --- 精度(geohash桁数)ごとの表示フィルター ---------------------------------
+// あしあと本体がセルの矩形そのものになった(中心の丸マーカー廃止)ことで、
+// 従来の「エリア」トグル(セル範囲を別レイヤーで薄く重ね描きする機能)は
+// 完全に重複表示になったため廃止し、代わりに桁数ごとに地図上へ表示するか
+// どうかを選べるようにした。4桁・5桁の広いセルが密集地の7桁セルを覆い隠す
+// ケースを、利用者側で個別にオフにして解消できる。
+const visiblePrecisionLengths = new Set<number>([4, 5, 6, 7]);
 
-const toggleAreaBtn = $<HTMLButtonElement>("#toggleArea");
-let areaEnabled = false;
+for (const chip of document.querySelectorAll<HTMLButtonElement>(".precision-filter-chip")) {
+  const length = Number(chip.dataset.length);
+  chip.style.setProperty("--chip-color", ashiatoColor(length));
+  chip.onclick = () => {
+    const nowVisible = !visiblePrecisionLengths.has(length);
+    if (nowVisible) visiblePrecisionLengths.add(length);
+    else visiblePrecisionLengths.delete(length);
+    chip.setAttribute("aria-pressed", String(nowVisible));
+    for (const cell of ashiatoCells.values()) rebuildCellVisual(cell);
+  };
+}
 
-toggleAreaBtn.onclick = () => {
-  areaEnabled = !areaEnabled;
-  toggleAreaBtn.setAttribute("aria-pressed", String(areaEnabled));
-  areaOverlay.setEnabled(areaEnabled);
+// 色見本(小さな正方形)をテキストに埋め込む。「青・緑」等の色名だけだと
+// 実際の色との対応が分かりにくいため、その色そのものを見せる。
+function colorSwatch(geohashLength: number): HTMLSpanElement {
+  const swatch = document.createElement("span");
+  swatch.className = "color-swatch";
+  swatch.style.backgroundColor = ashiatoColor(geohashLength);
+  return swatch;
+}
+
+// 色だけでは何を切り替えているか分からないため、簡単な説明を出す入口。
+// 「現地に行かなくても見れる/見るには現地で発見が必要」という区別
+// (requiresOnSiteDiscovery参照)は色分けでしか示していないため、ここで補足する。
+$<HTMLButtonElement>("#precisionFilterInfo").onclick = () => {
+  const message = document.createDocumentFragment();
+  const line1 = document.createElement("span");
+  line1.append(colorSwatch(4), colorSwatch(5), document.createTextNode("は現地に行かなくても見れます"));
+  const line2 = document.createElement("span");
+  line2.append(colorSwatch(6), colorSwatch(7), document.createTextNode("は現地で発見する必要があります"));
+  message.append(line1, document.createElement("br"), line2);
+  showConfirm(message, { okLabel: "閉じる", hideCancel: true });
 };
 
 // --- 「既読を隠す」トグル(既読のAshiatoを地図に表示しない) -------------------
@@ -1808,16 +1874,30 @@ async function switchHost(host: string): Promise<number> {
 
   for (const cell of ashiatoCells.values()) clearCellVisual(cell);
   ashiatoCells.clear();
-  pendingRecords.clear();
-  areaOverlay.refresh([]);
 
   await pruneCache(host, TAG); // 読み込み前に期限切れ・上限超過分を掃除
   const cached = await getAshiatoRecords(host, TAG);
   // 古い順に並べておくと、ページングで足された分と混ざっても違和感がない
   cached.sort((a, b) => a.cachedAt - b.cachedAt);
+  // 4桁・5桁は「見つけたあしあと」の対象外(=unlockedAtを持たない)という不変条件を
+  // 常に保つ。この機能追加より前に実際にGPSで発見済みになっていたキャッシュが
+  // 残っていた場合に備え、ここで矯正しておく(地図上の表示自体はunlockedAtの
+  // 有無に関わらず行われるため、矯正してもそのセルが見えなくなることはない)。
+  const idsToUncollect = cached
+    .filter((r) => r.unlockedAt && !requiresOnSiteDiscovery(r.geohash.length))
+    .map((r) => r.id);
+  if (idsToUncollect.length > 0) {
+    await clearCollectedAshiatoByIds(idsToUncollect);
+    for (const record of cached) {
+      if (idsToUncollect.includes(record.id)) {
+        record.unlockedAt = null;
+        record.readAt = null;
+      }
+    }
+  }
   for (const record of cached) {
     if (!isSupportedGeohashLength(record.geohash)) continue; // 対象外の桁数は無視
-    registerRecord(record);
+    addRecordToCell(record);
   }
   refreshUnlockedList();
 
@@ -1966,7 +2046,7 @@ async function ingestNotes(host: string, notes: MisskeyNote[]): Promise<AshiatoR
   }
 
   await putAshiatoRecords(records);
-  for (const record of records) registerRecord(record);
+  for (const record of records) addRecordToCell(record);
 
   // 「過去を探す」「最新を確認」でセルが新しく増えた場合、GPSが既にONで
   // その場から動いていない(=watchPositionが発火しない)状況でも、現在地がその
@@ -1991,9 +2071,13 @@ async function ingestNotes(host: string, notes: MisskeyNote[]): Promise<AshiatoR
 // 信頼できるため、画面内メモリの状態とズレようがない。
 // なお「未読」(readAt無し)は発見済み(unlockedAtあり)に含まれるため、ここでは
 // unlockedAtの有無だけを見る(readAtは一切参照しない)。
+// 4桁・5桁(現地探索の対象外、requiresOnSiteDiscovery参照)は「見つけたあしあと」
+// に含まれない=そもそも「未発見」という概念の対象外のため、この件数にも含めない。
 async function buildDiscoveryStatusMessage(suffix: string): Promise<string> {
   const records = currentHost ? await getAshiatoRecords(currentHost, TAG) : [];
-  const undiscovered = records.filter((r) => !r.unlockedAt);
+  const undiscovered = records.filter(
+    (r) => !r.unlockedAt && requiresOnSiteDiscovery(r.geohash.length),
+  );
 
   // 都道府県の逆引き(ネットワーク取得を伴いうる)は、同じgeohashについて
   // 1回で済ませる。
@@ -2130,11 +2214,9 @@ async function fetchNewer(): Promise<void> {
 }
 
 // 「検索キャッシュを消す」。まだ発見していない(unlockedAtが無い)レコードと
-// 保留中(pendingRecords)のレコード、カーソルだけを消す。
-// 「見つけたあしあと」(発見済み)は地図上にもそのまま残す。
+// カーソルだけを消す。「見つけたあしあと」(発見済み)は地図上にもそのまま残す。
 async function handleClearSearchCache(): Promise<void> {
   await clearSearchCache();
-  pendingRecords.clear();
 
   for (const [geohash, cell] of [...ashiatoCells]) {
     for (const [id, record] of [...cell.records]) {
@@ -2147,7 +2229,6 @@ async function handleClearSearchCache(): Promise<void> {
       rebuildCellVisual(cell); // 残るのは発見済みだけなので、見た目は基本変わらない
     }
   }
-  areaOverlay.refresh([...ashiatoCells.values()]);
 
   cursor = null;
   setStatus("検索キャッシュを消去しました。");
@@ -2212,27 +2293,28 @@ function selectedPrecision(): GeohashLength {
   ) as GeohashLength;
 }
 
-// 精度「約150m」(7桁)は、作成から30分経つまで投稿不可
-// (下書きの精度をあとから変更しても、常にこの条件で都度再評価する)。
+// 精度に応じた遅延(DRAFT_POST_DELAY_MS_BY_LENGTH)が0より大きい場合、下書き保存から
+// その時間が経つまで投稿不可(下書きの精度をあとから変更しても、常にこの条件で
+// 都度再評価する)。
 function isDraftPostable(draft: Draft): boolean {
-  if (draft.geohashLength !== HIGH_PRECISION_GEOHASH_LENGTH) return true;
-  return Date.now() - draft.createdAt >= DRAFT_HIGH_PRECISION_DELAY_MS;
+  const delayMs = DRAFT_POST_DELAY_MS_BY_LENGTH[draft.geohashLength];
+  return Date.now() - draft.createdAt >= delayMs;
 }
 
 function updateComposeButtons(): void {
-  const isHighPrecision = selectedPrecision() === HIGH_PRECISION_GEOHASH_LENGTH;
+  const requiresDraftDelay = DRAFT_POST_DELAY_MS_BY_LENGTH[selectedPrecision()] > 0;
   const precisionBad = isPrecisionBad();
 
-  $<HTMLButtonElement>("#composePost").disabled = isHighPrecision || precisionBad;
+  $<HTMLButtonElement>("#composePost").disabled = requiresDraftDelay || precisionBad;
   $<HTMLButtonElement>("#composeSaveDraft").disabled = precisionBad;
 
-  composePrecisionNote.hidden = !isHighPrecision && !precisionBad;
+  composePrecisionNote.hidden = !requiresDraftDelay && !precisionBad;
   if (precisionBad) {
     composePrecisionNote.textContent =
       "現在地の精度が低いため、新規投稿・下書きの保存はできません。精度が改善してからお試しください。";
-  } else if (isHighPrecision) {
-    composePrecisionNote.textContent =
-      "この精度はプライバシー保護のため直接投稿できません。いったん下書きに保存し、30分経過後に投稿してください。";
+  } else if (requiresDraftDelay) {
+    const delayMin = DRAFT_POST_DELAY_MS_BY_LENGTH[selectedPrecision()] / 60000;
+    composePrecisionNote.textContent = `この精度はプライバシー保護のため直接投稿できません。いったん下書きに保存し、${delayMin}分経過後に投稿してください。`;
   }
 }
 
@@ -2431,7 +2513,7 @@ async function refreshDraftList(): Promise<void> {
         postBtn.textContent = "投稿する";
       } else {
         const remainingMs =
-          DRAFT_HIGH_PRECISION_DELAY_MS - (Date.now() - draft.createdAt);
+          DRAFT_POST_DELAY_MS_BY_LENGTH[draft.geohashLength] - (Date.now() - draft.createdAt);
         const remainingMin = Math.max(1, Math.ceil(remainingMs / 60000));
         postBtn.textContent = `投稿できません(あと${remainingMin}分)`;
       }
@@ -2478,7 +2560,7 @@ async function refreshDraftList(): Promise<void> {
   }
 }
 
-// 30分経過による投稿可否の変化を、リストを開いたまま待っていても反映されるように
+// 遅延経過による投稿可否の変化を、リストを開いたまま待っていても反映されるように
 setInterval(() => {
   if (draftListDialog.open) refreshDraftList();
 }, 60 * 1000);
