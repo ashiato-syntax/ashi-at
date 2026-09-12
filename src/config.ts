@@ -16,6 +16,18 @@ export const SHOW_LOCKED_ASHIATO_FOR_DEBUG = false;
 // 本番ではfalse。
 export const SHOW_TEST_CONTEXT_ASHIATO_FOR_DEBUG = true;
 
+// --- キャッシュ(IndexedDB) --------------------------------------------------
+
+// 通常のキャッシュ(未発見のAshiato)の保存期限。これを過ぎたレコードは
+// getAshiatoRecordsで読み込まれなくなり、pruneCacheで削除される。
+// 発見済み(unlockedAtあり)のAshiatoにはTTLを設けない。「達成の記録」なので、
+// ユーザーが「リセット」等で明示的に削除しない限り永続させる(cache.ts参照)。
+export const CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90日
+
+// host::tagごとに保持する未発見レコードの上限件数。超過分は古い順に間引く
+// (発見済みレコードはこの上限の対象外。cache.ts: pruneCache参照)。
+export const MAX_RECORDS_PER_HOST_TAG = 1000;
+
 // --- Ashiato Syntax・検索まわり ---------------------------------------------
 
 // 検索対象の固定タグ。将来複数タグに対応するなら cache.js のhostTagキーは

@@ -1,13 +1,10 @@
+import { CACHE_TTL_MS, MAX_RECORDS_PER_HOST_TAG } from "./config.js";
 import type { AshiatoModel } from "./parser.js";
 import type { AshiatoFile, AshiatoRecord, Cursor, Draft, GeohashLength } from "./types.js";
 
 // ローカルキャッシュ(IndexedDB)。
 const DB_NAME = "ashi-at";
 const DB_VERSION = 4; // 4: emojiImagesストア追加(カスタム絵文字画像のキャッシュ用)
-
-export const CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14日(通常のキャッシュ)
-export const UNLOCKED_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180日(発見済みAshiato)
-const MAX_RECORDS_PER_HOST_TAG = 1000;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -211,18 +208,18 @@ export async function putAshiatoRecords(records: AshiatoRecord[]): Promise<void>
 
 export interface GetAshiatoRecordsOptions {
   ttlMs?: number;
-  unlockedTtlMs?: number;
 }
 
 /**
- * @returns 期限内のレコードだけを返す。unlockedAtがあるレコードはunlockedTtlMs、
- * 無いレコードはttlMsで判定する(cachedAt起点は共通)。期限切れ分はここでは
- * 削除しない(削除はpruneCacheの役目) — 読み込みは読み込み、掃除は掃除。
+ * @returns 期限内のレコードだけを返す。unlockedAtがあるレコード(発見済み、
+ * 「達成の記録」)はTTLの対象外で常に返す。無いレコードはttlMsで判定する
+ * (cachedAt起点)。期限切れ分はここでは削除しない(削除はpruneCacheの役目)
+ * — 読み込みは読み込み、掃除は掃除。
  */
 export async function getAshiatoRecords(
   host: string,
   tag: string,
-  { ttlMs = CACHE_TTL_MS, unlockedTtlMs = UNLOCKED_TTL_MS }: GetAshiatoRecordsOptions = {},
+  { ttlMs = CACHE_TTL_MS }: GetAshiatoRecordsOptions = {},
 ): Promise<AshiatoRecord[]> {
   try {
     const db = await openDb();
@@ -238,7 +235,7 @@ export async function getAshiatoRecords(
 
     const now = Date.now();
     return all
-      .filter((r) => now - r.cachedAt < (r.unlockedAt ? unlockedTtlMs : ttlMs))
+      .filter((r) => r.unlockedAt || now - r.cachedAt < ttlMs)
       .map(normalizeRecord);
   } catch (error) {
     console.warn("cache: getAshiatoRecords failed — キャッシュなしとして続行します:", error);
@@ -271,11 +268,7 @@ export interface PruneCacheOptions extends GetAshiatoRecordsOptions {
 export async function pruneCache(
   host: string,
   tag: string,
-  {
-    ttlMs = CACHE_TTL_MS,
-    unlockedTtlMs = UNLOCKED_TTL_MS,
-    maxRecords = MAX_RECORDS_PER_HOST_TAG,
-  }: PruneCacheOptions = {},
+  { ttlMs = CACHE_TTL_MS, maxRecords = MAX_RECORDS_PER_HOST_TAG }: PruneCacheOptions = {},
 ): Promise<void> {
   try {
     const db = await openDb();
@@ -289,8 +282,7 @@ export async function pruneCache(
 
       req.onsuccess = () => {
         const all: AshiatoRecord[] = req.result ?? [];
-        const isFresh = (r: AshiatoRecord) =>
-          now - r.cachedAt < (r.unlockedAt ? unlockedTtlMs : ttlMs);
+        const isFresh = (r: AshiatoRecord) => Boolean(r.unlockedAt) || now - r.cachedAt < ttlMs;
 
         const expired = all.filter((r) => !isFresh(r));
         const notExpired = all.filter(isFresh);

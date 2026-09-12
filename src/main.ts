@@ -2036,12 +2036,6 @@ async function switchHost(host: string): Promise<number> {
 
   cursor = await getCursor(host, TAG);
 
-  setStatus(
-    cached.length > 0
-      ? `キャッシュから${cached.length}件のAshiatoを復元しました`
-      : "準備完了",
-  );
-
   return cached.length;
 }
 
