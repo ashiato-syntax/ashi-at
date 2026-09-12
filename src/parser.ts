@@ -221,10 +221,14 @@ function canonicalize(m: AshiatoModel): string {
 
 // 投稿機能用: geohash1つだけを持つ最小限のAshiato Syntax文字列を組み立てる。
 // 時間条件フィールド(d/w/t/o/tz/z)は「まずは最低限から」の方針でまだ未対応。
-export function buildMinimalCandidate(geohash: string): string {
+// contextId(c)はAshi@が扱う候補として受け入れる文脈識別子(main.ts側の
+// isAcceptedContextIdがこれで絞り込む)。呼び出し側(main.ts)から
+// config.tsのASHIATO_CONTEXT_IDを渡すこと — parser.ts自体はAshiato Syntaxの
+// 汎用実装であり、アプリ固有の値をここに直接持たせないため引数にしている。
+export function buildMinimalCandidate(geohash: string, contextId: string | null = null): string {
   return canonicalize({
     version: 1,
-    contextId: null,
+    contextId,
     geohash,
     utcOffsetMinutes: 0,
     timezoneIndex: null,

@@ -341,7 +341,7 @@ button.btn-danger:hover {
     /* スプラッシュのグラデーションと同系統(夜明けの空: 紺→ピンク→オレンジ)を、
        常時見える主要ボタンにもうっすら効かせる。単色に比べて主張しすぎ
        ないよう、角度・色幅は控えめにしている。 */
-    background: linear-gradient(135deg, #d46dad, #ff9e6d);
+    background: linear-gradient(135deg, #d46dad, #ff7c73);
     color: #fff;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
     transition: transform 0.1s ease, background 0.1s ease, box-shadow 0.1s ease;
@@ -602,37 +602,93 @@ dialog#aboutDialog {
 dialog#aboutDialog p {
     line-height: 1.6;
 }
-dialog#aboutDialog h3 {
-    margin: 20px 0 8px;
+/* 「利用規約」「ライセンス情報」。本文と区切るため、settingsDialogの
+   「メディアの表示」等と同じ折りたたみ(.settings-collapsible)にした上で、
+   元のh3見出しにあった区切り線をこのラッパーに付け替える。 */
+.about-collapsible {
+    margin-top: 20px;
     padding-top: 12px;
     border-top: 1px solid #eee;
-    font-size: 0.95rem;
 }
-/* 出典表記等のクレジット。本文と視覚的に区切るため、淡いカード状の背景にする。 */
-.about-credit {
+/* 利用規約・プライバシーポリシー(Markdown文書、main.ts:loadMarkdownDocInto参照)。
+   見出しはダイアログ自体の見出し(h2「Ashi@について」・折りたたみのラベル)より
+   目立たないよう小さめに抑える。.about-credit(ライセンス情報)と同じ、淡い
+   カード状の背景で本文と視覚的に区切る。 */
+.markdown-doc {
     background: #f7f7f7;
     border-radius: 8px;
     padding: 10px 12px;
+    /* 文書自体がかなり長いため、展開してもダイアログ全体が引き伸ばされない
+       よう、この中だけでスクロールさせる。 */
+    max-height: 40vh;
+    overflow-y: auto;
 }
-.about-credit h4 {
-    margin: 0 0 6px;
+.markdown-doc h1 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+}
+.markdown-doc h2 {
+    margin: 16px 0 6px;
+    font-size: 0.9rem;
+}
+.markdown-doc p,
+.markdown-doc ul,
+.markdown-doc ol {
+    margin: 0 0 10px;
     font-size: 0.85rem;
-    color: #444;
+    line-height: 1.7;
+    color: #333;
 }
-.about-credit p {
-    margin: 0 0 6px;
-    font-size: 0.8rem;
-    color: #555;
-    line-height: 1.6;
+.markdown-doc ul,
+.markdown-doc ol {
+    padding-left: 1.4em;
 }
-.about-credit p:last-child {
+.markdown-doc li {
+    margin-bottom: 4px;
+}
+.markdown-doc a {
+    color: #d46dad;
+}
+.markdown-doc > :last-child {
     margin-bottom: 0;
 }
-.about-credit-source {
-    color: #777;
+/* 起動時の「利用規約・プライバシーポリシーを必ずご確認ください」通知
+   (main.ts: maybeShowTermsNotice参照)。各文書をアイコン+名前+日付の
+   カード行(実際に押せるボタン。押すと通知を閉じて「Ashi@について」側の
+   該当セクションへジャンプする)にして、ただの文章の羅列より一目で
+   分かるようにする。 */
+.terms-notice-intro {
+    margin: 0 0 12px;
+    font-weight: 600;
 }
-.about-credit-source a {
-    color: #d46dad;
+.terms-notice-list {
+    display: grid;
+    gap: 8px;
+}
+.terms-notice-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: none;
+    background: #f7f7f7;
+    border-radius: 8px;
+    box-shadow: none;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+}
+.terms-notice-row:hover {
+    background: #eee;
+}
+.terms-notice-label {
+    flex: 1;
+    font-weight: 600;
+}
+.terms-notice-date {
+    font-size: 0.8rem;
+    color: #777;
 }
 dialog#aboutDialog #aboutClose {
     margin-top: 12px;
@@ -648,36 +704,30 @@ dialog#instanceDialog label {
     line-height: 1.5;
     white-space: pre-line; /* alert/confirmに含まれる\n\nを改行として表示 */
 }
-/* 箇条書き(投稿前の注意書き等、buildBulletList参照)。text-indentによる
-   ぶら下げインデントは、「・」の実際の描画幅とtext-indentの指定値が
-   ぴったり一致しないと、折り返した2行目以降が本文の頭より深く(または
-   浅く)インデントされてしまう。flexで「・」(幅は自身の内容分=flex:none)と
-   本文(残り幅いっぱい=flex:1)を分けることで、幅を数値で仮定する必要なく
-   常に本文の頭の位置で正しく折り返せるようにする。 */
-.dialog-message-list {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: grid;
-    gap: 8px;
+/* showConfirmにMarkdown由来のNode(renderMarkdownDocInto参照。投稿前の注意等)を
+   渡した場合のための、箇条書き・コード表示の見た目。ネイティブの<ul>/<li>で
+   マーカーを描画させれば、折り返した2行目以降のぶら下げインデントはブラウザが
+   自動で正しく揃えてくれる(以前の手作りの「・」+text-indent方式は、マーカー幅を
+   数値で仮定する必要があり、ズレの原因になっていた)。 */
+.dialog-message ul,
+.dialog-message ol {
+    /* .dialog-message自体のwhite-space:pre-line(プレーンテキストの\n\n用)は
+       Markdown由来のリストには不要かつ余計な改行の原因になりうるため、
+       通常の折り返しに戻す。 */
+    white-space: normal;
+    margin: 8px 0 0;
+    padding-left: 1.3em;
 }
-.dialog-message-list li {
-    display: flex;
-    align-items: baseline;
-    gap: 0.4em;
+.dialog-message li {
+    margin-bottom: 8px;
 }
-.dialog-message-list li::before {
-    content: "・";
-    flex: none;
+.dialog-message li:last-child {
+    margin-bottom: 0;
 }
-.dialog-message-list li span {
-    flex: 1;
-    min-width: 0;
-}
-/* Ashiato Syntax文字列等、コードのように扱いたい部分(buildBulletList/inlineCode参照)。
+/* Ashiato Syntax文字列等、コードのように扱いたい部分(Markdownのバッククォート)。
    引用のように見せるため、灰色の背景+等幅フォントにする。長い文字列でもこの
    要素自体で折り返せるよう、インライン要素のままoverflow-wrapで対応する。 */
-.inline-code {
+.dialog-message code {
     background: #eee;
     border-radius: 4px;
     padding: 1px 5px;
@@ -1566,7 +1616,7 @@ dialog#mediaLightbox::backdrop {
     /* 夜明けの空をイメージした3色グラデーション(紺→ピンク→オレンジ)。
        常時表示ではなく起動時のスプラッシュだけなので、主張が強めでも
        うるさく感じにくい。 */
-    background: linear-gradient(135deg, #a73a8a, #d46a81, #ffab73);
+    background: linear-gradient(135deg, #a73a8a, #df6ea1, #ffab73);
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;

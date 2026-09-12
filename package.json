@@ -12,6 +12,7 @@
   "dependencies": {
     "leaflet": "^1.9.4",
     "lucide-static": "^1.43.0",
+    "marked": "^18.0.12",
     "mfm-js": "^0.26.0"
   },
   "devDependencies": {

@@ -27,6 +27,9 @@ import clock from "lucide-static/icons/clock.svg?raw";
 import ruler from "lucide-static/icons/ruler.svg?raw";
 import triangleAlert from "lucide-static/icons/triangle-alert.svg?raw";
 import layers from "lucide-static/icons/layers.svg?raw";
+import fileText from "lucide-static/icons/file-text.svg?raw";
+import copyright from "lucide-static/icons/copyright.svg?raw";
+import shield from "lucide-static/icons/shield.svg?raw";
 
 const ICONS = {
   footprints,
@@ -54,6 +57,9 @@ const ICONS = {
   ruler,
   "triangle-alert": triangleAlert,
   layers,
+  "file-text": fileText,
+  copyright,
+  shield,
 } as const;
 
 export type IconName = keyof typeof ICONS;

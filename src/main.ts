@@ -8,6 +8,16 @@ import {
 import { parseText, extractCandidates, buildMinimalCandidate } from "./parser.js";
 import { isAshiatoActiveNow } from "./ashiatoEval.js";
 import { parse as parseMfm, type MfmNode } from "mfm-js";
+import { marked } from "marked";
+// 「Ashi@について」に表示するMarkdown文書。実行時にfetchするのではなく、
+// ?rawでビルド時にJSへ直接埋め込む(ネットワーク状況に関わらず必ず読めるように
+// するため。特に利用規約は「読めないのにアプリを使用できてしまう」ことを
+// 避けたい)。
+import overviewMd from "./docs/概要.md?raw";
+import termsMd from "./docs/利用規約.md?raw";
+import privacyMd from "./docs/プライバシーポリシー.md?raw";
+import licenseMd from "./docs/ライセンス情報.md?raw";
+import composeWarningMd from "./docs/投稿前の注意.md?raw";
 import {
   createMap,
   addAshiatoGroup,
@@ -62,7 +72,7 @@ import type {
   Cursor,
   GeohashLength,
 } from "./types.js";
-import { createIcon } from "./icons.js";
+import { createIcon, type IconName } from "./icons.js";
 import {
   SHOW_LOCKED_ASHIATO_FOR_DEBUG,
   SHOW_TEST_CONTEXT_ASHIATO_FOR_DEBUG,
@@ -87,6 +97,8 @@ import {
   MIN_ZOOM_FOR_MUNICIPALITIES,
   MIN_ZOOM_FOR_CAPITAL_LABELS,
   MIN_ZOOM_FOR_MUNICIPALITY_LABELS,
+  TERMS_VERSION_DATE,
+  PRIVACY_VERSION_DATE,
 } from "./config.js";
 
 // 4桁(約20km)・5桁(約4km)はエリアが広すぎて「現地に行って発見する」体験に
@@ -156,6 +168,12 @@ $("#layerDisplayIcon").append(createIcon("layers"));
 $("#composePrecisionIcon").append(createIcon("ruler"));
 $("#mediaVisibilityToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
 $("#layerDisplayToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
+$("#termsIcon").append(createIcon("file-text"));
+$("#privacyIcon").append(createIcon("shield"));
+$("#licenseIcon").append(createIcon("copyright"));
+$("#termsToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
+$("#privacyToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
+$("#licenseToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
 $("#ashiatoActionShowOnMapIcon").append(createIcon("map-pin"));
 $("#ashiatoActionOpenPostIcon").append(createIcon("external-link"));
 $("#ashiatoActionDeleteIcon").append(createIcon("trash-2"));
@@ -306,33 +324,6 @@ function showConfirm(
 }
 
 closeOnBackdropClick(confirmDialog);
-
-// showConfirmのmessageに渡す箇条書き。各項目の折り返しが「・」の真下ではなく
-// 本文の頭に揃うよう、本文をspanで囲んでCSS側(.dialog-message-list)で
-// flexの残り幅として扱う(text-indentで「・」の幅を数値で仮定する必要が無い)。
-// 文字列だけでなく、一部だけ強調したい項目(inlineCode参照)のためにNodeも渡せる。
-function buildBulletList(items: (string | Node)[]): HTMLUListElement {
-  const list = document.createElement("ul");
-  list.className = "dialog-message-list";
-  for (const item of items) {
-    const li = document.createElement("li");
-    const text = document.createElement("span");
-    if (typeof item === "string") text.textContent = item;
-    else text.append(item);
-    li.append(text);
-    list.append(li);
-  }
-  return list;
-}
-
-// Ashiato Syntax文字列等、コードのように扱いたい部分を灰色の背景+等幅フォントで
-// 引用のように見せる(buildBulletList参照)。
-function inlineCode(text: string): HTMLElement {
-  const code = document.createElement("code");
-  code.className = "inline-code";
-  code.textContent = text;
-  return code;
-}
 
 // --- 「つまんで高さ調整」ドラッグ操作の共通処理 -----------------------------
 // 下部シート(投稿UI/見つけたあしあと/下書き)・マップの吹き出し(同一地点の
@@ -1836,6 +1827,79 @@ $<HTMLButtonElement>("#aboutCloseX").onclick = () => aboutDialog.close();
 // ダイアログ外側(::backdrop)クリックでも閉じられるようにする
 closeOnBackdropClick(aboutDialog);
 
+// maybeShowTermsNotice用: 「利用規約(2026/09/12)」のようなカード行を、
+// 日付部分だけ右寄せ・淡色にした見た目で組み立てる。実際に押せるボタンにし、
+// 押すとこの通知を閉じた上で「Ashi@について」を開き、該当セクションを展開して
+// スクロールする(「確認しました」だけ押して中身を見ない場合は、わざわざ
+// 「Ashi@について」を開かずに済むよう、ここで初めて開く)。
+function buildTermsNoticeDocRow(
+  icon: IconName,
+  label: string,
+  date: string,
+  targetToggleId: string,
+  targetRowsId: string,
+): HTMLElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "terms-notice-row";
+  const iconSpan = document.createElement("span");
+  iconSpan.className = "action-sheet-icon";
+  iconSpan.append(createIcon(icon));
+  const labelSpan = document.createElement("span");
+  labelSpan.className = "terms-notice-label";
+  labelSpan.textContent = label;
+  const dateSpan = document.createElement("span");
+  dateSpan.className = "terms-notice-date";
+  dateSpan.textContent = date;
+  button.append(iconSpan, labelSpan, dateSpan);
+  button.onclick = () => {
+    confirmDialog.close(); // 通知を閉じる(.click()による合成イベントは使わない)
+    if (!aboutDialog.open) aboutDialog.showModal();
+    expandCollapsible(targetToggleId, targetRowsId);
+    $(`#${targetToggleId}`).scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  return button;
+}
+
+// 初回利用時、または利用規約・プライバシーポリシーの内容が変わったとき
+// (TERMS_VERSION_DATE/PRIVACY_VERSION_DATEが、前回確認した時点の値と
+// 異なるとき)、スプラッシュが消えたタイミングで確認を促すダイアログを表示する。
+// 「Ashi@について」自体は自動で開かない(内容を見ずに「確認しました」だけ
+// 押すことも多いはずなので、そのケースで余計なダイアログが残らないように)。
+// 中の「利用規約」「プライバシーポリシー」ボタンを押した場合だけ、そこで
+// 初めて「Ashi@について」を開いて該当セクションへジャンプする
+// (buildTermsNoticeDocRow参照)。閉じた時点で「確認済み」として今の
+// バージョンをsettingsへ保存する。
+async function maybeShowTermsNotice(): Promise<void> {
+  const [ackTerms, ackPrivacy] = await Promise.all([
+    getSetting<string>("acknowledgedTermsVersion"),
+    getSetting<string>("acknowledgedPrivacyVersion"),
+  ]);
+  if (ackTerms === TERMS_VERSION_DATE && ackPrivacy === PRIVACY_VERSION_DATE) return;
+
+  const message = document.createDocumentFragment();
+  const intro = document.createElement("p");
+  intro.className = "terms-notice-intro";
+  intro.textContent = "利用規約・プライバシーポリシーを必ずご確認ください";
+  const list = document.createElement("div");
+  list.className = "terms-notice-list";
+  list.append(
+    buildTermsNoticeDocRow("file-text", "利用規約", TERMS_VERSION_DATE, "termsToggle", "termsRows"),
+    buildTermsNoticeDocRow(
+      "shield",
+      "プライバシーポリシー",
+      PRIVACY_VERSION_DATE,
+      "privacyToggle",
+      "privacyRows",
+    ),
+  );
+  message.append(intro, list);
+
+  await showConfirm(message, { okLabel: "確認しました", hideCancel: true });
+  putSetting("acknowledgedTermsVersion", TERMS_VERSION_DATE);
+  putSetting("acknowledgedPrivacyVersion", PRIVACY_VERSION_DATE);
+}
+
 // --- 設定ダイアログ(メディアの表示モード) -----------------------------------
 // 「リセット」(resetAllCache、IndexedDBごと削除)を実行しない限り、
 // settingsストア経由で永続する(他の設定値と同じ扱い)。
@@ -1849,27 +1913,59 @@ $<HTMLButtonElement>("#settingsToggle").onclick = () => {
 $<HTMLButtonElement>("#settingsCloseX").onclick = () => settingsDialog.close();
 closeOnBackdropClick(settingsDialog);
 
-// 「メディアの表示」は選択肢が3つあって縦に長いため、既定では折りたたんでおき、
-// 必要なときだけ開く(style.css側のgrid-template-rowsの0fr/1frアニメーション。
-// 既定は折りたたみ)。
-const mediaVisibilityToggle = $<HTMLButtonElement>("#mediaVisibilityToggle");
-const mediaVisibilityRows = $("#mediaVisibilityRows");
+// 「メディアの表示」「表示レイヤー」は縦に長いため、既定では折りたたんでおき、
+// 必要なときだけ開く(style.css側のgrid-template-rowsの0fr/1frアニメーション)。
+function wireCollapsibleToggle(toggleId: string, rowsId: string): void {
+  const toggle = $<HTMLButtonElement>(`#${toggleId}`);
+  const rows = $(`#${rowsId}`);
+  toggle.onclick = () => {
+    const willExpand = !rows.classList.contains("expanded");
+    rows.classList.toggle("expanded", willExpand);
+    toggle.setAttribute("aria-expanded", String(willExpand));
+  };
+}
 
-mediaVisibilityToggle.onclick = () => {
-  const willExpand = !mediaVisibilityRows.classList.contains("expanded");
-  mediaVisibilityRows.classList.toggle("expanded", willExpand);
-  mediaVisibilityToggle.setAttribute("aria-expanded", String(willExpand));
-};
+// 折りたたみを展開状態にする(プログラムから、クリックせずに)。
+// toggle.click()で代用すると、そのクリックイベントが祖先のdialogまで
+// バブリングし、closeOnBackdropClickの「クリック座標がdialogの矩形の外なら
+// 閉じる」判定に引っかかってしまう(click()が生成する合成イベントは
+// clientX/clientYが0になるため、ほぼ必ず矩形の外と判定されてしまう)。
+// maybeShowTermsNoticeのボタンから「Ashi@について」側のセクションを開く際に
+// dialogそのものが閉じてしまっていたのはこれが原因。
+function expandCollapsible(toggleId: string, rowsId: string): void {
+  $<HTMLButtonElement>(`#${toggleId}`).setAttribute("aria-expanded", "true");
+  $(`#${rowsId}`).classList.add("expanded");
+}
 
-// 「レイヤーの表示」も同様に既定では折りたたんでおく。
-const layerDisplayToggle = $<HTMLButtonElement>("#layerDisplayToggle");
-const layerDisplayRows = $("#layerDisplayRows");
+// 利用規約・プライバシーポリシー・ライセンス情報等のMarkdown文書をHTMLへ変換し、
+// containerへ差し込む。src/docs/以下のファイルを?rawでビルド時にJSへ直接
+// 埋め込んでいる(実行時にfetchで取得するのではない)ため、ネットワーク状況に
+// 関わらず必ず表示できる(「利用規約が読めないのにアプリを使用できてしまう」
+// ことを避けるため)。埋め込み済みの文字列を変換するだけなので同期的に完了する。
+// 内容はAshi@自身がビルド時に同梱する文書(利用者の入力等ではない)なので、
+// サニタイズせずそのままinnerHTMLへ描画してよい。
+function renderMarkdownDocInto(container: HTMLElement, markdown: string): void {
+  container.innerHTML = marked.parse(markdown, { async: false });
+  // markedはリンクにtarget/relを付けないため、タップでAshi@から離脱しない
+  // よう(新しいタブで開くよう)ここで補う。
+  for (const a of container.querySelectorAll("a[href]")) {
+    a.setAttribute("target", "_blank");
+    a.setAttribute("rel", "noopener noreferrer");
+  }
+}
 
-layerDisplayToggle.onclick = () => {
-  const willExpand = !layerDisplayRows.classList.contains("expanded");
-  layerDisplayRows.classList.toggle("expanded", willExpand);
-  layerDisplayToggle.setAttribute("aria-expanded", String(willExpand));
-};
+wireCollapsibleToggle("mediaVisibilityToggle", "mediaVisibilityRows");
+wireCollapsibleToggle("layerDisplayToggle", "layerDisplayRows");
+wireCollapsibleToggle("termsToggle", "termsRows");
+wireCollapsibleToggle("privacyToggle", "privacyRows");
+wireCollapsibleToggle("licenseToggle", "licenseRows");
+
+// ページ読み込みの段階で(ダイアログを開く前に)埋め込み済みなので、
+// 開いたときには常に表示できる状態になっている。
+renderMarkdownDocInto($("#aboutIntro"), overviewMd);
+renderMarkdownDocInto($("#termsContent"), termsMd);
+renderMarkdownDocInto($("#privacyContent"), privacyMd);
+renderMarkdownDocInto($("#licenseContent"), licenseMd);
 
 document.querySelectorAll<HTMLInputElement>('input[name="mediaVisibility"]').forEach((el) => {
   el.onchange = () => {
@@ -2272,7 +2368,7 @@ $<HTMLButtonElement>("#loadNewer").onclick = fetchNewer;
 $<HTMLButtonElement>("#toggleGps").onclick = () => setGpsEnabled(!gpsEnabled);
 $<HTMLButtonElement>("#clearSearchCache").onclick = async () => {
   const wantsToClear = await showConfirm(
-    "検索キャッシュを削除しますか？(見つけたあしあとは残ります)",
+    "検索キャッシュを削除しますか？\n(見つけたあしあとは残ります)",
     { okLabel: "削除する", danger: true },
   );
   if (!wantsToClear) return;
@@ -2413,28 +2509,16 @@ composeDialog.addEventListener("close", () => precisionPreview.hide());
 // 自由記述コメントはAshi@側では持たない(共有フォーム側で書けるため)。
 function shareTextFor(lat: number, lon: number, geohashLength: GeohashLength): string {
   const geohash = encodeGeohash(lat, lon, geohashLength);
-  return `${buildMinimalCandidate(geohash)} #Ashiato`;
+  return `${buildMinimalCandidate(geohash, ASHIATO_CONTEXT_ID)} #Ashiato`;
 }
 
 $<HTMLButtonElement>("#composePost").onclick = async () => {
   if (!composePosition) return;
 
+  const composeWarning = document.createElement("div");
+  renderMarkdownDocInto(composeWarning, composeWarningMd);
   const wantsToPost = await showConfirm(
-    buildBulletList([
-      "位置情報は誰でも解読可能な形で、投稿本文に直接記載されます",
-      "投稿は投稿先のSNSで、エリアサイズに関係なく誰でも見れます",
-      "投稿の公開範囲は「パブリック」です",
-      (() => {
-        const frag = document.createDocumentFragment();
-        frag.append(
-          "投稿本文に自動挿入された文字列\n（例）",
-          inlineCode("⟦as;1,c;asat;g;xn0m5kq⟧ #Ashiato"),
-          "\nは消さないでください",
-        );
-        return frag;
-      })(),
-      "ご自身、また第三者のプライバシーには十分、ご注意ください",
-    ]),
+    composeWarning,
     { okLabel: "理解して進む" },
   );
   if (!wantsToPost) return;
@@ -2469,7 +2553,7 @@ async function refreshDraftList(): Promise<void> {
   if (drafts.length === 0) {
     const empty = document.createElement("p");
     empty.className = "unlocked-list-empty";
-    empty.textContent = "下書きはありません";
+    empty.textContent = "下書きはありません。";
     draftList.append(empty);
     return;
   }
@@ -2612,6 +2696,7 @@ if (splash) {
     splashHidden = true;
     splash.classList.add("hide");
     appRoot.removeAttribute("inert");
+    maybeShowTermsNotice();
   };
   splash.addEventListener("click", hideSplash);
   setTimeout(hideSplash, 1600);

@@ -449,7 +449,7 @@
                                         id="autoEnableLayerOnDiscovery"
                                         checked
                                     />
-                                    現地で発見したら、その精度の表示レイヤーを自動でONにする</label
+                                    現地であしあとを発見したら、そのあしあとの表示レイヤーを自動でONにする</label
                                 >
                             </fieldset>
                         </div>
@@ -506,27 +506,64 @@
                 aria-label="閉じる"
             ></button>
             <h2>Ashi@について</h2>
-            <p>
-                Ashi@は、Misskeyの「#Ashiato」投稿に埋め込まれた位置・時間情報(Ashiato Syntax)をもとに、実際にその場所へ行くと開封できるクライアントです。
-            </p>
-            <p>
-                ここの文章は公開直前に考える
-            </p>
-            <h3>ライセンス情報</h3>
-            <section class="about-credit">
-                <h4>市区町村境界データ</h4>
-                <p>
-                    国土交通省 国土数値情報（2021年9月28日取得）をもとに加工して作成した市区町村境界データを使用しています。
-                </p>
-                <p class="about-credit-source">
-                    出典：<a
-                        href="https://nlftp.mlit.go.jp/ksj/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        >国土交通省 国土数値情報</a
-                    >
-                </p>
-            </section>
+            <div id="aboutIntro"></div>
+            <div class="settings-collapsible about-collapsible">
+                <button
+                    type="button"
+                    id="termsToggle"
+                    class="settings-collapsible-toggle"
+                    aria-expanded="false"
+                >
+                    <span class="settings-collapsible-toggle-label">
+                        <span class="action-sheet-icon" id="termsIcon"></span>
+                        <span>利用規約</span>
+                    </span>
+                    <span class="settings-collapsible-toggle-icon"></span>
+                </button>
+                <div id="termsRows" class="settings-collapsible-rows">
+                    <div class="settings-collapsible-rows-inner">
+                        <div id="termsContent" class="markdown-doc"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-collapsible about-collapsible">
+                <button
+                    type="button"
+                    id="privacyToggle"
+                    class="settings-collapsible-toggle"
+                    aria-expanded="false"
+                >
+                    <span class="settings-collapsible-toggle-label">
+                        <span class="action-sheet-icon" id="privacyIcon"></span>
+                        <span>プライバシーポリシー</span>
+                    </span>
+                    <span class="settings-collapsible-toggle-icon"></span>
+                </button>
+                <div id="privacyRows" class="settings-collapsible-rows">
+                    <div class="settings-collapsible-rows-inner">
+                        <div id="privacyContent" class="markdown-doc"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-collapsible about-collapsible">
+                <button
+                    type="button"
+                    id="licenseToggle"
+                    class="settings-collapsible-toggle"
+                    aria-expanded="false"
+                >
+                    <span class="settings-collapsible-toggle-label">
+                        <span class="action-sheet-icon" id="licenseIcon"></span>
+                        <span>ライセンス情報</span>
+                    </span>
+                    <span class="settings-collapsible-toggle-icon"></span>
+                </button>
+                <div id="licenseRows" class="settings-collapsible-rows">
+                    <div class="settings-collapsible-rows-inner">
+                        <div id="licenseContent" class="markdown-doc"></div>
+                    </div>
+                </div>
+            </div>
         </dialog>
         <dialog id="confirmDialog">
             <div id="confirmMessage" class="dialog-message"></div>

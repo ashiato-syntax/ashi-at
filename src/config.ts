@@ -143,7 +143,7 @@ export const POPUP_DRAG_MAX_HEIGHT_PX = 480;
 // (=表示された瞬間)に即既読化すると未読ドットを目にする間もなく消えてしまうため、
 // 「ちゃんと表示された」とみなせるだけの猶予を設ける。この間にスクロールで
 // 画面外に出た場合はタイマーを取り消し、既読にしない。
-export const READ_DWELL_MS = 800;
+export const READ_DWELL_MS = 700;
 
 // --- 地図のズームしきい値 ---------------------------------------------------
 
@@ -155,3 +155,13 @@ export const MIN_ZOOM_FOR_MUNICIPALITIES = 10;
 export const MIN_ZOOM_FOR_CAPITAL_LABELS = 10;
 // これよりズームしたら、区・区が無い市町村等、通常の市区町村名ラベルを表示。
 export const MIN_ZOOM_FOR_MUNICIPALITY_LABELS = 11;
+
+// --- 利用規約・プライバシーポリシーのバージョン -----------------------------
+
+// src/docs/利用規約.md・プライバシーポリシー.mdの内容を変更するたびに、
+// この日付も更新すること(yyyy/mm/dd表記。表示にも使うため、この形式のまま)。
+// 起動時、利用者が最後に確認した時点のこの値(putSetting保存)と比較し、
+// 異なっていれば(初回利用時を含む)「Ashi@について」を自動表示し、確認を促す
+// (main.ts: maybeShowTermsNotice参照)。
+export const TERMS_VERSION_DATE = "2026/09/12";
+export const PRIVACY_VERSION_DATE = "2026/09/12";
