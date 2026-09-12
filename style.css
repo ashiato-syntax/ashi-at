@@ -468,6 +468,30 @@ button.btn-danger:hover {
     flex: none;
     border: none;
 }
+/* メールの受信トレイ風の件数バッジ(下書きの総数・見つけたあしあとの未読数)。
+   .menu-item-labelがflex:1で幅を埋めるので、ラベルの右側に自然と収まる。 */
+.menu-item-count {
+    flex: none;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: #eee;
+    color: #666;
+}
+.menu-item-count[hidden] {
+    display: none;
+}
+/* 未読(見つけたあしあと)は他と見分けが付くよう、テーマカラーで強調する。 */
+.menu-item-count.unread {
+    background: #d46dad;
+    color: #fff;
+}
 .menu-current-host {
     margin: 0;
     padding: 10px 14px 4px;

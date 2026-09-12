@@ -146,7 +146,8 @@ const $ = <T extends Element = HTMLElement>(s: string): T => document.querySelec
   unlockedSortModeSelect = $<HTMLSelectElement>("#unlockedSortMode"),
   unreadOnlyFilterCheckbox = $<HTMLInputElement>("#unreadOnlyFilter"),
   unlockedBadge = $("#unlockedBadge"),
-  menuBadge = $("#menuBadge");
+  menuBadge = $("#menuBadge"),
+  draftBadge = $("#draftBadge");
 
 // メニューFAB・ハンバーガーメニュー各項目のアイコン(絵文字は端末フォント依存で
 // 意図した絵文字が無い環境だと崩れるため、lucide-staticのインラインSVGに置き換える)。
@@ -1049,16 +1050,20 @@ function sortKeyFor(record: AshiatoRecord, mode: UnlockedSortMode): number {
   return record.unlockedAt ?? 0;
 }
 
-// 発見済み(unlockedAt)かつ未読(readAtが無い)のレコードが1件でもあれば、
-// メニューFABとハンバーガーメニュー内「見つけたあしあと」項目に緑の点を出す。
+// 発見済み(unlockedAt)かつ未読(readAtが無い)のレコード件数を、メールの受信
+// トレイのような件数バッジとしてハンバーガーメニュー内「見つけたあしあと」項目に
+// 出す(メニューFAB自体は場所が狭いので、従来通り点のままにする)。
 // 一覧・ポップアップの描画後、および可視性ベースの既読化(observeRowsForRead)が
 // 実際に既読化を行った後、いずれのタイミングでも呼ぶこと。
 function updateUnreadBadge(): void {
-  const hasUnread = [...ashiatoCells.values()].some((cell) =>
-    [...cell.records.values()].some((r) => r.unlockedAt && !r.readAt),
+  const unreadCount = [...ashiatoCells.values()].reduce(
+    (total, cell) =>
+      total + [...cell.records.values()].filter((r) => r.unlockedAt && !r.readAt).length,
+    0,
   );
-  menuBadge.hidden = !hasUnread;
-  unlockedBadge.hidden = !hasUnread;
+  menuBadge.hidden = unreadCount === 0;
+  unlockedBadge.hidden = unreadCount === 0;
+  unlockedBadge.textContent = String(unreadCount);
 }
 
 // 一定時間(READ_DWELL_MS、config.ts参照)表示され続けたレコードだけを既読にする。
@@ -2489,14 +2494,29 @@ $<HTMLButtonElement>("#composeSaveDraft").onclick = async () => {
   );
 
   await putDraft(makeDraft(lat, lon, geohashLength, municipalityLabel));
+  await refreshDraftBadge();
   composeDialog.close();
   setStatus("下書きに保存しました");
 };
 
 // --- 下書きリスト(ダイアログ) ------------------------------------------
 
+// 下書きの総数を、メールの受信トレイのような件数バッジとしてハンバーガー
+// メニュー内「下書き」項目に出す(既読/未読の概念は無いので、常に総数を出す)。
+function setDraftBadgeCount(count: number): void {
+  draftBadge.hidden = count === 0;
+  draftBadge.textContent = String(count);
+}
+
+// 下書きリストのダイアログを開いていないとき(投稿UIから直接保存した場合等)にも
+// バッジだけ更新したいケース向けの軽量版。
+async function refreshDraftBadge(): Promise<void> {
+  setDraftBadgeCount((await getDrafts()).length);
+}
+
 async function refreshDraftList(): Promise<void> {
   const drafts = await getDrafts();
+  setDraftBadgeCount(drafts.length);
   draftList.replaceChildren();
 
   if (drafts.length === 0) {
@@ -2692,6 +2712,8 @@ if (splash) {
         animate: false,
       });
     }
+
+    await refreshDraftBadge();
 
     const restoredCount = await switchHost(
       normalizeInstanceUrl($<HTMLInputElement>("#instance").value),
