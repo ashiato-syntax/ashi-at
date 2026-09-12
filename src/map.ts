@@ -4,32 +4,26 @@ import { decodeGeohash, encodeGeohash } from "./geohash.js";
 import type { AshiatoGroupHandle } from "./types.js";
 import type { FeatureCollection, Geometry, Position } from "geojson";
 import { createIcon } from "./icons.js";
+import {
+  LAND_FILL_COLOR,
+  PREFECTURE_DASH_ARRAY,
+  PREFECTURE_BOUNDARY_COLOR,
+  PREFECTURE_BOUNDARY_WEIGHT,
+  MUNICIPALITY_BOUNDARY_COLOR,
+  MUNICIPALITY_BOUNDARY_WEIGHT,
+  WARD_DASH_ARRAY,
+  WARD_BOUNDARY_COLOR,
+  ASHIATO_COLORS_BY_LENGTH,
+  INSET_FRACTION,
+  PRECISION_PREVIEW_COLOR,
+  CURRENT_LOCATION_COLOR,
+} from "./config.js";
 
 // NOTE: ここでは意図的に L.tileLayer(...) を追加していない
 // サードパーティ製のタイルプロバイダは使用しない
 // 無料で運用できるように、都道府県市区町村境界だけ、
 // https://github.com/smartnews-smri/japan-topography　の1%GeoJsonを使って描画してる
 const JAPAN_BOUNDS = L.latLngBounds([17, 122], [46, 154]);
-
-// 陸地の塗りつぶし色。海は#mapのCSS背景色(style.css)で表現しているので、
-// ここでは都道府県ポリゴンの塗りつぶしだけを指定する。
-const LAND_FILL_COLOR = "#F7F2EC";
-
-// 都道府県境界線の一点鎖線(長い破線, 隙間, 点, 隙間 の繰り返し)
-// 「点」はlineCap:'round'(Path options既定値)により短い線分が丸い点として描画される
-const PREFECTURE_DASH_ARRAY = "10,4,1,4";
-// 都道府県境界線の色・太さ。
-const PREFECTURE_BOUNDARY_COLOR = "#707070";
-const PREFECTURE_BOUNDARY_WEIGHT = 1.0;
-
-// 市区町村境界線(実線)の色・太さ。
-const MUNICIPALITY_BOUNDARY_COLOR = "#B9B9B9";
-const MUNICIPALITY_BOUNDARY_WEIGHT = 0.7;
-
-// 政令指定都市内部の区どうしの境界は、色は市区町村境界と同じまま、
-// 点線(dashArray)だけで見分けられるようにしている。
-const WARD_DASH_ARRAY = "1,3";
-const WARD_BOUNDARY_COLOR = "#B9B9B9";
 
 function ringsOf(geometry: Geometry): Position[][] {
   if (geometry.type === "Polygon") return geometry.coordinates;
@@ -235,15 +229,7 @@ function extractMunicipalityBoundaryChains(
   };
 }
 
-// Geohashの桁数(精度)ごとの色。精度が細かい(=判定エリアが狭い)ほど暖色にして目立たせる。
-// 4桁=青, 5桁=緑, 6桁=黄色, 7桁=赤。Ashi@が扱うのはこの4種類の桁数のみ。
-// (UIのテーマカラーがマゼンタになったため、緑に戻せるようになった)
-const ASHIATO_COLORS_BY_LENGTH: Record<number, string> = {
-  4: "#00acc1",
-  5: "#4caf50",
-  6: "#fbc02d",
-  7: "#e53935",
-};
+// Geohashの桁数(精度)ごとの色(ASHIATO_COLORS_BY_LENGTH)はconfig.ts参照。
 // main.js側(エリアオーバーレイの色計算等)からも使えるようにエクスポートする。
 export function ashiatoColor(geohashLength: number): string {
   return ASHIATO_COLORS_BY_LENGTH[geohashLength] ?? ASHIATO_COLORS_BY_LENGTH[7];
@@ -666,9 +652,8 @@ function combinedCentroid(geometries: Geometry[]): [number, number] | null {
   return [sumLat / totalArea, sumLon / totalArea];
 }
 
-// あしあとセルの境界線(outline)を、塗りの矩形よりどれだけ内側に描くか
-// (セルの縦横それぞれの長さに対する割合)。addAshiatoGroup参照。
-const INSET_FRACTION = 0.05;
+// あしあとセルの境界線(outline)の内側への割合(INSET_FRACTION)はconfig.ts参照
+// (addAshiatoGroup参照)。
 
 // 表示対象レコードが全て既読かどうかで、マーカーの見た目を変えるためのCSSクラス。
 // 全て既読ならフェード(薄く・明滅なし)、1件でも未読が残っていればゆっくり明滅させる
@@ -781,10 +766,10 @@ export interface PrecisionPreviewLayer {
 // 投稿UI表示中、選択中の精度でのGeohashセル範囲をプレビュー表示する。
 // areaOverlay(既存の「エリア」トグル)とは独立(投稿UI固有)。
 // あしあと本体の色(4桁=青緑, 5桁=緑, 6桁=黄, 7桁=赤)と紛らわしくならないよう、
-// あしあとでは使っていない紫系で統一して表示する。
+// あしあとでは使っていない紫系(PRECISION_PREVIEW_COLOR、config.ts参照)で
+// 統一して表示する。
 // show()はプレビュー用に計算したgeohash文字列を返す(呼び出し側で投稿本文の
 // 組み立てに使い回せるように)。
-const PRECISION_PREVIEW_COLOR = "#8e24aa";
 
 export function createPrecisionPreviewLayer(map: L.Map): PrecisionPreviewLayer {
   const rect = L.rectangle(
@@ -824,9 +809,9 @@ export interface CurrentLocationLayer {
   hide(): void;
 }
 
-// 現在地マーカー+精度円の色。テーマカラーがマゼンタになったので、
-// あしあとの丸(4桁=青緑, 5桁=緑, 6桁=黄, 7桁=赤)とも被らない青に戻せる。
-const CURRENT_LOCATION_COLOR = "#4285f4";
+// 現在地マーカー+精度円の色(CURRENT_LOCATION_COLOR、config.ts参照)。
+// テーマカラーがマゼンタになったので、あしあとの丸(4桁=青緑, 5桁=緑, 6桁=黄,
+// 7桁=赤)とも被らない青に戻せる。
 
 // 現在地マーカー+精度円。専用paneに乗せ、Ashiatoより手前に表示する
 export function createCurrentLocationLayer(map: L.Map): CurrentLocationLayer {

@@ -63,24 +63,31 @@ import type {
   GeohashLength,
 } from "./types.js";
 import { createIcon } from "./icons.js";
-
-// これよりズームしたら、都道府県名ラベルを表示
-const MIN_ZOOM_FOR_PREFECTURE_LABELS = 7;
-// これよりズームしたら、当該都道府県の市区町村GeoJsonを読み込む
-const MIN_ZOOM_FOR_MUNICIPALITIES = 10;
-// これよりズームしたら、県庁所在地・政令指定都市の大きいラベルを表示。
-const MIN_ZOOM_FOR_CAPITAL_LABELS = 10;
-// これよりズームしたら、区・区が無い市町村等、通常の市区町村名ラベルを表示
-const MIN_ZOOM_FOR_MUNICIPALITY_LABELS = 11;
-
-// 固定タグ。将来複数タグに対応するなら cache.js のhostTagキーはそのまま使い回せる。
-const TAG = "Ashiato";
-const PAGE_SIZE = 30;
-
-// Ashi@で扱うgeohashの桁数(精度)。これ以外の精度の「あしあと」は対象外として無視する
-// (地図表示にも「見つけたあしあと」にも一切出さない)。
-const MIN_GEOHASH_LENGTH = 4;
-const MAX_GEOHASH_LENGTH = 7;
+import {
+  SHOW_LOCKED_ASHIATO_FOR_DEBUG,
+  SHOW_TEST_CONTEXT_ASHIATO_FOR_DEBUG,
+  TAG,
+  PAGE_SIZE,
+  ASHIATO_CONTEXT_ID,
+  MIN_GEOHASH_LENGTH,
+  MAX_GEOHASH_LENGTH,
+  PRECISION_LABELS,
+  DRAFT_POST_DELAY_MS_BY_LENGTH,
+  PENDING_PROMOTION_INTERVAL_MS,
+  TEXT_PREVIEW_SAFETY_CAP_LENGTH,
+  BAD_ACCURACY_RADIUS_M,
+  STATUS_AUTO_HIDE_MS,
+  ERROR_AUTO_HIDE_MS,
+  MIN_DRAG_RESIZE_HEIGHT_PX,
+  DRAG_RESIZE_FLICK_VELOCITY_PX_PER_MS,
+  DRAG_RESIZE_CLOSE_HEIGHT_RATIO,
+  POPUP_DRAG_MAX_HEIGHT_PX,
+  READ_DWELL_MS,
+  MIN_ZOOM_FOR_PREFECTURE_LABELS,
+  MIN_ZOOM_FOR_MUNICIPALITIES,
+  MIN_ZOOM_FOR_CAPITAL_LABELS,
+  MIN_ZOOM_FOR_MUNICIPALITY_LABELS,
+} from "./config.js";
 
 // 4桁(約20km)・5桁(約4km)はエリアが広すぎて「現地に行って発見する」体験に
 // そぐわないため、現地探索(GPSでの発見判定=unlockedAt付与)の対象外とする。
@@ -94,41 +101,10 @@ function requiresOnSiteDiscovery(geohashLength: number): boolean {
   return geohashLength >= 6;
 }
 
-// 投稿機能: geohashの桁数(判定エリアの狭さ)に応じて、下書き保存から投稿できる
-// ようになるまでの遅延時間を設ける(プライバシー配慮。投稿者の現在地が即座に
-// 特定されないようにするため)。桁数が細かい(=判定エリアが狭い)ほど投稿者の
-// 居場所が絞り込まれやすいため、4桁(約20km)・5桁(約4km)は遅延なし(直接投稿可)、
-// 6桁(約1km)は下書き保存から20分、7桁(約150m)は40分経過するまで投稿できない
-// ようにする(isDraftPostable/updateComposeButtonsの両方でこの定数を参照すること)。
-const DRAFT_POST_DELAY_MS_BY_LENGTH: Record<GeohashLength, number> = {
-  4: 0,
-  5: 0,
-  6: 20 * 60 * 1000, // 20分
-  7: 40 * 60 * 1000, // 40分
-};
-
-// Ashiato Syntaxの時間条件(d/w/t/o等)は位置が変わらなくても時刻の経過だけで
-// Active/Inactiveが切り替わりうるため、位置情報の更新を待たずにこの間隔で
-// 定期的に再評価する(reevaluateActiveConditions参照)。
-const PENDING_PROMOTION_INTERVAL_MS = 60 * 1000; // 1分ごとに再チェック
-
-const PRECISION_LABELS: Record<GeohashLength, string> = {
-  4: "約20km",
-  5: "約4km",
-  6: "約1km",
-  7: "約150m",
-};
-
-// 「見つけたあしあと」一覧・ポップアップに表示する本文プレビューの
-// 安全弁としての最大文字数。表示上の省略はCSS(.mfm-preview)での高さクリップ
-// +「続きを表示」ヒントで行うため、通常はここで切り詰められることはない
-// (Misskeyの標準的な投稿文字数上限を大きく超えるような極端なケースにのみ働く、
-// 文字数で機械的に切ると:name:のようなMFM記法の途中で千切れる恐れがあるため)。
-const TEXT_PREVIEW_SAFETY_CAP_LENGTH = 3000;
-
-// デバッグ用: trueにすると、未発見(ロック中)のAshiatoも地図に表示する。
-// GPSによる発見判定や「集めたあしあと」一覧の仕様は変えない。本番ではfalse。
-const SHOW_LOCKED_ASHIATO_FOR_DEBUG = false;
+function isAcceptedContextId(contextId: string | null): boolean {
+  if (contextId === ASHIATO_CONTEXT_ID) return true;
+  return SHOW_TEST_CONTEXT_ASHIATO_FOR_DEBUG && contextId === "test";
+}
 
 // インスタンスのorigin(https://misskey.io等)を、画面表示用に"misskey.io"の
 // ようなホスト名だけへ短縮する。
@@ -176,8 +152,10 @@ $("#aboutButton .menu-item-icon").append(createIcon("info"));
 $("#precisionFilterInfo").append(createIcon("info"));
 $("#settingsToggle .menu-item-icon").append(createIcon("settings"));
 $("#mediaVisibilityIcon").append(createIcon("eye"));
+$("#layerDisplayIcon").append(createIcon("layers"));
 $("#composePrecisionIcon").append(createIcon("ruler"));
 $("#mediaVisibilityToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
+$("#layerDisplayToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
 $("#ashiatoActionShowOnMapIcon").append(createIcon("map-pin"));
 $("#ashiatoActionOpenPostIcon").append(createIcon("external-link"));
 $("#ashiatoActionDeleteIcon").append(createIcon("trash-2"));
@@ -227,8 +205,6 @@ const currentLocationLayer = createCurrentLocationLayer(map);
 let watchId: number | null = null;
 let gpsEnabled = false;
 
-const STATUS_AUTO_HIDE_MS = 3500;
-const ERROR_AUTO_HIDE_MS = 6000; // エラーも時間経過で自動的に消す(内容確認の猶予として少し長め)
 let statusHideTimer: ReturnType<typeof setTimeout> | undefined;
 
 // 通常メッセージ・エラーメッセージいずれも、一定時間で自動的に消える
@@ -331,6 +307,33 @@ function showConfirm(
 
 closeOnBackdropClick(confirmDialog);
 
+// showConfirmのmessageに渡す箇条書き。各項目の折り返しが「・」の真下ではなく
+// 本文の頭に揃うよう、本文をspanで囲んでCSS側(.dialog-message-list)で
+// flexの残り幅として扱う(text-indentで「・」の幅を数値で仮定する必要が無い)。
+// 文字列だけでなく、一部だけ強調したい項目(inlineCode参照)のためにNodeも渡せる。
+function buildBulletList(items: (string | Node)[]): HTMLUListElement {
+  const list = document.createElement("ul");
+  list.className = "dialog-message-list";
+  for (const item of items) {
+    const li = document.createElement("li");
+    const text = document.createElement("span");
+    if (typeof item === "string") text.textContent = item;
+    else text.append(item);
+    li.append(text);
+    list.append(li);
+  }
+  return list;
+}
+
+// Ashiato Syntax文字列等、コードのように扱いたい部分を灰色の背景+等幅フォントで
+// 引用のように見せる(buildBulletList参照)。
+function inlineCode(text: string): HTMLElement {
+  const code = document.createElement("code");
+  code.className = "inline-code";
+  code.textContent = text;
+  return code;
+}
+
 // --- 「つまんで高さ調整」ドラッグ操作の共通処理 -----------------------------
 // 下部シート(投稿UI/見つけたあしあと/下書き)・マップの吹き出し(同一地点の
 // 複数あしあと一覧)のどちらも、上部のハンドルをつまんで高さを直接調整でき、
@@ -338,14 +341,7 @@ closeOnBackdropClick(confirmDialog);
 // DRAG_RESIZE_CLOSE_HEIGHT_RATIO)まで小さくした場合は、指を離した時点で
 // そのまま閉じる、という同じ操作感にする。高さの取得/反映方法と「閉じる」の
 // 実体(dialog.close() / map.closePopup())は対象ごとに異なるので、
-// DragResizeTargetとして注入する。
-const MIN_DRAG_RESIZE_HEIGHT_PX = 120;
-const DRAG_RESIZE_FLICK_VELOCITY_PX_PER_MS = 0.6;
-const DRAG_RESIZE_CLOSE_HEIGHT_RATIO = 0.35;
-// マップの吹き出し(showAshiatoCellPopup)をドラッグで広げられる上限。
-// Leaflet側のL.popup({maxHeight:260})はあくまで初期表示時の上限で、
-// ドラッグ操作はこちらの値(とウィンドウ高さ)を上限にする。
-const POPUP_DRAG_MAX_HEIGHT_PX = 480;
+// DragResizeTargetとして注入する。数値の調整はconfig.tsを参照。
 
 interface DragResizeTarget {
   handle: HTMLElement;
@@ -455,7 +451,7 @@ async function initBoundaries(): Promise<void> {
     });
   } catch (error) {
     console.error(error);
-    setStatus("地図境界の読み込みに失敗しました。", true);
+    setStatus("地図境界の読み込みに失敗しました", true);
   }
 }
 
@@ -890,33 +886,31 @@ function buildMediaGrid(files: AshiatoFile[]): HTMLElement {
 
   if (files.length === 1 && files[0].type.startsWith("video/")) {
     grid.classList.add("ashiato-media-grid-single-video");
-    grid.append(buildMediaItem(files[0], [], -1, 0, 1));
+    grid.append(buildMediaItem(files[0], [], -1));
     return grid;
   }
 
   const images = files.filter((f) => !f.type.startsWith("video/"));
-  files.forEach((file, index) => {
-    grid.append(buildMediaItem(file, images, images.indexOf(file), index, files.length));
+  files.forEach((file) => {
+    grid.append(buildMediaItem(file, images, images.indexOf(file)));
   });
   return grid;
 }
 
 // imagesForLightbox/lightboxIndexは、この1件が画像の場合の「ライトボックスに
 // 渡す画像だけの配列とその中でのインデックス」。動画の場合は使わない(-1)。
-// position/totalは添付ファイル全体(動画も含む)の中での位置と総数で、
-// 複数枚あることを示すバッジ(1/3等)の表示に使う。
 // モザイク(ぼかし)の状態はitemの"ashiato-media-blurred"クラスの有無だけで管理する。
 // veil(タップで表示)とeyeBtn(タップでモザイクをかけ直す)はどちらも常にDOM上に
 // 存在し、どちらを見せるかはCSS側でそのクラスの有無から切り替える
 // (style.css: .ashiato-media-blurred .ashiato-media-veil / :not(...) .ashiato-media-eye-btn)。
 // センシティブタグは、モザイク状態に関わらずisSensitiveなら常に表示する
 // (ライトボックス側には付けない = このitem内だけの要素なので自然に満たされる)。
+// 何枚中の何枚目か(n/m)は、一覧側では表示せずライトボックス(拡大表示)側だけで
+// 表示する(openMediaLightbox参照)。
 function buildMediaItem(
   file: AshiatoFile,
   imagesForLightbox: AshiatoFile[],
   lightboxIndex: number,
-  position: number,
-  total: number,
 ): HTMLElement {
   const item = document.createElement("div");
   item.className = "ashiato-media-item";
@@ -971,15 +965,6 @@ function buildMediaItem(
     item.classList.add("ashiato-media-blurred");
   };
   item.append(eyeBtn);
-
-  // 複数枚あるときだけ、何枚中の何枚目かを示すバッジを付ける(横スクロールで
-  // 1枚ずつしか見えないため、境界線の装飾だけでは複数枚あることに気づきにくい)。
-  if (total > 1) {
-    const counter = document.createElement("span");
-    counter.className = "ashiato-media-counter";
-    counter.textContent = `${position + 1}/${total}`;
-    item.append(counter);
-  }
 
   return item;
 }
@@ -1083,11 +1068,10 @@ function updateUnreadBadge(): void {
   unlockedBadge.hidden = !hasUnread;
 }
 
-// 一定時間(このミリ秒数)表示され続けたレコードだけを既読にする。開いた瞬間
-// (=表示された瞬間)に即既読化すると未読ドットを目にする間もなく消えてしまうため、
-// 「ちゃんと表示された」とみなせるだけの猶予を設ける。この間にスクロールで
-// 画面外に出た場合はタイマーを取り消し、既読にしない。
-const READ_DWELL_MS = 800;
+// 一定時間(READ_DWELL_MS、config.ts参照)表示され続けたレコードだけを既読にする。
+// 開いた瞬間(=表示された瞬間)に即既読化すると未読ドットを目にする間もなく
+// 消えてしまうため、「ちゃんと表示された」とみなせるだけの猶予を設ける。
+// この間にスクロールで画面外に出た場合はタイマーを取り消し、既読にしない。
 
 // 「開いただけ」ではなく「実際にスクロールされて画面内に表示された」行だけを
 // 既読にする(可視性ベースの既読判定)。rootは実際のスクロール領域
@@ -1421,7 +1405,7 @@ function openAshiatoActions(record: AshiatoRecord): void {
     }
 
     refreshUnlockedList();
-    setStatus("あしあとを削除しました。(現地に行けば再度発見できます)");
+    setStatus("あしあとを削除しました（現地に行けば再度発見できます）");
   };
 
   ashiatoActionDialog.showModal();
@@ -1439,10 +1423,9 @@ let lastKnownPosition: { lat: number; lon: number } | null = null;
 // 直近の位置精度(半径, メートル)。GPSトグルOFF中は常にnull。
 let lastKnownAccuracy: number | null = null;
 
-// 位置精度がこの半径(メートル)を超えたら「精度が悪い」とみなす。
-// この状態では、あしあとの発見(当たり判定)・新規投稿・新規下書きを行わない
-// (下書き済みのあしあとの投稿はisDraftPostableのルールのみに従い、ここでは制限しない)。
-const BAD_ACCURACY_RADIUS_M = 500;
+// 位置精度のしきい値(BAD_ACCURACY_RADIUS_M)はconfig.ts参照。この状態では、
+// あしあとの発見(当たり判定)・新規投稿・新規下書きを行わない(下書き済みの
+// あしあとの投稿はisDraftPostableのルールのみに従い、ここでは制限しない)。
 
 function isPrecisionBad(): boolean {
   return gpsEnabled && lastKnownAccuracy !== null && lastKnownAccuracy > BAD_ACCURACY_RADIUS_M;
@@ -1473,10 +1456,12 @@ function showDiscoveryBanner(count: number): void {
   }, 3500);
 }
 
-// GPSトグルON/OFF・位置精度いずれの変化でも、投稿メニュー項目(新規投稿・新規下書きの入口)の
-// 有効/無効を再計算する。
+// GPSトグルON/OFF・現在地の有無・位置精度いずれの変化でも、投稿メニュー項目
+// (新規投稿・新規下書きの入口)の有効/無効を再計算する。
+// トグルはタップした瞬間に見た目上ON表示になる(setGpsEnabled参照)が、
+// 実際に現在地(lastKnownPosition)が取れるまでは投稿できない。
 function updateComposeAvailability(): void {
-  composeAshiatoMenuItem.disabled = !gpsEnabled || isPrecisionBad();
+  composeAshiatoMenuItem.disabled = !gpsEnabled || !lastKnownPosition || isPrecisionBad();
 }
 
 // 起動時、そもそもGeolocation APIが無い端末なら見た目で分かるようにしておく
@@ -1489,7 +1474,7 @@ composeAshiatoMenuItem.disabled = true;
 
 function setGpsEnabled(enabled: boolean): void {
   if (enabled && !("geolocation" in navigator)) {
-    setStatus("この端末では位置情報が使えません。", true);
+    setStatus("この端末では位置情報が使えません", true);
     return;
   }
 
@@ -1511,14 +1496,16 @@ function setGpsEnabled(enabled: boolean): void {
     return;
   }
 
-  if (watchId !== null) return; // 既に取得試行中(確定前含む)なら二重に開始しない
+  if (watchId !== null) return; // 既に取得試行中なら二重に開始しない
 
-  // ここではまだgpsEnabled/aria-pressedをONにしない。スマホ側の位置情報
-  // サービスがOFFになっている等でこの後のwatchPositionが失敗する可能性が
-  // あり、要求した時点で即座にONの見た目にしてしまうと、実際には取得できて
-  // いないのに一瞬(あるいはエラーが返るまでの間)「ONにできてしまった」ように
-  // 見えてしまうため。ON状態の確定はhandlePositionUpdateで初回取得に
-  // 成功した時点で行う。
+  // タップした時点で即座にON表示にする(現在地の取得を待たせず、もたつき
+  // 感を無くすため)。実際の現在地(lastKnownPosition)が届くまでは
+  // 「あしあとを投稿」を押せないままにする(updateComposeAvailability参照)。
+  // 取得が失敗/タイムアウトした場合は、handlePositionErrorが自動でOFFに戻す。
+  gpsEnabled = true;
+  gpsToggleBtn.setAttribute("aria-pressed", "true");
+  updateComposeAvailability();
+
   setStatus("現在地を取得中…");
   watchId = navigator.geolocation.watchPosition(
     handlePositionUpdate,
@@ -1530,15 +1517,16 @@ function setGpsEnabled(enabled: boolean): void {
 function handlePositionError(error: GeolocationPositionError): void {
   console.error(error);
   const messages: Record<number, string> = {
-    1: "位置情報の利用が許可されていません。",
-    2: "現在地を取得できませんでした。",
-    3: "現在地の取得がタイムアウトしました。",
+    1: "位置情報の利用が許可されていません",
+    2: "現在地を取得できませんでした",
+    3: "現在地の取得がタイムアウトしました",
   };
-  setStatus(messages[error.code] ?? "位置情報の取得に失敗しました。", true);
-  // 権限拒否(1)、または取得不能(2: 端末側の位置情報サービスがOFFの場合もこのコードで
-  // 返ってくることが多い)なら、トグルもOFFに戻す。Web Geolocation APIには
-  // OS側の位置情報サービスON/OFFを直接判定する手段が無いため、これを代理シグナルとして使う。
-  if (error.code === 1 || error.code === 2) setGpsEnabled(false);
+  setStatus(messages[error.code] ?? "位置情報の取得に失敗しました", true);
+  // 権限拒否(1)、取得不能(2: 端末側の位置情報サービスがOFFの場合もこのコードで
+  // 返ってくることが多い)、タイムアウト(3)のいずれでも、トグルをOFFに戻す。
+  // タップした時点で見た目上ON表示にしている(setGpsEnabled参照)ため、
+  // 現在地が一向に取れない状態のままONの見た目だけが残ることを防ぐ。
+  setGpsEnabled(false);
 }
 
 // 現在地(lastKnownPosition)と全セルを突き合わせて、未発見のものを判定する。
@@ -1551,6 +1539,7 @@ async function checkCurrentPositionAgainstCells(): Promise<void> {
   if (!lastKnownPosition || isPrecisionBad()) return;
   const { lat, lon } = lastKnownPosition;
   let discoveredCount = 0;
+  let anyLengthAutoEnabled = false;
 
   for (const cell of ashiatoCells.values()) {
     // 4桁・5桁(現地探索の対象外、requiresOnSiteDiscovery参照)は、たとえ現在地が
@@ -1575,10 +1564,24 @@ async function checkCurrentPositionAgainstCells(): Promise<void> {
       // しまわないようにするため。
       record.unlockedAt = unlockedAt;
       discoveredCount++;
+      // 現地で発見した桁数(ここに来るのは常に6桁・7桁。requiresOnSiteDiscovery参照)の
+      // 表示レイヤーがOFFなら、設定で有効な場合に限り自動でONにする。
+      if (
+        autoEnableLayerOnDiscoveryEnabled &&
+        enablePrecisionLengthIfNeeded(record.geohash.length)
+      ) {
+        anyLengthAutoEnabled = true;
+      }
       await markAshiatoUnlocked(record.id, unlockedAt);
     }
     rebuildCellVisual(cell); // 初めて発見された/丸の数が増えたケースに対応
     refreshUnlockedList();
+  }
+
+  // 表示レイヤーが自動でONになった場合、今回発見したセル以外にも同じ桁数の
+  // (これまでOFFで非表示だった)セルがあるかもしれないため、全セルを描画し直す。
+  if (anyLengthAutoEnabled) {
+    for (const cell of ashiatoCells.values()) rebuildCellVisual(cell);
   }
 
   if (discoveredCount > 0) showDiscoveryBanner(discoveredCount);
@@ -1587,11 +1590,10 @@ async function checkCurrentPositionAgainstCells(): Promise<void> {
 // 現在地が更新されるたびに呼ばれる。実際の判定はcheckCurrentPositionAgainstCellsに委譲する
 // (「過去を探す」等でセル自体が増減したタイミングでも同じ判定を再利用できるようにするため)。
 async function handlePositionUpdate(position: GeolocationPosition): Promise<void> {
-  if (!gpsEnabled) {
-    // 初回の取得成功。ここで初めてトグルのON状態を確定させる(setGpsEnabled参照)。
-    gpsEnabled = true;
-    gpsToggleBtn.setAttribute("aria-pressed", "true");
-  }
+  // トグルOFF後に古いwatchPositionのコールバックが遅れて届いた場合の保険
+  // (clearWatch済みのはずだが、念のため)。ON表示はsetGpsEnabledで即座に
+  // 済ませているため、ここでgpsEnabledをtrueにする必要はない。
+  if (!gpsEnabled) return;
 
   const { latitude, longitude, accuracy } = position.coords;
   lastKnownPosition = { lat: latitude, lon: longitude };
@@ -1737,9 +1739,11 @@ new ResizeObserver(([entry]) => {
 // どうかを選べるようにした。4桁・5桁の広いセルが密集地の7桁セルを覆い隠す
 // ケースを、利用者側で個別にオフにして解消できる。
 const visiblePrecisionLengths = new Set<number>([4, 5, 6, 7]);
+const precisionFilterChipsByLength = new Map<number, HTMLButtonElement>();
 
 for (const chip of document.querySelectorAll<HTMLButtonElement>(".precision-filter-chip")) {
   const length = Number(chip.dataset.length);
+  precisionFilterChipsByLength.set(length, chip);
   chip.style.setProperty("--chip-color", ashiatoColor(length));
   chip.onclick = () => {
     const nowVisible = !visiblePrecisionLengths.has(length);
@@ -1748,6 +1752,24 @@ for (const chip of document.querySelectorAll<HTMLButtonElement>(".precision-filt
     chip.setAttribute("aria-pressed", String(nowVisible));
     for (const cell of ashiatoCells.values()) rebuildCellVisual(cell);
   };
+}
+
+// 「設定」の「現地で発見したら、その精度の表示レイヤーを自動でONにする」。
+// デフォルト有効(index.htmlのcheckedと一致させる)。
+let autoEnableLayerOnDiscoveryEnabled = true;
+const autoEnableLayerOnDiscoveryCheckbox = $<HTMLInputElement>("#autoEnableLayerOnDiscovery");
+autoEnableLayerOnDiscoveryCheckbox.onchange = () => {
+  autoEnableLayerOnDiscoveryEnabled = autoEnableLayerOnDiscoveryCheckbox.checked;
+  putSetting("autoEnableLayerOnDiscoveryEnabled", autoEnableLayerOnDiscoveryEnabled);
+};
+
+// 指定した桁数の表示レイヤーがまだOFFなら、ONにしてチップの見た目も更新する。
+// 実際に切り替えた場合はtrueを返す(呼び出し側でまとめて再描画するため)。
+function enablePrecisionLengthIfNeeded(length: number): boolean {
+  if (visiblePrecisionLengths.has(length)) return false;
+  visiblePrecisionLengths.add(length);
+  precisionFilterChipsByLength.get(length)?.setAttribute("aria-pressed", "true");
+  return true;
 }
 
 // 色見本(小さな正方形)をテキストに埋め込む。「青・緑」等の色名だけだと
@@ -1839,6 +1861,16 @@ mediaVisibilityToggle.onclick = () => {
   mediaVisibilityToggle.setAttribute("aria-expanded", String(willExpand));
 };
 
+// 「レイヤーの表示」も同様に既定では折りたたんでおく。
+const layerDisplayToggle = $<HTMLButtonElement>("#layerDisplayToggle");
+const layerDisplayRows = $("#layerDisplayRows");
+
+layerDisplayToggle.onclick = () => {
+  const willExpand = !layerDisplayRows.classList.contains("expanded");
+  layerDisplayRows.classList.toggle("expanded", willExpand);
+  layerDisplayToggle.setAttribute("aria-expanded", String(willExpand));
+};
+
 document.querySelectorAll<HTMLInputElement>('input[name="mediaVisibility"]').forEach((el) => {
   el.onchange = () => {
     mediaVisibilityMode = el.value as MediaVisibilityMode;
@@ -1897,6 +1929,7 @@ async function switchHost(host: string): Promise<number> {
   }
   for (const record of cached) {
     if (!isSupportedGeohashLength(record.geohash)) continue; // 対象外の桁数は無視
+    if (!isAcceptedContextId(record.contextId)) continue; // 対象外のcontextIdは無視
     addRecordToCell(record);
   }
   refreshUnlockedList();
@@ -1905,8 +1938,8 @@ async function switchHost(host: string): Promise<number> {
 
   setStatus(
     cached.length > 0
-      ? `キャッシュから${cached.length}件のAshiatoを復元しました。`
-      : "準備完了。",
+      ? `キャッシュから${cached.length}件のAshiatoを復元しました`
+      : "準備完了",
   );
 
   return cached.length;
@@ -2023,7 +2056,7 @@ async function ingestNotes(host: string, notes: MisskeyNote[]): Promise<AshiatoR
 
     let idx = 0;
     for (const r of parseText(note.text)) {
-      if (isSupportedGeohashLength(r.model.geohash)) {
+      if (isSupportedGeohashLength(r.model.geohash) && isAcceptedContextId(r.model.contextId)) {
         records.push(
           makeRecord(
             host,
@@ -2103,11 +2136,11 @@ async function buildDiscoveryStatusMessage(suffix: string): Promise<string> {
         );
         if (cellPref === prefName) inPrefecture += count;
       }
-      prefectureClause = `${prefName}内に${inPrefecture}個。`;
+      prefectureClause = `（${prefName}内に${inPrefecture}個）`;
     }
   }
 
-  return `あなたが未発見のあしあとが${undiscovered.length}件あります。${prefectureClause}${suffix}`;
+  return `あなたが未発見のあしあとが${undiscovered.length}件あります ${prefectureClause}${suffix}`;
 }
 
 // 過去方向(untilId): 「過去を探す」(初回・2回目以降とも同じボタン)
@@ -2149,14 +2182,14 @@ async function fetchOlder(): Promise<void> {
       const oldestLabel = formatDateTime(oldestCreatedAt);
 
       setStatus(
-        await buildDiscoveryStatusMessage(oldestLabel ? `${oldestLabel}まで探しました。` : ""),
+        await buildDiscoveryStatusMessage(oldestLabel ? `-${oldestLabel}まで探しました` : ""),
       );
     } else {
-      setStatus("これより古いAshiatoは見つかりませんでした。");
+      setStatus("これより古いAshiatoは見つかりませんでした");
     }
   } catch (e) {
     console.error(e);
-    setStatus((e as Error).message || "検索に失敗しました。", true);
+    setStatus((e as Error).message || "検索に失敗しました", true);
   } finally {
     btn.disabled = false;
   }
@@ -2203,11 +2236,11 @@ async function fetchNewer(): Promise<void> {
     setStatus(
       notes.length > 0
         ? await buildDiscoveryStatusMessage("")
-        : "新しいAshiatoはありませんでした。",
+        : "新しいAshiatoはありませんでした",
     );
   } catch (e) {
     console.error(e);
-    setStatus((e as Error).message || "検索に失敗しました。", true);
+    setStatus((e as Error).message || "検索に失敗しました", true);
   } finally {
     btn.disabled = false;
   }
@@ -2231,15 +2264,12 @@ async function handleClearSearchCache(): Promise<void> {
   }
 
   cursor = null;
-  setStatus("検索キャッシュを消去しました。");
+  setStatus("検索キャッシュを消去しました");
 }
 
 $<HTMLButtonElement>("#search").onclick = fetchOlder;
 $<HTMLButtonElement>("#loadNewer").onclick = fetchNewer;
-// 確定ON(gpsEnabled)・取得試行中で未確定(watchId!==nullだがgpsEnabledはまだfalse)の
-// いずれの状態でもOFFに戻す。完全にOFFの状態からのみONにする試行を開始する。
-$<HTMLButtonElement>("#toggleGps").onclick = () =>
-  setGpsEnabled(!(gpsEnabled || watchId !== null));
+$<HTMLButtonElement>("#toggleGps").onclick = () => setGpsEnabled(!gpsEnabled);
 $<HTMLButtonElement>("#clearSearchCache").onclick = async () => {
   const wantsToClear = await showConfirm(
     "検索キャッシュを削除しますか？(見つけたあしあとは残ります)",
@@ -2358,35 +2388,14 @@ document.querySelectorAll<HTMLInputElement>('input[name="precision"]').forEach((
 
 $<HTMLButtonElement>("#composeAshiatoMenuItem").onclick = () => {
   closeMenu();
-  if (!gpsEnabled || isPrecisionBad()) return; // ボタン自体を無効化済みだが念のため
+  // ボタン自体を無効化済み(updateComposeAvailability参照。GPS ON かつ
+  // 現在地取得済みでないと押せない)だが、念のため。
+  if (!gpsEnabled || !lastKnownPosition || isPrecisionBad()) return;
 
-  // GPSトグルが既にONで現在地が分かっていれば、新たに取得し直さず即座に開く。
-  if (lastKnownPosition) {
-    composePosition = { ...lastKnownPosition };
-    updateComposeButtons();
-    composeDialog.show(); // 非モーダル: マップ操作(ドラッグ/ズーム/エリアトグル等)を妨げない
-    updateComposePreview();
-    return;
-  }
-
-  // ONにした直後などでまだ現在地が届いていない場合だけ、改めて取得する。
-  setStatus("現在地を取得中…");
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      // 取得を待っている間にGPSがOFFにされていたら、古い位置情報で
-      // 投稿UIを開き直さない。
-      if (!gpsEnabled) return;
-      composePosition = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-      updateComposeButtons();
-      // dialogを開いてから高さを測ってfitBoundsする必要があるため、
-      // show()を先に呼ぶ(まだ非表示の時点でupdateComposePreviewを
-      // 呼ぶとcomposeDialogの高さが0になりfitMapToComposeCellが動かない)。
-      composeDialog.show(); // 非モーダル
-      updateComposePreview();
-    },
-    handlePositionError,
-    { enableHighAccuracy: true, timeout: 15000 },
-  );
+  composePosition = { ...lastKnownPosition };
+  updateComposeButtons();
+  composeDialog.show(); // 非モーダル: マップ操作(ドラッグ/ズーム/エリアトグル等)を妨げない
+  updateComposePreview();
 };
 
 $<HTMLButtonElement>("#composeCloseX").onclick = () => composeDialog.close();
@@ -2411,8 +2420,22 @@ $<HTMLButtonElement>("#composePost").onclick = async () => {
   if (!composePosition) return;
 
   const wantsToPost = await showConfirm(
-    "現在地の情報を含んだ投稿フォームを開きます。内容は共有フォーム上で確認・編集できます。",
-    { okLabel: "共有フォームを開く" },
+    buildBulletList([
+      "位置情報は誰でも解読可能な形で、投稿本文に直接記載されます",
+      "投稿は投稿先のSNSで、エリアサイズに関係なく誰でも見れます",
+      "投稿の公開範囲は「パブリック」です",
+      (() => {
+        const frag = document.createDocumentFragment();
+        frag.append(
+          "投稿本文に自動挿入された文字列\n（例）",
+          inlineCode("⟦as;1,c;asat;g;xn0m5kq⟧ #Ashiato"),
+          "\nは消さないでください",
+        );
+        return frag;
+      })(),
+      "ご自身、また第三者のプライバシーには十分、ご注意ください",
+    ]),
+    { okLabel: "理解して進む" },
   );
   if (!wantsToPost) return;
 
@@ -2434,7 +2457,7 @@ $<HTMLButtonElement>("#composeSaveDraft").onclick = async () => {
 
   await putDraft(makeDraft(lat, lon, geohashLength, municipalityLabel));
   composeDialog.close();
-  setStatus("下書きに保存しました。");
+  setStatus("下書きに保存しました");
 };
 
 // --- 下書きリスト(ダイアログ) ------------------------------------------
@@ -2446,7 +2469,7 @@ async function refreshDraftList(): Promise<void> {
   if (drafts.length === 0) {
     const empty = document.createElement("p");
     empty.className = "unlocked-list-empty";
-    empty.textContent = "下書きはありません。";
+    empty.textContent = "下書きはありません";
     draftList.append(empty);
     return;
   }
@@ -2623,6 +2646,12 @@ if (splash) {
       if (radio) radio.checked = true;
     }
 
+    const savedAutoEnableLayer = await getSetting<boolean>("autoEnableLayerOnDiscoveryEnabled");
+    if (typeof savedAutoEnableLayer === "boolean") {
+      autoEnableLayerOnDiscoveryEnabled = savedAutoEnableLayer;
+      autoEnableLayerOnDiscoveryCheckbox.checked = savedAutoEnableLayer;
+    }
+
     const savedMapView = await getSetting<{ lat: number; lon: number; zoom: number }>("mapView");
     if (savedMapView) {
       map.setView([savedMapView.lat, savedMapView.lon], savedMapView.zoom, {
@@ -2636,6 +2665,6 @@ if (splash) {
     if (restoredCount === 0) fetchOlder();
   } catch (error) {
     console.error(error);
-    setStatus("キャッシュの読み込みに失敗しました。", true);
+    setStatus("キャッシュの読み込みに失敗しました", true);
   }
 })();

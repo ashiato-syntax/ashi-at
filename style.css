@@ -644,8 +644,46 @@ dialog#instanceDialog label {
 }
 .dialog-message {
     margin: 0;
-    line-height: 1.6;
+    font-size: 1.05rem;
+    line-height: 1.5;
     white-space: pre-line; /* alert/confirmに含まれる\n\nを改行として表示 */
+}
+/* 箇条書き(投稿前の注意書き等、buildBulletList参照)。text-indentによる
+   ぶら下げインデントは、「・」の実際の描画幅とtext-indentの指定値が
+   ぴったり一致しないと、折り返した2行目以降が本文の頭より深く(または
+   浅く)インデントされてしまう。flexで「・」(幅は自身の内容分=flex:none)と
+   本文(残り幅いっぱい=flex:1)を分けることで、幅を数値で仮定する必要なく
+   常に本文の頭の位置で正しく折り返せるようにする。 */
+.dialog-message-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 8px;
+}
+.dialog-message-list li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4em;
+}
+.dialog-message-list li::before {
+    content: "・";
+    flex: none;
+}
+.dialog-message-list li span {
+    flex: 1;
+    min-width: 0;
+}
+/* Ashiato Syntax文字列等、コードのように扱いたい部分(buildBulletList/inlineCode参照)。
+   引用のように見せるため、灰色の背景+等幅フォントにする。長い文字列でもこの
+   要素自体で折り返せるよう、インライン要素のままoverflow-wrapで対応する。 */
+.inline-code {
+    background: #eee;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.9em;
+    overflow-wrap: anywhere;
 }
 /* 「表示レイヤー」の色分け説明等、色名の代わりに実際の色を見せるための色見本。 */
 .color-swatch {
@@ -876,23 +914,27 @@ dialog#instanceDialog label {
 .ashiato-media-grid {
     display: flex;
     flex-direction: row;
-    gap: 4px;
+    gap: 8px;
     margin-top: 2px;
-    border-radius: 12px;
     overflow-x: auto;
     overflow-y: hidden;
     scroll-snap-type: x mandatory;
     scrollbar-width: none; /* Firefox */
+    /* 右側に少し余白を確保しないと、最後の画像の右端がスクロール可能領域の
+       境界ぴったりに来てしまい、枠線の右側だけ描画されずに消えて見える。 */
+    padding-right: 8px;
 }
 .ashiato-media-grid::-webkit-scrollbar {
     display: none; /* Chrome/Safari/Edge */
 }
 .ashiato-media-item {
     position: relative;
-    flex: 0 0 100%; /* 1枚ずつ全幅でスナップさせる */
+    flex: 0 0 100%; /* 1枚ずつ全幅でスナップさせる(複数枚の場合は下で上書き) */
     scroll-snap-align: start;
     aspect-ratio: 1 / 1;
     background: #eee;
+    border-radius: 12px;
+    overflow: hidden; /* 角丸からのはみ出しをクリップ(枠線を付けても内側に収まる) */
 }
 .ashiato-media-item img,
 .ashiato-media-item video {
@@ -904,27 +946,14 @@ dialog#instanceDialog label {
 .ashiato-media-item img {
     cursor: pointer;
 }
-/* 複数枚ある投稿は、横スクロールで1枚ずつしか見えず単独の画像と見分けが
-   つきにくいため、画像に細い枠線を付けて「これは複数枚のうちの1枚」と
-   分かるようにする(枚数バッジ.ashiato-media-counterと合わせて使う)。
+/* 複数枚ある投稿は、Xのように次の画像が少し見えるサイズにして「まだ続きが
+   ある」ことを一目で分かるようにし、あわせて画像に細い枠線を付けて単独の
+   画像と見分けが付くようにする。何枚中の何枚目かの表示(n/m)は一覧側では
+   出さず、拡大表示(ライトボックス)側だけで行う(.media-lightbox-counter参照)。
    data-countは1〜4(buildMediaGrid参照)なので、1以外全てが対象。 */
 .ashiato-media-grid:not([data-count="1"]) .ashiato-media-item {
-    border: 2px solid #fff;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
-}
-/* 何枚中の何枚目かを示す右下のバッジ。右上はeyeBtn(モザイクかけ直し)・
-   左上はsensitive-tagが占めているため、右下に置く。 */
-.ashiato-media-counter {
-    position: absolute;
-    right: 6px;
-    bottom: 6px;
-    padding: 2px 7px;
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.6);
-    color: #fff;
-    font-size: 0.7rem;
-    font-weight: 600;
-    pointer-events: none;
+    flex-basis: 80%;
+    border: 1px solid rgba(0, 0, 0, 0.15);
 }
 /* 動画1件だけの投稿は、クロップせず自然な比率のまま全幅で表示する
    (シーク・音声ON/OFFはブラウザ標準のvideo controlsに任せる)。
@@ -1035,15 +1064,20 @@ dialog#mediaLightbox {
 }
 dialog#mediaLightbox[open] {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 12px;
 }
 dialog#mediaLightbox::backdrop {
     background: transparent;
 }
 .media-lightbox-img {
     max-width: 92vw;
-    max-height: 92vh;
+    /* n/m表示(.media-lightbox-counter)を画像の下に別行として置くための
+       余白を差し引いておく(以前は画像がほぼ画面いっぱいになり、下端固定の
+       n/m表示に重なって一部隠れていた)。 */
+    max-height: 88vh;
     object-fit: contain;
 }
 .media-lightbox-close {
@@ -1084,10 +1118,10 @@ dialog#mediaLightbox::backdrop {
     right: 12px;
 }
 .media-lightbox-counter {
-    position: fixed;
-    bottom: 16px;
-    left: 50%;
-    transform: translateX(-50%);
+    /* dialog#mediaLightbox[open](縦方向のflex、gap:12px)の中で、画像の直後に
+       並ぶ通常のフロー要素にする。position:fixedで下端固定にしていた頃は、
+       画像(最大92vh)の下端と重なって一部隠れることがあった。 */
+    flex: none;
     padding: 4px 12px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.15);
@@ -1369,7 +1403,7 @@ dialog#mediaLightbox::backdrop {
        セレクタ参照)を付けて詳細度を上げないと、後から結合されるleaflet.css側の
        marginに上書きされて全く効かない(closeButtonの件と同じ理由)。 */
     margin-left: 8px;
-    margin-right: 8px;
+    margin-right: 0px;
 }
 /* Leaflet既定の吹き出し×ボタンは、他のダイアログの.dialog-close-x(32pxの
    丸背景+アイコン)に比べて小さな文字リンクのままで見た目が揃っていない
@@ -1429,7 +1463,7 @@ dialog#mediaLightbox::backdrop {
     scrollbar-gutter: stable both-edges;
     /* scrollbar-gutterだけでは投稿の内容(特に右端の「…」ボタン)とスクロール
        バーの間の余白が心もとなく感じられるため、右側に明示的な余白も足す。 */
-    padding-right: 6px;
+    padding-right: 12px;
 }
 /* 見つけたあしあと一覧(.unlocked-list li)と同様、行の境目に区切り線を入れる。 */
 .ashiato-popup-rows > .ashiato-row {

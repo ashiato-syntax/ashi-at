@@ -50,7 +50,7 @@
                             class="toggle-panel-row"
                             aria-pressed="false"
                         >
-                            <span class="gps-toggle-label">既読を隠す</span>
+                            <span class="gps-toggle-label">既読エリアを隠す</span>
                             <span class="gps-toggle-track"
                                 ><span class="gps-toggle-knob"></span
                             ></span>
@@ -424,6 +424,37 @@
                         </div>
                     </div>
                 </div>
+                <div class="settings-collapsible">
+                    <button
+                        type="button"
+                        id="layerDisplayToggle"
+                        class="settings-collapsible-toggle"
+                        aria-expanded="false"
+                    >
+                        <span class="settings-collapsible-toggle-label">
+                            <span
+                                class="action-sheet-icon"
+                                id="layerDisplayIcon"
+                            ></span>
+                            <span>レイヤーの表示</span>
+                        </span>
+                        <span class="settings-collapsible-toggle-icon"></span>
+                    </button>
+                    <div id="layerDisplayRows" class="settings-collapsible-rows">
+                        <div class="settings-collapsible-rows-inner">
+                            <fieldset class="settings-fieldset">
+                                <label
+                                    ><input
+                                        type="checkbox"
+                                        id="autoEnableLayerOnDiscovery"
+                                        checked
+                                    />
+                                    現地で発見したら、その精度の表示レイヤーを自動でONにする</label
+                                >
+                            </fieldset>
+                        </div>
+                    </div>
+                </div>
                 <div class="action-sheet">
                     <button
                         id="clearSearchCache"
@@ -498,7 +529,7 @@
             </section>
         </dialog>
         <dialog id="confirmDialog">
-            <p id="confirmMessage" class="dialog-message"></p>
+            <div id="confirmMessage" class="dialog-message"></div>
             <div class="dialog-actions">
                 <button id="confirmCancel" type="button" class="secondary">
                     キャンセル
