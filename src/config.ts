@@ -87,35 +87,56 @@ export const TEXT_PREVIEW_SAFETY_CAP_LENGTH = 3000;
 export const BAD_ACCURACY_RADIUS_M = 500;
 
 // --- 地図の色・線の太さ -----------------------------------------------------
+// 陸地・境界線の色は、Leafletがfill/stroke属性としてSVGへ直接書き込む
+// (CSSのクラスではなくJSの描画オプション)ため、CSSのdata-theme切り替えだけ
+// では追従しない。ライト/ダークそれぞれの値を持たせ、map.ts側で現在の
+// テーマ(document.documentElement.dataset.theme)を見てどちらを使うか選ぶ
+// (map.ts: landFillColor/prefectureBoundaryColor等参照)。
+// 海の色は普通のCSS(#mapのbackground)で表現しているので、style.css側の
+// --color-map-seaで管理する(ここには持たせない)。
 
-// 陸地の塗りつぶし色。海は#mapのCSS背景色(style.css)で表現しているので、
-// ここでは都道府県ポリゴンの塗りつぶしだけを指定する。
-export const LAND_FILL_COLOR = "#F7F2EC";
+// 陸地の塗りつぶし色。
+export const LAND_FILL_COLOR_LIGHT = "#F7F2EC";
+export const LAND_FILL_COLOR_DARK = "#00383d";
 
 // 都道府県境界線の一点鎖線(長い破線, 隙間, 点, 隙間 の繰り返し)。
 // 「点」はlineCap:'round'(Path options既定値)により短い線分が丸い点として描画される。
 export const PREFECTURE_DASH_ARRAY = "10,4,1,4";
 // 都道府県境界線の色・太さ。
-export const PREFECTURE_BOUNDARY_COLOR = "#707070";
+export const PREFECTURE_BOUNDARY_COLOR_LIGHT = "#707070";
+export const PREFECTURE_BOUNDARY_COLOR_DARK = "#10b3b3";
 export const PREFECTURE_BOUNDARY_WEIGHT = 1.0;
 
 // 市区町村境界線(実線)の色・太さ。
-export const MUNICIPALITY_BOUNDARY_COLOR = "#B9B9B9";
+export const MUNICIPALITY_BOUNDARY_COLOR_LIGHT = "#B9B9B9";
+export const MUNICIPALITY_BOUNDARY_COLOR_DARK = "#0d8d8e";
 export const MUNICIPALITY_BOUNDARY_WEIGHT = 0.7;
 
 // 政令指定都市内部の区どうしの境界は、色は市区町村境界と同じまま、
 // 点線(dashArray)だけで見分けられるようにしている。
 export const WARD_DASH_ARRAY = "1,3";
-export const WARD_BOUNDARY_COLOR = "#B9B9B9";
+export const WARD_BOUNDARY_COLOR_LIGHT = "#B9B9B9";
+export const WARD_BOUNDARY_COLOR_DARK = "#0d8d8e";
 
 // Geohashの桁数(精度)ごとの色。精度が細かい(=判定エリアが狭い)ほど暖色にして
 // 目立たせる。4桁=青, 5桁=緑, 6桁=黄色, 7桁=赤。Ashi@が扱うのはこの4種類の
-// 桁数のみ。(UIのテーマカラーがマゼンタになったため、緑に戻せるようになった)
-export const ASHIATO_COLORS_BY_LENGTH: Record<number, string> = {
+// 桁数のみ。
+// ライト/ダークで別の値を持つ(map.ts: ashiatoColor参照)。ダークモードの
+// 陸地(LAND_FILL_COLOR_DARK)・境界線(*_BOUNDARY_COLOR_DARK)がどちらも
+// 暗い青緑系のため、4桁の色を同じ青緑系(元は#00acc1)のままにすると見分けが
+// 付きにくかった。ダークモードだけ4桁を青系に振り、5桁の緑も含めて全体的に
+// 明度・彩度を上げて暗い地図の上でも視認できるようにしている。
+export const ASHIATO_COLORS_BY_LENGTH_LIGHT: Record<number, string> = {
   4: "#00acc1",
   5: "#4caf50",
   6: "#fbc02d",
   7: "#e53935",
+};
+export const ASHIATO_COLORS_BY_LENGTH_DARK: Record<number, string> = {
+  4: "#2979ff",
+  5: "#00e676",
+  6: "#ffd740",
+  7: "#ff5252",
 };
 
 // あしあとセルの境界線(outline)を、塗りの矩形よりどれだけ内側に描くか

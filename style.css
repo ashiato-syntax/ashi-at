@@ -21,22 +21,37 @@
     --color-text-subtle: #888; /* さらに薄い補助文字 */
     --color-text-faint: #999; /* もっとも薄い文字(ホスト表示等) */
     --color-on-accent: #fff; /* アクセント色/濃い色の帯の上に乗る文字・アイコン色 */
+    /* 利用規約・プライバシーポリシー等、長文の文書(.markdown-doc)の地の文専用。
+       項目名(メニュー項目・折りたたみのラベル等、--color-text/-strong側)とは
+       あえて別変数にしている。ライトモードでは同じ見た目(--color-text-strongと
+       同値)だが、ダークモードでは項目名(黄)と本文(青緑)を明確に色分けする。 */
+    --color-text-body: #333;
 
     /* 枠線(濃い順) */
     --color-border: #bbb;
     --color-border-light: #ddd;
     --color-border-lighter: #eee;
 
-    /* アクセント(テーマカラー: マゼンタ) */
-    --color-accent: #d46dad;
-    --color-accent-pressed: #ae5a8e; /* menu-fab:active */
-    --color-accent-hover-bg: #ffe4f0; /* btn-primary:hover */
-    --color-accent-hover-bg-soft: #fbeef7; /* accentなメニュー項目:hover */
-    --color-accent-secondary: #e47a94; /* ラジオボタン/GPSトグルON */
+    /* アクセント(テーマカラー: 黄色) */
+    --color-accent: #f3e429;
+    --color-accent-pressed: #c2b621; /* menu-fab:active */
+    --color-accent-hover-bg: #fdf3b8; /* btn-primary:hover */
+    --color-accent-hover-bg-soft: #fdf8db; /* accentなメニュー項目:hover */
+    --color-accent-secondary: #f3e429; /* ラジオボタン/GPSトグルON。--color-accentと統一 */
+    /* 黄色(--color-accent)を背景として塗りつぶす箇所(.menu-item-count.unread等)
+       の上に乗せる文字・アイコン色。白だと黄色地でほとんど読めないため、
+       濃い色にする(--color-on-accentは他の色付きバナー等でも共有しているため
+       白のまま維持し、こちらは黄色塗りつぶし専用の別変数にしている)。 */
+    --color-accent-contrast: #241f00;
 
     /* 危険操作(削除等) */
     --color-danger: #c62828;
     --color-danger-hover-bg: #fdecea;
+
+    /* #map背景(海)。陸地はmap.jsの都道府県ポリゴン塗りつぶし(config.ts:
+       LAND_FILL_COLOR_LIGHT)で表現する。 */
+    --color-map-sea: #A2D4FC;
+    --color-map-label-halo: #fff;
 }
 /* ダークモード。深海探索ゲーム「In Other Waters」の、深い青緑がかった暗闇+
    細い発光ラインという雰囲気を参考にしている。テーマカラー(マゼンタ)は
@@ -47,31 +62,41 @@
    付け外しする。 */
 :root[data-theme="dark"] {
     --color-bg: #0a2023;
-    --color-surface: #123033;
+    --color-surface: #012523;
     --color-surface-alt: #16393c;
     --color-surface-hover: #1c4245;
     --color-surface-sunken: #0d272a;
     --color-overlay: rgba(0, 0, 0, 0.6);
 
-    --color-text: #e9f6f5;
-    --color-text-strong: #f7fffe;
+    --color-text: #f1bd00;
+    --color-text-strong: #f1bd00;
     --color-text-muted: #9bc4c2;
     --color-text-subtle: #7aa8a6;
     --color-text-faint: #5c8886;
     --color-on-accent: #fff;
+    --color-text-body: #eaf1f7;
 
     --color-border: #2f5457;
     --color-border-light: #244244;
     --color-border-lighter: #1a3335;
 
-    --color-accent: #ff8dcc;
-    --color-accent-pressed: #e070ad;
-    --color-accent-hover-bg: rgba(255, 141, 204, 0.16);
-    --color-accent-hover-bg-soft: rgba(255, 141, 204, 0.1);
-    --color-accent-secondary: #ffa8c9;
+    --color-accent: #f1bd00;
+    --color-accent-pressed: #c19700;
+    --color-accent-hover-bg: rgba(241, 189, 0, 0.18);
+    --color-accent-hover-bg-soft: rgba(241, 189, 0, 0.1);
+    --color-accent-secondary: #f1bd00;
+    --color-accent-contrast: #241f00;
 
     --color-danger: #ff7a7a;
     --color-danger-hover-bg: rgba(255, 122, 122, 0.16);
+
+    /* #map背景(海)。陸地・境界線側(config.ts: LAND_FILL_COLOR_DARK等)と
+       手動で値を揃えていること。 */
+    --color-map-sea: #000000;
+    /* 地名ラベルの縁取り(text-shadow)。ライトモードの白はこの暗い地図の上だと
+       にじんだ白い帯のように強く浮いて見えて読みづらいため、地図に馴染む
+       暗い色にする。 */
+    --color-map-label-halo: #041012;
 }
 * {
     box-sizing: border-box;
@@ -107,7 +132,7 @@ select {
     color: var(--color-text);
     min-height: 42px;
     border: 1px solid var(--color-border);
-    border-radius: 8px;
+    border-radius: 0;
     background: var(--color-surface);
     padding: 8px 12px;
     font: inherit;
@@ -115,16 +140,49 @@ select {
 button {
     cursor: pointer;
 }
-/* チェックボックスは、指定しないとブラウザ既定の青系になりテーマカラー
-   (緑)から浮いてしまうため、accent-colorで揃える。 */
+/* チェックボックスも、ラジオボタンと同じ理由(ブラウザ既定の見た目だと
+   unchecked時の背景色を指定できない)でappearance:noneの自前描画にする。
+   unchecked時の背景はメニュー内「現在のインスタンス」表示
+   (.menu-current-host)と同じ--color-text-faintに揃える。 */
 input[type="checkbox"] {
-    accent-color: var(--color-accent);
+    appearance: none;
+    -webkit-appearance: none;
+    min-height: auto;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    padding: 0;
+    border: 2px solid var(--color-border);
+    border-radius: 0;
+    background: var(--color-text-faint);
+    position: relative;
+    flex: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+input[type="checkbox"]:checked {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+}
+input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    /* 固定pxではなく%+translateで中央に置く。.unlocked-list-filter inputの
+       ように別のセレクタで幅・高さが上書きされる(18px→16px等)場合でも、
+       固定pxだと中心がずれてしまうため。 */
+    left: 50%;
+    top: 45%;
+    width: 30%;
+    height: 55%;
+    /* 黄色地の上なので、チェック自体は--color-accent-contrastで描く
+       (.menu-item-count.unread等と同じ理由)。 */
+    border: solid var(--color-accent-contrast);
+    border-width: 0 2px 2px 0;
+    transform: translate(-50%, -50%) rotate(45deg);
 }
 /* ラジオボタンは、accent-colorだけだと中の点はテーマカラーになっても
    外枠がブラウザ既定の黒系のままになり、枠と点で色がちぐはぐに見える
-   (環境依存の見た目)。appearance:noneで完全に自前描画にし、枠・点とも
-   同じ色に揃える。他のボタン/リンクのアクセントカラーとは別の、
-   サーモンピンク寄りの色(#e47a94)を使う。 */
+   (環境依存の見た目)。appearance:noneで完全に自前描画にし、unchecked時の
+   背景はチェックボックスと同じ--color-text-faintに揃える。 */
 input[type="radio"] {
     appearance: none;
     -webkit-appearance: none;
@@ -135,13 +193,14 @@ input[type="radio"] {
     padding: 0;
     border: 2px solid var(--color-border);
     border-radius: 50%;
-    background: var(--color-surface);
+    background: var(--color-text-faint);
     position: relative;
     flex: none;
-    transition: border-color 0.15s ease;
+    transition: border-color 0.15s ease, background 0.15s ease;
 }
 input[type="radio"]:checked {
     border-color: var(--color-accent-secondary);
+    background: var(--color-surface);
 }
 input[type="radio"]:checked::after {
     content: "";
@@ -177,14 +236,15 @@ button.secondary {
     border-color: var(--color-text-faint);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
-/* 「する」系の主操作(投稿する/適用 等)。塗りつぶさず枠線+文字色だけで強調する。 */
+/* 「する」系の主操作(投稿する/適用/確認ダイアログのOK等、何かを実行する
+   ボタン)は塗りつぶしボタンにする(.leaflet-control-zoomの+/-と同じ考え方)。 */
 button.btn-primary {
-    background: var(--color-surface);
-    color: var(--color-accent);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
     border-color: var(--color-accent);
 }
 button.btn-primary:hover {
-    background: var(--color-accent-hover-bg);
+    background: var(--color-accent-pressed);
 }
 /* 削除等、破壊的な操作の決定ボタン。 */
 button.btn-danger {
@@ -222,7 +282,7 @@ button.btn-danger:hover {
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    border-radius: 10px;
+    border-radius: 0;
     background: var(--color-surface);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     font-size: 0.85rem;
@@ -253,7 +313,7 @@ button.btn-danger:hover {
 .status-icon {
     flex: none;
     display: inline-flex;
-    color: var(--color-text-muted);
+    color: var(--color-accent);
 }
 .status-icon .icon {
     width: 18px;
@@ -375,10 +435,13 @@ button.btn-danger:hover {
     flex: 1;
     white-space: nowrap;
     /* トグルパネルの開閉ボタン(.toggle-panel-handle)と同じ枠線+影に揃える。 */
-    border: 1px solid var(--color-border);
-    border-radius: 999px;
+    border: 1px solid var(--color-accent);
+    border-radius: 0;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-    color: var(--color-text-strong); /* ハンバーガーメニュー(.menu-dropdown button)と同じ濃さに揃える */
+    color: var(--color-text-strong);
+}
+.bottom-toolbar .search-buttons button:hover {
+    background: var(--color-surface-hover);
 }
 .toolbar-btn {
     display: flex;
@@ -417,12 +480,16 @@ button.btn-danger:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    /* スプラッシュのグラデーションと同系統(夜明けの空: 紺→ピンク→オレンジ)を、
-       常時見える主要ボタンにもうっすら効かせる。単色に比べて主張しすぎ
-       ないよう、角度・色幅は控えめにしている。 */
-    background: linear-gradient(135deg, #d46dad, #ff7c73);
-    color: var(--color-on-accent);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+    background: var(--color-accent);
+    /* 黄色地の上なので、白(--color-on-accent)だとほぼ見えない。
+       .menu-item-count.unreadと同じ理由でコントラストの取れる色にする。 */
+    color: var(--color-accent-contrast);
+    /* 影に加えて、テーマカラー(--color-accent)のごく控えめなグローを添える。
+       color-mixでvar()から半透明色を作っているので、アクセントカラーが
+       変わっても追従する。 */
+    box-shadow:
+        0 1px 4px rgba(0, 0, 0, 0.18),
+        0 0 14px color-mix(in srgb, var(--color-accent) 55%, transparent);
     transition: transform 0.1s ease, background 0.1s ease, box-shadow 0.1s ease;
 }
 .menu-fab:active {
@@ -434,9 +501,9 @@ button.btn-danger:hover {
     width: 26px;
     height: 26px;
 }
-/* メニューFAB右上の未読バッジ(桜の花びら色の点)。ボタンの丸からはみ出さないよう
-   内側に置く。ボタン自体が濃いピンク〜オレンジのグラデーションのため、それより
-   明るい(ほぼ白に近い)桜色にした上で、白の縁取りで輪郭をはっきりさせる。 */
+/* メニューFAB右上の未読バッジ。黄色地のボタンに埋もれないよう、テーマカラー
+   (黄色)とは別の警告色(--color-danger)にする。白の縁取りで輪郭もはっきり
+   させる。ボタンの丸からはみ出さないよう内側に置く。 */
 .badge-dot {
     position: absolute;
     top: 8px;
@@ -444,7 +511,7 @@ button.btn-danger:hover {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #ffb3d1;
+    background: var(--color-danger);
     box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.9);
     animation: unread-glow 1.8s ease-in-out infinite;
 }
@@ -456,12 +523,12 @@ button.btn-danger:hover {
     100% {
         box-shadow:
             0 0 0 1.5px rgba(255, 255, 255, 0.9),
-            0 0 2px 0 rgba(255, 179, 209, 0.8);
+            0 0 2px 0 color-mix(in srgb, var(--color-danger) 80%, transparent);
     }
     50% {
         box-shadow:
             0 0 0 1.5px rgba(255, 255, 255, 0.9),
-            0 0 7px 3px rgba(255, 179, 209, 0.95);
+            0 0 7px 3px color-mix(in srgb, var(--color-danger) 95%, transparent);
     }
 }
 
@@ -480,8 +547,8 @@ button.btn-danger:hover {
     top: auto;
     right: 0;
     background: var(--color-surface);
-    border: 1px solid var(--color-border-light);
-    border-radius: 10px;
+    border: 1px solid var(--color-accent);
+    border-radius: 0;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     display: grid;
     min-width: 230px;
@@ -516,7 +583,14 @@ button.btn-danger:hover {
     border-radius: 0;
     text-align: left;
     background: var(--color-surface);
-    color: var(--color-text-strong); /* .iconのstroke=currentColorに使う */
+    /* 項目名は.toggle-panel-handle(地図右上の「<」ボタン、--color-text-subtle)
+       よりも少し明るいトーン(--color-text-muted)にする。「あしあとを投稿」
+       (.accent)も文字色はこれと揃える(太字だけで区別する。アイコンは
+       .accentも含め全項目共通でvar(--color-accent))。 */
+    color: var(--color-text-muted);
+}
+.menu-dropdown button:not(.danger) .menu-item-icon {
+    color: var(--color-accent);
 }
 .menu-dropdown button:hover {
     background: var(--color-surface-hover);
@@ -528,8 +602,7 @@ button.btn-danger:hover {
     background: var(--color-danger-hover-bg);
 }
 .menu-dropdown button.accent {
-    color: var(--color-accent); /* .iconのstroke=currentColorにも効く。テーマカラー(menu-fabのグラデーション始点)に合わせる */
-    font-weight: 700;
+    font-weight: 700; /* 文字色は他の項目と同じ(--color-text-muted)。太字だけで区別する */
 }
 .menu-dropdown button.accent:hover {
     background: var(--color-accent-hover-bg-soft);
@@ -554,7 +627,7 @@ button.btn-danger:hover {
     min-width: 20px;
     height: 20px;
     padding: 0 6px;
-    border-radius: 10px;
+    border-radius: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -569,7 +642,7 @@ button.btn-danger:hover {
 /* 未読(見つけたあしあと)は他と見分けが付くよう、テーマカラーで強調する。 */
 .menu-item-count.unread {
     background: var(--color-accent);
-    color: var(--color-on-accent);
+    color: var(--color-accent-contrast);
 }
 .menu-current-host {
     margin: 0;
@@ -592,7 +665,7 @@ dialog#settingsDialog {
     background: var(--color-surface);
     color: var(--color-text);
     border: none;
-    border-radius: 12px;
+    border-radius: 0px;
     padding: 20px;
     width: min(90vw, 420px);
 }
@@ -612,6 +685,22 @@ dialog#settingsDialog {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    /* .about-dialog-bodyと同じ調整。内側の.settings-fieldset等が自前の
+       スクロールを持つわけではないが、スクロールバーが項目の内容(右端の
+       アイコン等)に重ならないよう、同じ余白の取り方で揃える。 */
+    scrollbar-gutter: stable both-edges;
+    padding-right: 12px;
+    margin-right: -10px;
+}
+/* 「Ashi@について」の各項目(.about-collapsible)と同じく、区切り線で項目間を
+   分ける。gapで確保済みの余白の中に線を引くだけにする。
+   以前はここにpadding-topも足していたが、.action-sheet-row自身が既に
+   padding:12pxを持っているため、「検索キャッシュを消す/リセット」の
+   グループの手前だけ(gap12px+padding-top12px+行自身の12px=36px)と、
+   グループ内の行間(行自身の12px×2=24px)とで間隔が違って見えていた。
+   padding-topを外し、gapと各項目自身の余白だけに任せることで揃える。 */
+.settings-dialog-body > *:not(:first-child) {
+    border-top: 1px solid var(--color-border-lighter);
 }
 dialog#aboutDialog::backdrop,
 dialog#instanceDialog::backdrop,
@@ -737,6 +826,11 @@ dialog#aboutDialog {
 dialog#aboutDialog p {
     line-height: 1.6;
 }
+/* 概要文(overviewMd)。項目名(見出し・折りたたみラベル、--color-text)とは
+   区別し、.markdown-doc(利用規約等)の地の文と同じ--color-text-bodyにする。 */
+#aboutIntro {
+    color: var(--color-text-muted);
+}
 /* 「利用規約」「ライセンス情報」。本文と区切るため、settingsDialogの
    「メディアの表示」等と同じ折りたたみ(.settings-collapsible)にした上で、
    元のh3見出しにあった区切り線をこのラッパーに付け替える。 */
@@ -751,7 +845,11 @@ dialog#aboutDialog p {
    カード状の背景で本文と視覚的に区切る。 */
 .markdown-doc {
     background: var(--color-surface-alt);
-    border-radius: 8px;
+    /* 項目名(折りたたみのラベル等)とは別に、文書の地の文だけの色にする
+       (--color-text-body参照)。h1/h2/li等、個別に色指定していない子要素は
+       ここから継承する。 */
+    color: var(--color-text-body);
+    border-radius: 0;
     padding: 10px 12px;
     /* 文書自体がかなり長いため、展開してもダイアログ全体が引き伸ばされない
        よう、この中だけでスクロールさせる。 */
@@ -772,7 +870,6 @@ dialog#aboutDialog p {
     margin: 0 0 10px;
     font-size: 0.85rem;
     line-height: 1.7;
-    color: var(--color-text-strong);
 }
 .markdown-doc ul,
 .markdown-doc ol {
@@ -808,7 +905,7 @@ dialog#aboutDialog p {
     padding: 10px 12px;
     border: none;
     background: var(--color-surface-alt);
-    border-radius: 8px;
+    border-radius: 0;
     box-shadow: none;
     text-align: left;
     font: inherit;
@@ -874,7 +971,7 @@ dialog#instanceDialog label {
    要素自体で折り返せるよう、インライン要素のままoverflow-wrapで対応する。 */
 .dialog-message code {
     background: var(--color-surface-sunken);
-    border-radius: 4px;
+    border-radius: 0;
     padding: 1px 5px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.9em;
@@ -885,7 +982,7 @@ dialog#instanceDialog label {
     display: inline-block;
     width: 12px;
     height: 12px;
-    border-radius: 3px;
+    border-radius: 0;
     margin-right: 4px;
     vertical-align: -1px;
 }
@@ -1053,6 +1150,8 @@ dialog#instanceDialog label {
     text-overflow: ellipsis;
     font-weight: 600;
     white-space: nowrap;
+    /* 項目名(黄色)ではなく本文と同じ色にする。 */
+    color: var(--color-text-body);
 }
 /* 「@アカウント名@インスタンス」部分。表示名より一回り小さく薄い色にし、
    長い場合は投稿日時を圧迫しないよう後半を省略記号(…)で切り詰める。 */
@@ -1129,7 +1228,7 @@ dialog#instanceDialog label {
     scroll-snap-stop: always;
     aspect-ratio: 1 / 1;
     background: var(--color-surface-sunken);
-    border-radius: 12px;
+    border-radius: 0;
     overflow: hidden; /* 角丸からのはみ出しをクリップ(枠線を付けても内側に収まる) */
 }
 .ashiato-media-item img,
@@ -1232,7 +1331,7 @@ dialog#instanceDialog label {
     top: 6px;
     left: 6px;
     padding: 2px 6px;
-    border-radius: 4px;
+    border-radius: 0;
     background: rgba(0, 0, 0, 0.6);
     color: #fff;
     font-size: 0.65rem;
@@ -1319,7 +1418,7 @@ dialog#mediaLightbox::backdrop {
        画像(最大92vh)の下端と重なって一部隠れることがあった。 */
     flex: none;
     padding: 4px 12px;
-    border-radius: 999px;
+    border-radius: 0;
     background: rgba(255, 255, 255, 0.15);
     color: #fff;
     font-size: 0.8rem;
@@ -1344,17 +1443,24 @@ dialog#mediaLightbox::backdrop {
    しまう。.leaflet-touchの文脈を含めた分だけ詳細度を上げて確実に上書きする。 */
 .leaflet-bar.leaflet-control-zoom,
 .leaflet-touch .leaflet-bar.leaflet-control-zoom {
-    /* トグルパネルの開閉ボタン(.toggle-panel-handle)と同じ枠線+影に揃える。
-       backgroundも明示しないとLeaflet標準の白背景(leaflet.css)のままになり、
-       ダークモードで浮いて見える。 */
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-    overflow: hidden;
+    /* +/-それぞれを独立した正方形ボタンにするため、このコンテナ自体は
+       枠線・背景・クリップを持たず、単に2つを縦に並べてgapを空けるだけの
+       透明な入れ物にする。 */
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    /* leaflet.cssの既定(.leaflet-top .leaflet-control { margin-top: 10px; })
+       だと.toggle-panel(top:12px)と上端の余白がわずかにズレるため揃える。 */
+    margin-top: 12px;
 }
 .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-in,
-.leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-out {
+.leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-out,
+.leaflet-touch .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-in,
+.leaflet-touch .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-out {
     width: 36px;
     height: 36px;
     line-height: 36px;
@@ -1362,20 +1468,25 @@ dialog#mediaLightbox::backdrop {
     align-items: center;
     justify-content: center;
     /* leaflet.cssの.leaflet-bar a { background-color: #fff; }
-       (詳細度0,1,1)より、このセレクタ(0,3,0)の方が高いため確実に上書きできる。 */
-    background: var(--color-surface);
-    color: var(--color-text-strong);
+       (詳細度0,1,1)より、このセレクタ(0,3,0)の方が高いため確実に上書きできる。
+       fill(背景)とstroke(アイコン色)を入れ替えて、黄色地に濃色アイコンの
+       塗りつぶしボタンにする。 */
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    border: 1px solid var(--color-accent);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    /* leaflet.cssの.leaflet-bar a:first-child/:last-child(および
+       .leaflet-touch版)が個別に角丸(4px/2px)を付けてくるため、ここで
+       明示的に0で上書きしないと四隅だけ塗り残しが出る。 */
+    border-radius: 0;
 }
 .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-in:hover,
 .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-out:hover {
-    background: var(--color-surface-hover);
-}
-.leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-in {
-    border-bottom: 1px solid var(--color-border-lighter);
+    background: var(--color-accent-pressed);
 }
 .leaflet-control-zoom .icon {
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
 }
 
 .map-wrap {
@@ -1387,7 +1498,7 @@ dialog#mediaLightbox::backdrop {
     height: 100%;
     min-height: 280px; /* 極端に狭い画面での下限 */
     overflow: hidden;
-    background: #A2D4FC; /* 海の色。陸地はmap.jsの都道府県ポリゴン塗りつぶし(#F7F2EC)で表現する */
+    background: var(--color-map-sea); /* 陸地はmap.jsの都道府県ポリゴン塗りつぶし(config.ts: LAND_FILL_COLOR_*)で表現する */
     position: relative;
     z-index: 0;
 }
@@ -1414,11 +1525,12 @@ dialog#mediaLightbox::backdrop {
     justify-content: center;
     width: 32px;
     height: 80px;
-    border: 1px solid var(--color-border);
-    border-radius: 12px;
+    border: 1px solid var(--color-accent);
+    border-radius: 0px;
     background: var(--color-surface);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-    color: var(--color-text-subtle);
+    /* 「<」アイコンも黄色にする。 */
+    color: var(--color-accent);
 }
 .toggle-panel-handle-icon .icon {
     width: 20px;
@@ -1438,8 +1550,8 @@ dialog#mediaLightbox::backdrop {
     top: 0;
     right: calc(100% + 6px);
     background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 12px;
+    border: 1px solid var(--color-accent);
+    border-radius: 0px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     display: flex;
     flex-direction: column;
@@ -1506,7 +1618,7 @@ dialog#mediaLightbox::backdrop {
     border: none;
     background: transparent;
     box-shadow: none;
-    color: var(--color-text-faint);
+    color: var(--color-accent);
 }
 .toggle-info-btn .icon {
     width: 16px;
@@ -1515,8 +1627,9 @@ dialog#mediaLightbox::backdrop {
 .gps-toggle-track {
     width: 34px;
     height: 20px;
-    border-radius: 999px;
-    background: #ccc;
+    border-radius: 0px;
+    /* チェックボックス/ラジオボタンの未選択時と同じ色に揃える。 */
+    background: var(--color-text-faint);
     position: relative;
     flex: none;
     transition: background 0.15s ease;
@@ -1527,13 +1640,13 @@ dialog#mediaLightbox::backdrop {
     left: 2px;
     width: 16px;
     height: 16px;
-    border-radius: 50%;
+    border-radius: 0%;
     background: var(--color-surface);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     transition: transform 0.15s ease;
 }
 .toggle-panel-row[aria-pressed="true"] .gps-toggle-track {
-    /* ラジオボタンと同じ、少し青みのある色に揃える。 */
+    /* ラジオボタンと同じ色に揃える。 */
     background: var(--color-accent-secondary);
 }
 .toggle-panel-row[aria-pressed="true"] .gps-toggle-knob {
@@ -1549,7 +1662,7 @@ dialog#mediaLightbox::backdrop {
     display: flex;
     flex: none;
     border: 1px solid var(--color-border-light);
-    border-radius: 8px;
+    border-radius: 0px;
     overflow: hidden;
 }
 .precision-filter-chip {
@@ -1560,28 +1673,29 @@ dialog#mediaLightbox::backdrop {
     display: flex;
     align-items: center;
     justify-content: center;
-    border: none;
     border-radius: 0;
-    /* OFF状態でも「これは何色のレイヤーか」が分かるよう、単なるグレーではなく
-       自身の色(--chip-color)を薄めた色にする。 */
-    background: color-mix(in srgb, var(--chip-color, #999) 18%, white);
-    color: color-mix(in srgb, var(--chip-color, #999) 55%, white);
+    /* OFF状態でも「これは何色のレイヤーか」が分かるよう、塗りつぶしではなく
+       自身の色(--chip-color)の枠線で表示する。 */
+    border: 1px solid var(--chip-color, #999);
+    background: var(--color-surface);
+    color: var(--chip-color, #999);
     font-size: 0.72rem;
     font-weight: 600;
     line-height: 1;
     box-shadow: none;
     transition:
         background 0.15s ease,
-        color 0.15s ease;
+        color 0.15s ease,
+        border-color 0.15s ease;
 }
-.precision-filter-chip:not(:last-child) {
-    border-right: 1px solid var(--color-border-light);
-}
+/* 以前はmargin-right:-1pxで隣り合う枠線を1px重ねて2px幅に見えないようにして
+   いたが、重なった側の色が下敷きになって消えて見えてしまっていた。
+   重ねずに並べ、境目では両方の色の枠線がそれぞれ見えるようにする。 */
 .precision-filter-chip[aria-pressed="true"] {
-    /* フルの彩度で塗りつぶすとケバく見えるため、少し白を混ぜた背景+
-       濃いめの文字色に留める。 */
-    background: color-mix(in srgb, var(--chip-color, #999) 70%, white);
-    color: color-mix(in srgb, var(--chip-color, #999) 100%, black);
+    /* フルの彩度で塗りつぶすと派手すぎるため、背景色(--color-surface)を
+       混ぜて少し落ち着いたトーンにする(枠線は引き続きフルの--chip-color)。 */
+    background: color-mix(in srgb, var(--chip-color, #999) 55%, var(--color-surface));
+    color: var(--color-accent-contrast);
 }
 
 .ashiato-popup-list {
@@ -1601,6 +1715,8 @@ dialog#mediaLightbox::backdrop {
 #map .leaflet-popup-tip {
     background: var(--color-surface);
     color: var(--color-text-strong);
+    /* leaflet.cssの既定border-radius:12pxを、アプリ全体の角丸廃止方針に合わせて解除する。 */
+    border-radius: 0;
 }
 #map .leaflet-popup-content {
     /* 縦方向はflexで.ashiato-popup-listに高さを委譲する(この箱自体は
@@ -1741,6 +1857,8 @@ dialog#mediaLightbox::backdrop {
     overflow: hidden;
     line-height: 1.5;
     white-space: pre-line; /* 投稿本文中の改行を保持する */
+    /* 項目名(黄色)ではなく本文と同じ色にする。 */
+    color: var(--color-text-body);
 }
 /* 「続きを表示」クリック後、高さクリップを解除して全文を表示する。 */
 .mfm-preview.mfm-preview-expanded {
@@ -1798,7 +1916,7 @@ dialog#mediaLightbox::backdrop {
 /* 下書きカード(.draft-list li)と同じ、枠線+角丸+薄い影のカードの見た目に揃える。 */
 .precision-fieldset {
     border: 1px solid var(--color-border-lighter);
-    border-radius: 10px;
+    border-radius: 0;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
     display: flex;
     flex-wrap: wrap;
@@ -1815,7 +1933,8 @@ dialog#mediaLightbox::backdrop {
     gap: 8px;
     padding: 0;
     font-weight: 600;
-    color: var(--color-text);
+    /* 「設定」の各項目名(dialog#settingsDialog .action-sheet-row等)と同じ色。 */
+    color: var(--color-text-muted);
 }
 .precision-fieldset legend .action-sheet-icon {
     color: var(--color-text-subtle);
@@ -1825,13 +1944,19 @@ dialog#mediaLightbox::backdrop {
     align-items: center;
     gap: 6px;
     font-size: 0.9rem;
+    /* 「約○○km」は本文と同じ色にする。 */
+    color: var(--color-text-body);
+}
+/* 選択中の「約○○km」だけテーマカラーにして目立たせる。 */
+.precision-fieldset label:has(input:checked) {
+    color: var(--color-accent);
 }
 
 /* 設定ダイアログ内のラジオ選択。precision-fieldsetと違い選択肢の文言が長いため、
    横並びではなく縦積みにする。 */
 .settings-fieldset {
     border: 1px solid var(--color-border-light);
-    border-radius: 8px;
+    border-radius: 0px;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -1848,6 +1973,14 @@ dialog#mediaLightbox::backdrop {
     align-items: center;
     gap: 8px;
     font-size: 0.9rem;
+    /* 未選択時は「テーマ」等の項目名(dialog#settingsDialog .action-sheet-row等)
+       と同じ色にする。 */
+    color: var(--color-text-muted);
+}
+/* 選択中の選択肢(テーマ/メディアの表示のラジオボタン等)だけテーマカラーに
+   して目立たせる(.precision-fieldset labelと同じパターン)。 */
+.settings-fieldset label:has(input:checked) {
+    color: var(--color-accent);
 }
 /* 設定ダイアログ下部の操作一覧(インスタンス変更/検索キャッシュを消す/リセット)。
    「情報」ダイアログ(ashiatoActionDialog)と同じaction-sheetを再利用するが、
@@ -1856,6 +1989,15 @@ dialog#mediaLightbox::backdrop {
    margin-topを持たない。 */
 dialog#settingsDialog .action-sheet-row {
     justify-content: flex-start;
+}
+/* 「設定」の項目(インスタンスを変更/検索キャッシュを消す)も、折りたたみの
+   項目名と同じくメニュー項目(.menu-dropdown button)と同じ色+アイコンだけ
+   黄色にする。リセット(.danger)は破壊的操作の警告色のままにするため対象外。 */
+dialog#settingsDialog .action-sheet-row:not(.danger) {
+    color: var(--color-text-muted);
+}
+dialog#settingsDialog .action-sheet-row:not(.danger) .action-sheet-icon {
+    color: var(--color-accent);
 }
 
 /* 「メディアの表示」セクション。選択肢が3つあり縦に長いため、既定では
@@ -1875,12 +2017,17 @@ dialog#settingsDialog .action-sheet-row {
     padding: 4px;
     font: inherit;
     font-weight: 600;
-    color: var(--color-text-strong);
+    /* 項目名はメニュー項目(.menu-dropdown button)と同じ色にする
+       (アイコンだけ下でvar(--color-accent)に戻す)。 */
+    color: var(--color-text-muted);
 }
 .settings-collapsible-toggle-label {
     display: flex;
     align-items: center;
     gap: 12px;
+}
+.settings-collapsible-toggle .action-sheet-icon {
+    color: var(--color-accent);
 }
 .settings-collapsible-toggle-icon .icon {
     width: 16px;
@@ -1925,7 +2072,7 @@ dialog#draftListDialog {
     max-width: 100%;
     overflow-y: auto;
     border: none;
-    border-radius: 16px 16px 0 0;
+    border-radius: 0px 0px 0 0;
     padding: 20px;
     box-shadow: 0 -1px 6px rgba(0, 0, 0, 0.12);
     /* 開閉時に下から生える/下へ消えるアニメーション。close()を呼ぶだけで
@@ -1938,6 +2085,17 @@ dialog#draftListDialog {
         transform 0.28s ease,
         overlay 0.28s ease allow-discrete,
         display 0.28s ease allow-discrete;
+}
+/* メニューから直接開く主要な5つのダイアログ(Ashi@について/設定/下書き/
+   見つけたあしあと/あしあとを投稿)だけ、外枠線を黄色にする
+   (instanceDialog/confirmDialog/ashiatoActionDialog等は対象外)。
+   上のborder:noneのグループルールより後に書いて上書きする。 */
+dialog#aboutDialog,
+dialog#settingsDialog,
+dialog#draftListDialog,
+dialog#unlockedListDialog,
+dialog#composeDialog {
+    border: 1px solid var(--color-accent);
 }
 dialog#composeDialog[open],
 dialog#unlockedListDialog[open],
@@ -1987,7 +2145,7 @@ dialog#draftListDialog h2 {
 .sheet-handle-grip {
     width: 36px;
     height: 4px;
-    border-radius: 999px;
+    border-radius: 0;
     background: var(--color-border-light);
 }
 
@@ -2034,7 +2192,7 @@ dialog#draftListDialog[open] {
         width: 90%;
         max-width: 480px;
         transform: translateX(-50%) translateY(100%);
-        border-radius: 16px 16px 0 0;
+        border-radius: 0px 0px 0 0;
     }
     dialog#composeDialog[open],
     dialog#unlockedListDialog[open],
@@ -2062,7 +2220,7 @@ dialog#draftListDialog[open] {
     height: 32px;
     padding: 0;
     border: none;
-    border-radius: 50%;
+    border-radius: 0%;
     background: transparent; /* ホバー/フォーカス時だけ丸背景を出す */
     box-shadow: none;
     color: var(--color-text-muted);
@@ -2096,7 +2254,7 @@ dialog#draftListDialog[open] {
 }
 .draft-list li {
     border: 1px solid var(--color-border-lighter);
-    border-radius: 10px;
+    border-radius: 0px;
     padding: 12px;
     display: grid;
     gap: 8px;
@@ -2168,7 +2326,7 @@ dialog#draftListDialog[open] {
     background-position: right 6px center;
     background-size: 14px;
     font-size: 0.85rem;
-    border-radius: 999px;
+    border-radius: 0;
 }
 /* 「あしあとを投稿」の投稿ボタン(#composePost)と横幅を揃える。composePostは
    dialog#composeDialogの中で.dialog-actions(gap:10px)内の2つのbutton
@@ -2228,8 +2386,8 @@ dialog#draftListDialog[open] {
     color: var(--color-text-subtle);
     white-space: nowrap;
     text-shadow:
-        0 0 3px #fff,
-        0 0 3px #fff;
+        0 0 3px var(--color-map-label-halo),
+        0 0 3px var(--color-map-label-halo);
 }
 .municipality-label {
     display: inline-block;
@@ -2240,6 +2398,6 @@ dialog#draftListDialog[open] {
     color: var(--color-text-subtle);
     white-space: nowrap;
     text-shadow:
-        0 0 3px #fff,
-        0 0 3px #fff;
+        0 0 3px var(--color-map-label-halo),
+        0 0 3px var(--color-map-label-halo);
 }

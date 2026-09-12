@@ -29,6 +29,7 @@ import {
   createCurrentLocationLayer,
   createPrecisionPreviewLayer,
   ashiatoColor,
+  restyleMapForTheme,
   type MunicipalityBoundaryResult,
 } from "./map.js";
 import {
@@ -791,7 +792,8 @@ function renderAshiatoRow(
     // (「未読がある」という同じ意味の印なので、同じ色で統一する)。
     // .unread-dotのbackground/box-shadowはcurrentColorを参照しているため、
     // ここでcolorを指定するだけで明滅の色も追従する(style.css参照)。
-    dot.style.color = "#ffb3d1";
+    // var()を直接指定すればライト/ダーク両テーマの値に自動で追従する。
+    dot.style.color = "var(--color-danger)";
     dot.setAttribute("aria-label", "未読");
     header.append(dot);
   }
@@ -1809,6 +1811,7 @@ toggleHideReadBtn.onclick = () => {
 
 // --- ハンバーガーメニュー(投稿ボタンを統合、画面下部・footprint型) -------
 
+const menuWrapper = $(".menu");
 const menuToggle = $<HTMLButtonElement>("#menuToggle");
 const menuDropdown = $("#menuDropdown");
 const aboutDialog = $<HTMLDialogElement>("#aboutDialog");
@@ -1821,6 +1824,22 @@ function closeMenu(): void {
 menuToggle.onclick = (e) => {
   e.stopPropagation();
   const willOpen = menuDropdown.hidden;
+  if (willOpen) {
+    // ポップアップの左端を「過去を探す」ボタンの左端に、右端をトグル開閉
+    // ボタン(#togglePanelCollapse、地図右上の「<」)の右端に揃える。
+    // 両端とも外部の要素basisで決まるため、幅(width)もこの2点から逆算する。
+    // .menu-dropdownのCSS側min-width(230px)がこの計算値を上回る場合、
+    // widthを指定してもmin-widthに押し戻されて右端がはみ出してしまう
+    // (実際に発生していた不具合)ため、ここでmin-widthも明示的に0へ
+    // 上書きする。
+    const searchLeft = $("#search").getBoundingClientRect().left;
+    const toggleHandleRight = $("#togglePanelCollapse").getBoundingClientRect().right;
+    const menuLeft = menuWrapper.getBoundingClientRect().left;
+    menuDropdown.style.right = "auto";
+    menuDropdown.style.left = `${searchLeft - menuLeft}px`;
+    menuDropdown.style.minWidth = "0";
+    menuDropdown.style.width = `${toggleHandleRight - searchLeft}px`;
+  }
   menuDropdown.hidden = !willOpen;
   menuToggle.setAttribute("aria-expanded", String(willOpen));
 };
@@ -1999,6 +2018,18 @@ function resolveTheme(mode: ThemeMode): "light" | "dark" {
 
 function applyTheme(mode: ThemeMode): void {
   document.documentElement.dataset.theme = resolveTheme(mode);
+  // 陸地・境界線の色はLeafletがSVG属性として直接書き込んでいるため、CSSの
+  // data-theme切り替えだけでは追従しない(map.ts参照)。ここで明示的に
+  // 再着色する。
+  restyleMapForTheme();
+  // あしあとセル(ashiatoColor、桁数ごとの色)も同じ理由で、既に描画済みの
+  // ものは自動では追従しない。表示中の全セルを再描画して反映する。
+  for (const cell of ashiatoCells.values()) rebuildCellVisual(cell);
+  // 表示レイヤーのchip(--chip-color、インラインstyleで一度だけ設定している)
+  // も同様に明示的に再設定する。
+  for (const [length, chip] of precisionFilterChipsByLength) {
+    chip.style.setProperty("--chip-color", ashiatoColor(length));
+  }
 }
 
 function setThemeMode(mode: ThemeMode): void {
@@ -2654,10 +2685,10 @@ async function refreshDraftList(): Promise<void> {
     // 少なくとも共有フォームまでは進んだ、という前提。投稿が実際に成功
     // したかどうかまではAshi@側では検知できない)。
     postBtn.onclick = async () => {
-      const wantsToPost = await showConfirm(
-        "現在地の情報を含んだ投稿フォームを開きます。内容は共有フォーム上で確認・編集できます。",
-        { okLabel: "共有フォームを開く" },
-      );
+      // 「あしあとを投稿」の#composePostと同じ内容の確認にする(投稿前の注意.md)。
+      const draftPostWarning = document.createElement("div");
+      renderMarkdownDocInto(draftPostWarning, composeWarningMd);
+      const wantsToPost = await showConfirm(draftPostWarning, { okLabel: "理解して進む" });
       if (!wantsToPost) return;
 
       const text = shareTextFor(draft.lat, draft.lon, draft.geohashLength);

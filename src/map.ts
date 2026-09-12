@@ -5,15 +5,20 @@ import type { AshiatoGroupHandle } from "./types.js";
 import type { FeatureCollection, Geometry, Position } from "geojson";
 import { createIcon } from "./icons.js";
 import {
-  LAND_FILL_COLOR,
+  LAND_FILL_COLOR_LIGHT,
+  LAND_FILL_COLOR_DARK,
   PREFECTURE_DASH_ARRAY,
-  PREFECTURE_BOUNDARY_COLOR,
+  PREFECTURE_BOUNDARY_COLOR_LIGHT,
+  PREFECTURE_BOUNDARY_COLOR_DARK,
   PREFECTURE_BOUNDARY_WEIGHT,
-  MUNICIPALITY_BOUNDARY_COLOR,
+  MUNICIPALITY_BOUNDARY_COLOR_LIGHT,
+  MUNICIPALITY_BOUNDARY_COLOR_DARK,
   MUNICIPALITY_BOUNDARY_WEIGHT,
   WARD_DASH_ARRAY,
-  WARD_BOUNDARY_COLOR,
-  ASHIATO_COLORS_BY_LENGTH,
+  WARD_BOUNDARY_COLOR_LIGHT,
+  WARD_BOUNDARY_COLOR_DARK,
+  ASHIATO_COLORS_BY_LENGTH_LIGHT,
+  ASHIATO_COLORS_BY_LENGTH_DARK,
   INSET_FRACTION,
   PRECISION_PREVIEW_COLOR,
   CURRENT_LOCATION_COLOR,
@@ -24,6 +29,25 @@ import {
 // 無料で運用できるように、都道府県市区町村境界だけ、
 // https://github.com/smartnews-smri/japan-topography　の1%GeoJsonを使って描画してる
 const JAPAN_BOUNDS = L.latLngBounds([17, 122], [46, 154]);
+
+// 陸地・境界線の色はLeafletがSVGのfill/stroke属性としてJSから直接書き込むため、
+// CSSのdata-theme切り替えだけでは追従しない(config.ts参照)。都度、現在の
+// テーマ(main.ts: applyThemeが<html>に付けるdata-theme属性)を見て選ぶ。
+function isDarkTheme(): boolean {
+  return document.documentElement.dataset.theme === "dark";
+}
+function landFillColor(): string {
+  return isDarkTheme() ? LAND_FILL_COLOR_DARK : LAND_FILL_COLOR_LIGHT;
+}
+function prefectureBoundaryColor(): string {
+  return isDarkTheme() ? PREFECTURE_BOUNDARY_COLOR_DARK : PREFECTURE_BOUNDARY_COLOR_LIGHT;
+}
+function municipalityBoundaryColor(): string {
+  return isDarkTheme() ? MUNICIPALITY_BOUNDARY_COLOR_DARK : MUNICIPALITY_BOUNDARY_COLOR_LIGHT;
+}
+function wardBoundaryColor(): string {
+  return isDarkTheme() ? WARD_BOUNDARY_COLOR_DARK : WARD_BOUNDARY_COLOR_LIGHT;
+}
 
 function ringsOf(geometry: Geometry): Position[][] {
   if (geometry.type === "Polygon") return geometry.coordinates;
@@ -229,10 +253,13 @@ function extractMunicipalityBoundaryChains(
   };
 }
 
-// Geohashの桁数(精度)ごとの色(ASHIATO_COLORS_BY_LENGTH)はconfig.ts参照。
-// main.js側(エリアオーバーレイの色計算等)からも使えるようにエクスポートする。
+// Geohashの桁数(精度)ごとの色(ASHIATO_COLORS_BY_LENGTH_LIGHT/_DARK)は
+// config.ts参照。ライト/ダークで別の色を使うため、他の地図の色(landFillColor
+// 等)と同じくここでテーマを見て選ぶ。main.js側(エリアオーバーレイの色計算・
+// 表示レイヤーのchip色・凡例の色見本等)からも使えるようにエクスポートする。
 export function ashiatoColor(geohashLength: number): string {
-  return ASHIATO_COLORS_BY_LENGTH[geohashLength] ?? ASHIATO_COLORS_BY_LENGTH[7];
+  const table = isDarkTheme() ? ASHIATO_COLORS_BY_LENGTH_DARK : ASHIATO_COLORS_BY_LENGTH_LIGHT;
+  return table[geohashLength] ?? table[7];
 }
 
 export function createMap(el: string | HTMLElement): L.Map {
@@ -332,17 +359,28 @@ export interface BoundaryResult {
 // 境界線とは違うズーム閾値で表示/非表示を切り替えられるようにする。
 // 境界線(線のみ)とは別に、同じGeoJsonをlandPaneへ塗りつぶし表示することで
 // 「陸地の色」を表現する(海は#mapのCSS背景色)。
+// テーマ切り替え時、既に描画済みの陸地塗りつぶし・都道府県境界線を再着色するために
+// モジュールスコープで保持しておく(main.ts: applyThemeからrestyleMapForTheme経由で呼ばれる)。
+let landLayer: L.GeoJSON | null = null;
+let prefectureBoundaryLayer: L.Polyline | null = null;
+// 市区町村境界も同様(main.ts側のmunicipalityLayersキャッシュに対応する分だけ、
+// prefCodeごとに市区町村境界+区境界のポリラインを覚えておく)。
+const municipalityBoundaryLayersByPrefCode = new Map<
+  string,
+  { cityBoundaryLine: L.Polyline; wardBoundaryLine: L.Polyline }
+>();
+
 export async function loadPrefectureBoundaries(map: L.Map): Promise<BoundaryResult> {
   const res = await fetch("./data/maps/s0010/prefectures.json");
   if (!res.ok) throw new Error("都道府県境界GeoJSONの読み込みに失敗しました。");
   const data: FeatureCollection<Geometry, PrefectureProperties> = await res.json();
 
-  L.geoJSON(data, {
+  landLayer = L.geoJSON(data, {
     pane: "landPane",
     style: {
       stroke: false,
       fill: true,
-      fillColor: LAND_FILL_COLOR,
+      fillColor: landFillColor(),
       fillOpacity: 1,
       interactive: false,
     },
@@ -351,9 +389,9 @@ export async function loadPrefectureBoundaries(map: L.Map): Promise<BoundaryResu
   // 内陸の県境だけを一点鎖線で描画する(海岸線には一切線を引かない —
   // extractInternalBoundaryChains参照)。海岸線自体は、上のlandPaneの
   // 塗りつぶし(陸地)とmap.wrapのCSS背景色(海)の境目としてそのまま見える。
-  L.polyline(extractInternalBoundaryChains(data), {
+  prefectureBoundaryLayer = L.polyline(extractInternalBoundaryChains(data), {
     pane: "prefecturePane",
-    color: PREFECTURE_BOUNDARY_COLOR,
+    color: prefectureBoundaryColor(),
     weight: PREFECTURE_BOUNDARY_WEIGHT,
     interactive: false,
     dashArray: PREFECTURE_DASH_ARRAY,
@@ -463,7 +501,7 @@ export async function loadMunicipalityBoundaries(
   // 通常の市区町村境界(政令指定都市の場合はその市全体の外縁を含む)。
   const cityBoundaryLine = L.polyline(cityBoundaryChains, {
     pane: "municipalityPane",
-    color: MUNICIPALITY_BOUNDARY_COLOR,
+    color: municipalityBoundaryColor(),
     weight: MUNICIPALITY_BOUNDARY_WEIGHT,
     interactive: false,
   });
@@ -471,17 +509,32 @@ export async function loadMunicipalityBoundaries(
   // 政令指定都市内部の区どうしの境界だけ、外縁より薄い色で重ねる。
   const wardBoundaryLine = L.polyline(wardInternalChains, {
     pane: "municipalityPane",
-    color: WARD_BOUNDARY_COLOR,
+    color: wardBoundaryColor(),
     weight: MUNICIPALITY_BOUNDARY_WEIGHT,
     interactive: false,
     dashArray: WARD_DASH_ARRAY,
   });
+
+  municipalityBoundaryLayersByPrefCode.set(prefCode, { cityBoundaryLine, wardBoundaryLine });
 
   const boundaryLayer = L.layerGroup([cityBoundaryLine, wardBoundaryLine]).addTo(map);
 
   const { labelLayer, prominentLabelLayer } = buildMunicipalityLabelLayers(data, prefCode);
 
   return { boundaryLayer, labelLayer, prominentLabelLayer };
+}
+
+// テーマ切り替え時(main.ts: applyTheme)に呼ぶ。陸地の塗りつぶし・都道府県境界線・
+// これまでに読み込み済みの市区町村境界線(すべてloadPrefectureBoundaries/
+// loadMunicipalityBoundariesが保持しているモジュールスコープの参照)を、
+// GeoJsonを読み直すことなくsetStyleだけで再着色する。
+export function restyleMapForTheme(): void {
+  landLayer?.setStyle({ fillColor: landFillColor() });
+  prefectureBoundaryLayer?.setStyle({ color: prefectureBoundaryColor() });
+  for (const { cityBoundaryLine, wardBoundaryLine } of municipalityBoundaryLayersByPrefCode.values()) {
+    cityBoundaryLine.setStyle({ color: municipalityBoundaryColor() });
+    wardBoundaryLine.setStyle({ color: wardBoundaryColor() });
+  }
 }
 
 interface MunicipalityLabelLayers {
