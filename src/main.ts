@@ -166,6 +166,8 @@ $("#resetAllIcon").append(createIcon("rotate-ccw"));
 $("#aboutButton .menu-item-icon").append(createIcon("info"));
 $("#precisionFilterInfo").append(createIcon("info"));
 $("#settingsToggle .menu-item-icon").append(createIcon("settings"));
+$("#themeIcon").append(createIcon("moon"));
+$("#themeToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
 $("#mediaVisibilityIcon").append(createIcon("eye"));
 $("#layerDisplayIcon").append(createIcon("layers"));
 $("#composePrecisionIcon").append(createIcon("ruler"));
@@ -1963,6 +1965,7 @@ function renderMarkdownDocInto(container: HTMLElement, markdown: string): void {
   }
 }
 
+wireCollapsibleToggle("themeToggle", "themeRows");
 wireCollapsibleToggle("mediaVisibilityToggle", "mediaVisibilityRows");
 wireCollapsibleToggle("layerDisplayToggle", "layerDisplayRows");
 wireCollapsibleToggle("termsToggle", "termsRows");
@@ -1975,6 +1978,50 @@ renderMarkdownDocInto($("#aboutIntro"), overviewMd);
 renderMarkdownDocInto($("#termsContent"), termsMd);
 renderMarkdownDocInto($("#privacyContent"), privacyMd);
 renderMarkdownDocInto($("#licenseContent"), licenseMd);
+
+// --- テーマ(ライト/ダーク) ---------------------------------------------
+// 設定は「デバイスの設定に従う/ライト/ダーク」の3択。実際に見た目に使うのは
+// 解決後の"light"/"dark"のどちらか(resolveTheme)で、<html>のdata-theme属性
+// に反映するとstyle.css側の:root[data-theme="dark"]が効く。
+// IndexedDB(putSetting、他の設定と同じ)には常に選択した3択そのものを保存するが、
+// 次回読み込み時にCSSペイント前に反映できるよう(でないと一瞬ライトで表示されてから
+// ダークに切り替わる「フラッシュ」が起きる)、同じ値をlocalStorageにも同期で
+// ミラーしておき、index.html側の<head>内インラインスクリプトがそちらを
+// 同期的に読んで先にdata-theme属性を付けている。
+const THEME_STORAGE_KEY = "ashi-at-theme";
+type ThemeMode = "system" | "light" | "dark";
+let themeMode: ThemeMode = "system";
+
+function resolveTheme(mode: ThemeMode): "light" | "dark" {
+  if (mode !== "system") return mode;
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function applyTheme(mode: ThemeMode): void {
+  document.documentElement.dataset.theme = resolveTheme(mode);
+}
+
+function setThemeMode(mode: ThemeMode): void {
+  themeMode = mode;
+  applyTheme(mode);
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, mode);
+  } catch {
+    // localStorageが使えない(プライベートブラウジング等)環境でも、
+    // putSettingによるIndexedDBへの保存やアプリの動作自体は継続する。
+  }
+  putSetting("themeMode", mode);
+}
+
+document.querySelectorAll<HTMLInputElement>('input[name="theme"]').forEach((el) => {
+  el.onchange = () => setThemeMode(el.value as ThemeMode);
+});
+
+// OS側のテーマが起動中に切り替わった場合、設定が「デバイスの設定に従う」の
+// ときだけ追従させる(ライト/ダーク固定を選んでいる間は無視)。
+window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (themeMode === "system") applyTheme("system");
+});
 
 document.querySelectorAll<HTMLInputElement>('input[name="mediaVisibility"]').forEach((el) => {
   el.onchange = () => {
@@ -2680,6 +2727,21 @@ if (splash) {
   try {
     const savedInstance = await getSetting<string>("instanceUrl");
     if (savedInstance) $<HTMLInputElement>("#instance").value = savedInstance;
+
+    // 見た目自体(data-theme属性)はindex.html側のインラインスクリプトが
+    // localStorageを読んで既に反映済み(フラッシュ防止)。ここではIndexedDB側の
+    // 値を正として設定UIのラジオ選択を合わせ、両者がズレていた場合(例:
+    // 初回のこの機能追加より前からlocalStorageに値が無い状態でIndexedDBだけ
+    // 値がある、という状況は通常起きないが念のため)はapplyThemeで再適用する。
+    const savedTheme = await getSetting<ThemeMode>("themeMode");
+    if (savedTheme === "system" || savedTheme === "light" || savedTheme === "dark") {
+      themeMode = savedTheme;
+      const radio = document.querySelector<HTMLInputElement>(
+        `input[name="theme"][value="${savedTheme}"]`,
+      );
+      if (radio) radio.checked = true;
+      applyTheme(savedTheme);
+    }
 
     const savedSortMode = await getSetting<UnlockedSortMode>("unlockedSortMode");
     if (savedSortMode === "unlocked" || savedSortMode === "posted") {

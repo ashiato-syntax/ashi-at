@@ -12,6 +12,26 @@
         />
         <title>Ashi@</title>
         <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+        <!-- テーマ(ライト/ダーク)の初期反映。IndexedDBは非同期のため、CSS適用前に
+             間に合わずライト→ダークのフラッシュが起きてしまう。そのため、選択した
+             テーマをmain.ts側でlocalStorageにも同期でミラーしておき(キー名は
+             main.ts: THEME_STORAGE_KEYと一致させること)、ここで最初にそれを
+             同期的に読んでdata-theme属性を先に確定させる。 -->
+        <script>
+            (function () {
+                try {
+                    var saved = localStorage.getItem("ashi-at-theme");
+                    var resolved =
+                        saved === "light" || saved === "dark"
+                            ? saved
+                            : window.matchMedia &&
+                                window.matchMedia("(prefers-color-scheme: dark)").matches
+                              ? "dark"
+                              : "light";
+                    document.documentElement.dataset.theme = resolved;
+                } catch (e) {}
+            })();
+        </script>
         <link rel="stylesheet" href="/style.css" />
     </head>
     <body>
@@ -385,6 +405,54 @@
                 <div class="settings-collapsible">
                     <button
                         type="button"
+                        id="themeToggle"
+                        class="settings-collapsible-toggle"
+                        aria-expanded="false"
+                    >
+                        <span class="settings-collapsible-toggle-label">
+                            <span
+                                class="action-sheet-icon"
+                                id="themeIcon"
+                            ></span>
+                            <span>テーマ</span>
+                        </span>
+                        <span class="settings-collapsible-toggle-icon"></span>
+                    </button>
+                    <div id="themeRows" class="settings-collapsible-rows">
+                        <div class="settings-collapsible-rows-inner">
+                            <fieldset class="settings-fieldset">
+                                <label
+                                    ><input
+                                        type="radio"
+                                        name="theme"
+                                        value="system"
+                                        checked
+                                    />
+                                    デバイスの設定に従う</label
+                                >
+                                <label
+                                    ><input
+                                        type="radio"
+                                        name="theme"
+                                        value="light"
+                                    />
+                                    ライト</label
+                                >
+                                <label
+                                    ><input
+                                        type="radio"
+                                        name="theme"
+                                        value="dark"
+                                    />
+                                    ダーク</label
+                                >
+                            </fieldset>
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-collapsible">
+                    <button
+                        type="button"
                         id="mediaVisibilityToggle"
                         class="settings-collapsible-toggle"
                         aria-expanded="false"
@@ -512,61 +580,63 @@
                 aria-label="閉じる"
             ></button>
             <h2>Ashi@について</h2>
-            <div id="aboutIntro"></div>
-            <div class="settings-collapsible about-collapsible">
-                <button
-                    type="button"
-                    id="termsToggle"
-                    class="settings-collapsible-toggle"
-                    aria-expanded="false"
-                >
-                    <span class="settings-collapsible-toggle-label">
-                        <span class="action-sheet-icon" id="termsIcon"></span>
-                        <span>利用規約</span>
-                    </span>
-                    <span class="settings-collapsible-toggle-icon"></span>
-                </button>
-                <div id="termsRows" class="settings-collapsible-rows">
-                    <div class="settings-collapsible-rows-inner">
-                        <div id="termsContent" class="markdown-doc"></div>
+            <div class="about-dialog-body">
+                <div id="aboutIntro"></div>
+                <div class="settings-collapsible about-collapsible">
+                    <button
+                        type="button"
+                        id="termsToggle"
+                        class="settings-collapsible-toggle"
+                        aria-expanded="false"
+                    >
+                        <span class="settings-collapsible-toggle-label">
+                            <span class="action-sheet-icon" id="termsIcon"></span>
+                            <span>利用規約</span>
+                        </span>
+                        <span class="settings-collapsible-toggle-icon"></span>
+                    </button>
+                    <div id="termsRows" class="settings-collapsible-rows">
+                        <div class="settings-collapsible-rows-inner">
+                            <div id="termsContent" class="markdown-doc"></div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="settings-collapsible about-collapsible">
-                <button
-                    type="button"
-                    id="privacyToggle"
-                    class="settings-collapsible-toggle"
-                    aria-expanded="false"
-                >
-                    <span class="settings-collapsible-toggle-label">
-                        <span class="action-sheet-icon" id="privacyIcon"></span>
-                        <span>プライバシーポリシー</span>
-                    </span>
-                    <span class="settings-collapsible-toggle-icon"></span>
-                </button>
-                <div id="privacyRows" class="settings-collapsible-rows">
-                    <div class="settings-collapsible-rows-inner">
-                        <div id="privacyContent" class="markdown-doc"></div>
+                <div class="settings-collapsible about-collapsible">
+                    <button
+                        type="button"
+                        id="privacyToggle"
+                        class="settings-collapsible-toggle"
+                        aria-expanded="false"
+                    >
+                        <span class="settings-collapsible-toggle-label">
+                            <span class="action-sheet-icon" id="privacyIcon"></span>
+                            <span>プライバシーポリシー</span>
+                        </span>
+                        <span class="settings-collapsible-toggle-icon"></span>
+                    </button>
+                    <div id="privacyRows" class="settings-collapsible-rows">
+                        <div class="settings-collapsible-rows-inner">
+                            <div id="privacyContent" class="markdown-doc"></div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="settings-collapsible about-collapsible">
-                <button
-                    type="button"
-                    id="licenseToggle"
-                    class="settings-collapsible-toggle"
-                    aria-expanded="false"
-                >
-                    <span class="settings-collapsible-toggle-label">
-                        <span class="action-sheet-icon" id="licenseIcon"></span>
-                        <span>ライセンス情報</span>
-                    </span>
-                    <span class="settings-collapsible-toggle-icon"></span>
-                </button>
-                <div id="licenseRows" class="settings-collapsible-rows">
-                    <div class="settings-collapsible-rows-inner">
-                        <div id="licenseContent" class="markdown-doc"></div>
+                <div class="settings-collapsible about-collapsible">
+                    <button
+                        type="button"
+                        id="licenseToggle"
+                        class="settings-collapsible-toggle"
+                        aria-expanded="false"
+                    >
+                        <span class="settings-collapsible-toggle-label">
+                            <span class="action-sheet-icon" id="licenseIcon"></span>
+                            <span>ライセンス情報</span>
+                        </span>
+                        <span class="settings-collapsible-toggle-icon"></span>
+                    </button>
+                    <div id="licenseRows" class="settings-collapsible-rows">
+                        <div class="settings-collapsible-rows-inner">
+                            <div id="licenseContent" class="markdown-doc"></div>
+                        </div>
                     </div>
                 </div>
             </div>
