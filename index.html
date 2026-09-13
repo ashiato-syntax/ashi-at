@@ -513,6 +513,46 @@
                 <div class="settings-collapsible">
                     <button
                         type="button"
+                        id="mfmDisplayToggle"
+                        class="settings-collapsible-toggle"
+                        aria-expanded="false"
+                    >
+                        <span class="settings-collapsible-toggle-label">
+                            <span
+                                class="action-sheet-icon"
+                                id="mfmDisplayIcon"
+                            ></span>
+                            <span>MFMの表示</span>
+                        </span>
+                        <span class="settings-collapsible-toggle-icon"></span>
+                    </button>
+                    <div id="mfmDisplayRows" class="settings-collapsible-rows">
+                        <div class="settings-collapsible-rows-inner">
+                            <fieldset class="settings-fieldset">
+                                <label
+                                    ><input
+                                        type="radio"
+                                        name="mfmDisplay"
+                                        value="simple"
+                                        checked
+                                    />
+                                    簡易表示</label
+                                >
+                                <label
+                                    ><input
+                                        type="radio"
+                                        name="mfmDisplay"
+                                        value="full"
+                                    />
+                                    フル表示</label
+                                >
+                            </fieldset>
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-collapsible">
+                    <button
+                        type="button"
                         id="layerDisplayToggle"
                         class="settings-collapsible-toggle"
                         aria-expanded="false"

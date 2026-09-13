@@ -74,10 +74,12 @@ function hostTagKey(host: string, tag: string): string {
  * @param noteCreatedAt Misskeyのnote.createdAt(ISO8601文字列)
  * @param username 投稿者のacct名(note.user.username)。
  *   「見つけたあしあと」で開封済みのものを表示する際に使う(本文・投稿者の他の情報は保存しない)。
- * @param textPreview ノート本文からAshiato Syntax部分を除き、MFMを
- *   プレーンテキスト化したプレビュー文字列。表示側(main.js)ではCSSでの高さクリップ
- *   +「続きを表示」で見た目上だけ省略する方針のため、ここでは意図的な文字数での
- *   切り詰めは行わない(極端に長い本文に対する安全弁としての上限のみ設ける)。
+ * @param textPreview ノート本文からAshiato Syntax部分を除いた、MFM原文のまま
+ *   (装飾記法を保持したまま)のプレビュー文字列。設定(MFMの表示)に応じて
+ *   フル装飾かプレーンテキストかを表示側(main.js:renderMfmPreview)でその都度
+ *   切り替えるため、ここではMFMのパース・フラット化は行わない。CSSでの高さ
+ *   クリップ+「続きを表示」で見た目上だけ省略する方針のため、ここでは意図的な
+ *   文字数での切り詰めは行わない(極端に長い本文に対する安全弁としての上限のみ設ける)。
  *   未開封の「見つけたあしあと」一覧でも、開封前に内容を確認できるようにするために保持する
  *   (ノート本文そのものを無条件に保存しないという方針は、Ashiato Syntax部分の除去や
  *   note.deletedAt等のノート単位フィルタでは維持しつつ、本文プレビュー自体は

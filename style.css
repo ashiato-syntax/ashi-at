@@ -2184,6 +2184,239 @@ dialog#mediaLightbox::backdrop {
     display: none;
 }
 
+/* 本文プレビューの「フル表示」(設定→MFMの表示)で使う要素。
+   簡易表示(プレーンテキスト化)では使われない。main.ts:appendMfmNodeFull参照。 */
+.mfm-mention,
+.mfm-hashtag {
+    color: var(--color-accent);
+}
+.mfm-link {
+    color: var(--color-accent);
+    text-decoration: underline;
+}
+.mfm-code {
+    font-family: monospace;
+    background: var(--color-surface-sunken);
+    padding: 1px 4px;
+}
+.mfm-code-block {
+    display: block;
+    font-family: monospace;
+    background: var(--color-surface-sunken);
+    padding: 8px;
+    margin: 4px 0;
+    overflow-x: auto;
+    white-space: pre;
+}
+.mfm-math {
+    font-family: monospace;
+    font-style: italic;
+}
+.mfm-search {
+    display: inline-block;
+    background: var(--color-surface-sunken);
+    padding: 2px 8px;
+    margin: 2px 0;
+}
+.mfm-quote {
+    display: block;
+    margin: 4px 0;
+    padding: 2px 10px;
+    border-left: 3px solid var(--color-text-faint);
+    color: var(--color-text-muted);
+}
+.mfm-center {
+    display: block;
+    text-align: center;
+}
+/* $[x2]/$[x3]/$[x4](文字を大きくする)。transform:scaleだと行の高さ計算が
+   崩れやすいため、font-sizeの拡大で表現する(簡易だが安全)。 */
+.mfm-fn-x2 {
+    font-size: 1.5em;
+}
+.mfm-fn-x3 {
+    font-size: 2em;
+}
+.mfm-fn-x4 {
+    font-size: 3em;
+}
+/* $[blur](閲覧注意等のぼかし)。プレビューという性質上、常時ぼかしたままにし、
+   ホバー/フォーカス中だけ確認できるようにする(クリック操作は実装しない)。 */
+.mfm-fn-blur {
+    filter: blur(6px);
+    transition: filter 0.2s ease;
+}
+.mfm-fn-blur:hover,
+.mfm-fn-blur:focus-visible {
+    filter: blur(0);
+}
+.mfm-fn-jelly,
+.mfm-fn-tada,
+.mfm-fn-jump,
+.mfm-fn-bounce,
+.mfm-fn-shake,
+.mfm-fn-twitch,
+.mfm-fn-rainbow,
+.mfm-fn-spin,
+.mfm-fn-spin-x,
+.mfm-fn-spin-y {
+    display: inline-block;
+}
+.mfm-fn-jelly {
+    animation: mfm-fn-jelly 0.8s infinite;
+}
+.mfm-fn-tada {
+    animation: mfm-fn-tada 1s infinite;
+}
+.mfm-fn-jump {
+    animation: mfm-fn-jump 0.8s linear infinite;
+}
+.mfm-fn-bounce {
+    animation: mfm-fn-bounce 0.8s linear infinite;
+    transform-origin: bottom;
+}
+.mfm-fn-shake {
+    animation: mfm-fn-shake 0.5s linear infinite;
+}
+.mfm-fn-twitch {
+    animation: mfm-fn-twitch 0.3s linear infinite;
+}
+.mfm-fn-rainbow {
+    animation: mfm-fn-rainbow 1.5s linear infinite;
+}
+.mfm-fn-spin {
+    animation: mfm-fn-spin 1.5s linear infinite;
+}
+.mfm-fn-spin-x {
+    animation: mfm-fn-spin-x 1.5s linear infinite;
+}
+.mfm-fn-spin-y {
+    animation: mfm-fn-spin-y 1.5s linear infinite;
+}
+@keyframes mfm-fn-jelly {
+    0%,
+    100% {
+        transform: scale(1, 1);
+    }
+    25% {
+        transform: scale(1.2, 0.8);
+    }
+    50% {
+        transform: scale(0.85, 1.15);
+    }
+    75% {
+        transform: scale(1.05, 0.95);
+    }
+}
+@keyframes mfm-fn-tada {
+    0%,
+    100% {
+        transform: scale(1) rotate(0);
+    }
+    10%,
+    20% {
+        transform: scale(0.9) rotate(-4deg);
+    }
+    30%,
+    50%,
+    70%,
+    90% {
+        transform: scale(1.1) rotate(4deg);
+    }
+    40%,
+    60%,
+    80% {
+        transform: scale(1.1) rotate(-4deg);
+    }
+}
+@keyframes mfm-fn-jump {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    25% {
+        transform: translateY(-8px);
+    }
+    50% {
+        transform: translateY(0);
+    }
+}
+@keyframes mfm-fn-bounce {
+    0%,
+    60%,
+    100% {
+        transform: translateY(0) scale(1, 1);
+    }
+    40% {
+        transform: translateY(-8px) scale(1, 1.1);
+    }
+    80% {
+        transform: translateY(0) scale(1.1, 0.9);
+    }
+}
+@keyframes mfm-fn-shake {
+    0%,
+    100% {
+        transform: translate(0, 0) rotate(0);
+    }
+    25% {
+        transform: translate(-2px, 2px) rotate(-6deg);
+    }
+    50% {
+        transform: translate(2px, -2px) rotate(0);
+    }
+    75% {
+        transform: translate(-2px, 2px) rotate(6deg);
+    }
+}
+@keyframes mfm-fn-twitch {
+    0%,
+    100% {
+        transform: translate(0, 0);
+    }
+    25% {
+        transform: translate(2px, -1px);
+    }
+    50% {
+        transform: translate(-1px, 2px);
+    }
+    75% {
+        transform: translate(1px, -2px);
+    }
+}
+@keyframes mfm-fn-rainbow {
+    0% {
+        filter: hue-rotate(0deg) saturate(3);
+    }
+    100% {
+        filter: hue-rotate(360deg) saturate(3);
+    }
+}
+@keyframes mfm-fn-spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+@keyframes mfm-fn-spin-x {
+    from {
+        transform: perspective(120px) rotateX(0deg);
+    }
+    to {
+        transform: perspective(120px) rotateX(360deg);
+    }
+}
+@keyframes mfm-fn-spin-y {
+    from {
+        transform: perspective(120px) rotateY(0deg);
+    }
+    to {
+        transform: perspective(120px) rotateY(360deg);
+    }
+}
+
 .splash {
     position: fixed;
     inset: 0;

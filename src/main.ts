@@ -7,7 +7,7 @@ import {
 } from "./misskey.js";
 import { parseText, extractCandidates, buildMinimalCandidate } from "./parser.js";
 import { isAshiatoActiveNow } from "./ashiatoEval.js";
-import { parse as parseMfm, type MfmNode } from "mfm-js";
+import { parse as parseMfm, type MfmNode, type MfmFn } from "mfm-js";
 import { marked } from "marked";
 // 「Ashi@について」に表示するMarkdown文書。実行時にfetchするのではなく、
 // ?rawでビルド時にJSへ直接埋め込む(ネットワーク状況に関わらず必ず読めるように
@@ -170,9 +170,11 @@ $("#settingsToggle .menu-item-icon").append(createIcon("settings"));
 $("#themeIcon").append(createIcon("moon"));
 $("#themeToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
 $("#mediaVisibilityIcon").append(createIcon("eye"));
+$("#mfmDisplayIcon").append(createIcon("sparkles"));
 $("#layerDisplayIcon").append(createIcon("layers"));
 $("#composePrecisionIcon").append(createIcon("ruler"));
 $("#mediaVisibilityToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
+$("#mfmDisplayToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
 $("#layerDisplayToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
 $("#termsIcon").append(createIcon("file-text"));
 $("#privacyIcon").append(createIcon("shield"));
@@ -634,11 +636,11 @@ function formatUserLabel(record: AshiatoRecord): string {
 }
 
 // --- 本文プレビュー中のカスタム絵文字描画 ---------------------------------
-// textPreview(MFMをプレーンテキスト化したもの)には、カスタム絵文字が
-// 「:name:」という記法のまま残っている(mfmNodeToPlainText参照)。
-// ポップアップ・見つけたあしあと一覧の2箇所だけ、record.emojiHost(投稿元インスタンス)
-// のmisskey.js:fetchEmojiMapを使ってshortcode→画像URLを解決し、実際の画像に置き換えて
-// 表示する(note.emojisは最近のMisskeyでは空のことが多く当てにできないため使わない)。
+// 本文プレビュー(record.textPreview、MFM原文のまま)には、カスタム絵文字が
+// 「:name:」という記法で含まれている。ポップアップ・見つけたあしあと一覧の
+// 2箇所だけ、record.emojiHost(投稿元インスタンス)のmisskey.js:fetchEmojiMapを
+// 使ってshortcode→画像URLを解決し、実際の画像に置き換えて表示する
+// (note.emojisは最近のMisskeyでは空のことが多く当てにできないため使わない)。
 // 下書き一覧はユーザーが本文を入力する欄自体が無いため対象外。
 
 const EMOJI_SHORTCODE_RE = /:([0-9a-zA-Z_+-]+):/g;
@@ -679,13 +681,39 @@ async function resolveEmojiImageUrl(emojiHost: string, name: string): Promise<st
   }
 }
 
-// text中の「:name:」を、emojiHost(投稿元インスタンス)から解決した画像があれば<img>に、
-// 無ければそのままのテキストとしてcontainerへ追加していく。画像の解決は非同期のため、
-// 一旦プレースホルダーのimgを差し込んでおき、後から src を差し替える
-// (取得に失敗した場合はテキストへフォールバックする)。
-// onEmojiSettledは、各絵文字の解決(成功/失敗いずれか)が完了するたびに呼ばれる。
+// shortcode(name)1個分を、emojiHost(投稿元インスタンス)から解決した画像が
+// あれば<img>として、無ければそのままのテキスト「:name:」としてcontainerへ
+// 追加する。画像の解決は非同期のため、一旦プレースホルダーのimgを差し込んで
+// おき、後から src を差し替える(取得に失敗した場合はテキストへフォール
+// バックする)。簡易表示(appendTextWithEmojis)・フル表示(appendMfmNodeFull)
+// の両方から呼ばれる共通処理。
+// onEmojiSettledは、この絵文字の解決(成功/失敗いずれか)が完了した時に呼ばれる。
 // 画像挿入によってcontainerの高さが変わりうるため、呼び出し側は「続きを表示」ヒントの
 // 表示要否(applyPreviewOverflowChecks)を再計算するのに使う。
+function appendEmojiImage(
+  container: HTMLElement,
+  name: string,
+  emojiHost: string,
+  onEmojiSettled?: () => void,
+): void {
+  const img = document.createElement("img");
+  img.className = "mfm-emoji-inline";
+  img.alt = `:${name}:`;
+  img.decoding = "async";
+  container.append(img);
+
+  resolveEmojiImageUrl(emojiHost, name).then((objectUrl) => {
+    if (objectUrl) {
+      img.src = objectUrl;
+    } else if (img.isConnected) {
+      img.replaceWith(document.createTextNode(`:${name}:`));
+    }
+    onEmojiSettled?.();
+  });
+}
+
+// プレーンテキスト中の「:name:」をappendEmojiImageで画像に差し替えながら、
+// それ以外はテキストノードとしてcontainerへ追加していく(簡易表示用)。
 function appendTextWithEmojis(
   container: HTMLElement,
   text: string,
@@ -700,23 +728,7 @@ function appendTextWithEmojis(
     if (m.index > lastIndex) {
       container.append(document.createTextNode(text.slice(lastIndex, m.index)));
     }
-
-    const name = m[1];
-    const img = document.createElement("img");
-    img.className = "mfm-emoji-inline";
-    img.alt = `:${name}:`;
-    img.decoding = "async";
-    container.append(img);
-
-    resolveEmojiImageUrl(emojiHost, name).then((objectUrl) => {
-      if (objectUrl) {
-        img.src = objectUrl;
-      } else if (img.isConnected) {
-        img.replaceWith(document.createTextNode(`:${name}:`));
-      }
-      onEmojiSettled?.();
-    });
-
+    appendEmojiImage(container, m[1], emojiHost, onEmojiSettled);
     lastIndex = EMOJI_SHORTCODE_RE.lastIndex;
   }
 
@@ -730,7 +742,7 @@ function appendTextWithEmojis(
 // 要素がまだ画面に表示されていない(閉じたdialog内・ポップアップ生成直後でDOM未接続 等)
 // タイミングで呼んでも高さが正しく測れないため、実際に画面へ表示されたタイミング
 // (dialogを開いた直後、ポップアップをopenOn()した直後)、および絵文字画像の非同期
-// 読み込みで高さが変わりうるタイミング(appendTextWithEmojisのonEmojiSettled経由)で呼ぶ。
+// 読み込みで高さが変わりうるタイミング(renderMfmPreviewのonEmojiSettled経由)で呼ぶ。
 function applyPreviewOverflowChecks(root: ParentNode): void {
   for (const preview of root.querySelectorAll<HTMLElement>(".mfm-preview")) {
     // 手動で「続きを表示」→展開済みのものは、クリップが外れて overflow が
@@ -844,7 +856,7 @@ function renderAshiatoRow(
       const expanded = preview.classList.toggle("mfm-preview-expanded");
       hint.textContent = expanded ? "折りたたむ" : "続きを表示";
     };
-    appendTextWithEmojis(
+    renderMfmPreview(
       preview,
       record.textPreview,
       record.emojiHost ?? record.host,
@@ -887,6 +899,13 @@ function renderAshiatoRow(
 // 実行しない限り永続する。
 type MediaVisibilityMode = "hide-all" | "hide-sensitive" | "show-all";
 let mediaVisibilityMode: MediaVisibilityMode = "hide-sensitive";
+
+// 「設定」ダイアログのMFM表示モード。本文プレビュー(record.textPreview、
+// MFM原文のまま保存済み)を、装飾記号を取り除いたプレーンテキストにするか
+// (simple)、太字・拡大・回転等の装飾込みでHTMLへ描画するか(full)を選ぶ。
+// mediaVisibilityModeと同じくputSettingで永続する。
+type MfmDisplayMode = "simple" | "full";
+let mfmDisplayMode: MfmDisplayMode = "simple";
 
 // この添付ファイルを最初はモザイク(ぼかし)状態で表示すべきかどうか。
 // - hide-all: 全てのメディアを隠す
@@ -2107,6 +2126,7 @@ function renderMarkdownDocInto(container: HTMLElement, markdown: string): void {
 
 wireCollapsibleToggle("themeToggle", "themeRows");
 wireCollapsibleToggle("mediaVisibilityToggle", "mediaVisibilityRows");
+wireCollapsibleToggle("mfmDisplayToggle", "mfmDisplayRows");
 wireCollapsibleToggle("layerDisplayToggle", "layerDisplayRows");
 wireCollapsibleToggle("termsToggle", "termsRows");
 wireCollapsibleToggle("privacyToggle", "privacyRows");
@@ -2184,6 +2204,15 @@ document.querySelectorAll<HTMLInputElement>('input[name="mediaVisibility"]').for
   };
 });
 
+document.querySelectorAll<HTMLInputElement>('input[name="mfmDisplay"]').forEach((el) => {
+  el.onchange = () => {
+    mfmDisplayMode = el.value as MfmDisplayMode;
+    putSetting("mfmDisplayMode", mfmDisplayMode);
+    // 開いたままの一覧があれば、変更を即座に反映する。
+    if (unlockedListDialog.open) refreshUnlockedList();
+  };
+});
+
 // --- インスタンス変更ダイアログ --------------------------------------------
 
 const instanceDialog = $<HTMLDialogElement>("#instanceDialog");
@@ -2253,10 +2282,12 @@ async function ensureHost(): Promise<string> {
 // 「見つけたあしあと」を開封する前でも、内容を少しだけ確認できるように、
 // ノート本文の冒頭をプレビュー表示する。ノート本文そのもの(全文)は
 // これまで通りキャッシュに保存しない方針を維持し、ここで作った短い
-// プレビュー文字列だけを例外的にレコードへ持たせる。
-// MFM(Misskey Flavored Markdown)の構文記号がそのまま見えると読みにくいため、
-// misskey-dev/mfm.js でパースした上でプレーンテキスト化する
-// (https://github.com/misskey-dev/mfm.js)。
+// プレビュー文字列(MFM原文のまま)だけを例外的にレコードへ持たせる。
+// MFM(Misskey Flavored Markdown)は misskey-dev/mfm.js でパースする
+// (https://github.com/misskey-dev/mfm.js)。設定の「MFMの表示」により、
+// 構文記号を取り除いたプレーンテキストにする(簡易表示)か、太字・拡大・
+// 回転等の装飾込みでHTMLへ描画する(フル表示)かを切り替える
+// (renderMfmPreview参照)。
 // 表示上の省略(3行程度でクリップし「続きを表示」を出す)はCSS側(.mfm-preview)で
 // 行うため、ここでは文字数による切り詰めはしない(TEXT_PREVIEW_SAFETY_CAP_LENGTH参照)。
 
@@ -2296,12 +2327,335 @@ function mfmNodesToPlainText(nodes: MfmNode[]): string {
   return nodes.map(mfmNodeToPlainText).join("");
 }
 
-// ノート本文からAshiato Syntax候補(⟦...⟧)を取り除いた上でMFMをプレーン
-// テキスト化する。表示上の省略はCSSでの高さクリップで行うため、ここでは
-// TEXT_PREVIEW_SAFETY_CAP_LENGTHを超える極端なケースの安全弁としてのみ切り詰める
-// (文字数で機械的に切ると:name:のようなMFM記法の途中で千切れる恐れがあるため)。
+// mfm-jsのAST(MfmNode[])を、containerへ実際のDOM要素として描画する
+// (フル表示用)。$[x2 ...]・$[rotate.deg=45 ...]等の装飾関数(fn)は
+// appendMfmFnFullで名前ごとにCSSクラス/インラインstyleへ変換する。
+// 未対応のノード種別・fn名は、装飾を諦めて子ノードだけをそのまま描画する
+// (mfmNodeToPlainTextの「装飾記号を落として連結する」フォールバックと同じ考え方)。
+function appendMfmNodeFull(
+  container: HTMLElement,
+  node: MfmNode,
+  emojiHost: string,
+  onEmojiSettled?: () => void,
+): void {
+  switch (node.type) {
+    case "text":
+      container.append(document.createTextNode(node.props.text));
+      return;
+    case "unicodeEmoji":
+      container.append(document.createTextNode(node.props.emoji));
+      return;
+    case "emojiCode":
+      appendEmojiImage(container, node.props.name, emojiHost, onEmojiSettled);
+      return;
+    case "mention": {
+      const span = document.createElement("span");
+      span.className = "mfm-mention";
+      span.textContent = node.props.acct ? `@${node.props.acct}` : `@${node.props.username}`;
+      container.append(span);
+      return;
+    }
+    case "hashtag": {
+      const span = document.createElement("span");
+      span.className = "mfm-hashtag";
+      span.textContent = `#${node.props.hashtag}`;
+      container.append(span);
+      return;
+    }
+    case "url": {
+      const a = document.createElement("a");
+      a.className = "mfm-link";
+      a.href = node.props.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = node.props.url;
+      container.append(a);
+      return;
+    }
+    case "link": {
+      const a = document.createElement("a");
+      a.className = "mfm-link";
+      a.href = node.props.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      appendMfmNodesFull(a, node.children, emojiHost, onEmojiSettled);
+      container.append(a);
+      return;
+    }
+    case "inlineCode": {
+      const code = document.createElement("code");
+      code.className = "mfm-code";
+      code.textContent = node.props.code;
+      container.append(code);
+      return;
+    }
+    case "blockCode": {
+      const pre = document.createElement("pre");
+      pre.className = "mfm-code-block";
+      const code = document.createElement("code");
+      code.textContent = node.props.code;
+      pre.append(code);
+      container.append(pre);
+      return;
+    }
+    case "mathInline":
+    case "mathBlock": {
+      // KaTeX等の数式レンダラは導入していないため、数式ソースをそのまま
+      // コード風に表示するだけに留める。
+      const code = document.createElement("code");
+      code.className = "mfm-math";
+      code.textContent = node.props.formula;
+      container.append(code);
+      return;
+    }
+    case "search": {
+      const span = document.createElement("span");
+      span.className = "mfm-search";
+      span.textContent = node.props.content;
+      container.append(span);
+      return;
+    }
+    case "quote": {
+      const bq = document.createElement("blockquote");
+      bq.className = "mfm-quote";
+      appendMfmNodesFull(bq, node.children, emojiHost, onEmojiSettled);
+      container.append(bq);
+      return;
+    }
+    case "center": {
+      const div = document.createElement("div");
+      div.className = "mfm-center";
+      appendMfmNodesFull(div, node.children, emojiHost, onEmojiSettled);
+      container.append(div);
+      return;
+    }
+    case "bold": {
+      const b = document.createElement("b");
+      appendMfmNodesFull(b, node.children, emojiHost, onEmojiSettled);
+      container.append(b);
+      return;
+    }
+    case "italic": {
+      const i = document.createElement("i");
+      appendMfmNodesFull(i, node.children, emojiHost, onEmojiSettled);
+      container.append(i);
+      return;
+    }
+    case "strike": {
+      const s = document.createElement("s");
+      appendMfmNodesFull(s, node.children, emojiHost, onEmojiSettled);
+      container.append(s);
+      return;
+    }
+    case "small": {
+      const small = document.createElement("small");
+      appendMfmNodesFull(small, node.children, emojiHost, onEmojiSettled);
+      container.append(small);
+      return;
+    }
+    case "plain": {
+      for (const child of node.children) container.append(document.createTextNode(child.props.text));
+      return;
+    }
+    case "fn":
+      appendMfmFnFull(container, node, emojiHost, onEmojiSettled);
+      return;
+    default: {
+      // 将来ノード種別が増えた場合のフォールバック。子があれば装飾なしで連結する。
+      const maybeParent = node as { children?: MfmNode[] };
+      if (Array.isArray(maybeParent.children)) {
+        appendMfmNodesFull(container, maybeParent.children, emojiHost, onEmojiSettled);
+      }
+    }
+  }
+}
+
+function appendMfmNodesFull(
+  container: HTMLElement,
+  nodes: MfmNode[],
+  emojiHost: string,
+  onEmojiSettled?: () => void,
+): void {
+  for (const node of nodes) appendMfmNodeFull(container, node, emojiHost, onEmojiSettled);
+}
+
+// MFMの色指定引数(例: "f00"、"ff0000")の先頭に#を補う。既に#や
+// rgb()等のCSS色関数っぽい記法ならそのまま使う(念のための保険)。
+function normalizeMfmColorArg(value: string | true | undefined): string | undefined {
+  if (typeof value !== "string" || !value) return undefined;
+  if (value.startsWith("#") || /[a-z]{3,}\(/i.test(value)) return value;
+  return /^[0-9a-fA-F]{3,8}$/.test(value) ? `#${value}` : value;
+}
+
+// speed引数(例: "5s"、"200ms")がCSSのtime値として妥当な形式かだけ検証する。
+// 不正な値をそのままstyle.animationDurationへ入れると他の宣言ごと無視される
+// ことがあるため、通さない。
+function isValidCssTime(value: string): boolean {
+  return /^[0-9]*\.?[0-9]+(ms|s)$/.test(value);
+}
+
+// $[name.arg1=val1,arg2 ...]形式の装飾関数(fn)を解釈し、対応するCSSクラス/
+// インラインstyleを付けたspanで子ノードを包む。Misskeyの主要なMFM関数の
+// うち、よく使われるものを一通りカバーする(sparkle・ruby・unixtimeのような
+// 実装コストの高い/稀なものは非対応とし、装飾なしでフォールバックする)。
+function appendMfmFnFull(
+  container: HTMLElement,
+  node: MfmFn,
+  emojiHost: string,
+  onEmojiSettled?: () => void,
+): void {
+  const { name, args } = node.props;
+  const span = document.createElement("span");
+  span.className = "mfm-fn";
+
+  const ANIMATION_CLASS_BY_NAME: Record<string, string> = {
+    jelly: "mfm-fn-jelly",
+    tada: "mfm-fn-tada",
+    jump: "mfm-fn-jump",
+    bounce: "mfm-fn-bounce",
+    shake: "mfm-fn-shake",
+    twitch: "mfm-fn-twitch",
+    rainbow: "mfm-fn-rainbow",
+  };
+  const FONT_FAMILY_BY_NAME: Record<string, string> = {
+    serif: "serif",
+    monospace: "monospace",
+    cursive: "cursive",
+    fantasy: "fantasy",
+  };
+
+  switch (name) {
+    case "x2":
+    case "x3":
+    case "x4":
+      span.classList.add(`mfm-fn-${name}`);
+      break;
+    case "blur":
+      span.classList.add("mfm-fn-blur");
+      break;
+    case "flip": {
+      const horizontal = !("v" in args) || "h" in args;
+      const vertical = "v" in args;
+      span.style.display = "inline-block";
+      span.style.transform = `scale(${horizontal ? -1 : 1}, ${vertical ? -1 : 1})`;
+      break;
+    }
+    case "rotate": {
+      const deg = Number(args.deg ?? 90);
+      span.style.display = "inline-block";
+      span.style.transform = `rotate(${Number.isFinite(deg) ? deg : 90}deg)`;
+      break;
+    }
+    case "position": {
+      const x = Number(args.x ?? 0);
+      const y = Number(args.y ?? 0);
+      span.style.display = "inline-block";
+      span.style.transform = `translate(${Number.isFinite(x) ? x : 0}em, ${Number.isFinite(y) ? y : 0}em)`;
+      break;
+    }
+    case "scale": {
+      const x = Number(args.x ?? 1);
+      const y = Number(args.y ?? 1);
+      span.style.display = "inline-block";
+      span.style.transform = `scale(${Number.isFinite(x) ? x : 1}, ${Number.isFinite(y) ? y : 1})`;
+      break;
+    }
+    case "fg": {
+      const color = normalizeMfmColorArg(args.color);
+      if (color) span.style.color = color;
+      break;
+    }
+    case "bg": {
+      const color = normalizeMfmColorArg(args.color);
+      if (color) span.style.backgroundColor = color;
+      break;
+    }
+    case "border": {
+      const width = Number(args.width ?? 1);
+      const style = typeof args.style === "string" ? args.style : "solid";
+      const color = normalizeMfmColorArg(args.color) ?? "currentColor";
+      const radius = Number(args.radius ?? 0);
+      span.style.display = "inline-block";
+      span.style.border = `${Number.isFinite(width) ? width : 1}px ${style} ${color}`;
+      if (Number.isFinite(radius) && radius > 0) span.style.borderRadius = `${radius}px`;
+      break;
+    }
+    case "font": {
+      const key = Object.keys(FONT_FAMILY_BY_NAME).find((k) => k in args);
+      if (key) span.style.fontFamily = FONT_FAMILY_BY_NAME[key];
+      break;
+    }
+    case "spin": {
+      span.classList.add(
+        "v" in args ? "mfm-fn-spin-y" : "x" in args ? "mfm-fn-spin-x" : "mfm-fn-spin",
+      );
+      if ("alternate" in args) span.style.animationDirection = "alternate";
+      else if ("left" in args) span.style.animationDirection = "reverse";
+      break;
+    }
+    default: {
+      const cls = ANIMATION_CLASS_BY_NAME[name];
+      if (cls) span.classList.add(cls);
+      // 未対応(sparkle/ruby/unixtime等)はここでは何もせず、下で子ノードだけ
+      // 装飾なしで描画する。
+    }
+  }
+
+  // アニメーション系はspeed引数(例: "5s")で周期を上書きできる。
+  if (typeof args.speed === "string" && isValidCssTime(args.speed)) {
+    span.style.animationDuration = args.speed;
+  }
+
+  appendMfmNodesFull(span, node.children, emojiHost, onEmojiSettled);
+  container.append(span);
+}
+
+// 設定(mfmDisplayMode)に応じて、source(MFM原文)をプレビュー用にcontainerへ
+// 描画する。simple: 装飾記号を取り除いたプレーンテキストにする(従来通り)。
+// full: 太字・拡大・回転等の装飾込みでHTML要素へ描画する(appendMfmNodeFull)。
+// どちらのモードでもカスタム絵文字(:name:)はappendEmojiImageで画像に
+// 差し替える。onEmojiSettledは画像挿入で高さが変わりうるタイミングで呼ばれ、
+// 呼び出し側は「続きを表示」ヒントの表示要否を再計算するのに使う。
+function renderMfmPreview(
+  container: HTMLElement,
+  source: string,
+  emojiHost: string,
+  onEmojiSettled?: () => void,
+): void {
+  let nodes: MfmNode[];
+  try {
+    nodes = parseMfm(source);
+  } catch (error) {
+    console.warn("main: MFM解析に失敗。プレーンテキストのまま表示します:", error);
+    appendTextWithEmojis(container, source, emojiHost, onEmojiSettled);
+    return;
+  }
+
+  if (mfmDisplayMode === "full") {
+    appendMfmNodesFull(container, nodes, emojiHost, onEmojiSettled);
+    return;
+  }
+
+  // 簡易表示: プレーンテキスト化した上で、改行以外の空白は1つに正規化しつつ
+  // 改行自体は残す(.mfm-previewはwhite-space:pre-line)。3行以上連続する
+  // 空行はさすがに詰める(以前のextractPreviewTextと同じ正規化)。
+  const plain = mfmNodesToPlainText(nodes)
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  appendTextWithEmojis(container, plain, emojiHost, onEmojiSettled);
+}
+
+// ノート本文からAshiato Syntax候補(⟦...⟧)を取り除いた上で、MFM原文のまま
+// (装飾情報を保持したまま)保存する。表示側(renderMfmPreview)が設定
+// (mfmDisplayMode)に応じて、フル装飾で描画するかプレーンテキスト化して
+// 描画するかをその都度切り替える。
+// 表示上の省略はCSSでの高さクリップで行うため、ここではTEXT_PREVIEW_SAFETY_
+// CAP_LENGTHを超える極端なケースの安全弁としてのみ切り詰める(文字数で機械的に
+// 切るとMFM記法の途中で千切れることがあるが、mfm-jsは閉じていない記法を素の
+// テキストへフォールバックするパーサのため、描画自体が壊れることは無い)。
 // 残りが空文字列になった場合はnull(プレビュー無し)を返す。
-function extractPreviewText(noteText: string): string | null {
+function extractPreviewSource(noteText: string): string | null {
   let stripped = noteText;
   for (const candidate of extractCandidates(noteText)) {
     stripped = stripped.split(candidate).join("");
@@ -2309,27 +2663,10 @@ function extractPreviewText(noteText: string): string | null {
   stripped = stripped.trim();
   if (!stripped) return null;
 
-  let plain: string;
-  try {
-    plain = mfmNodesToPlainText(parseMfm(stripped));
-  } catch (error) {
-    console.warn("main: MFM解析に失敗。プレーンテキストのまま使用します:", error);
-    plain = stripped;
-  }
-
-  // 改行以外の空白(スペース・タブ等)は1つに正規化しつつ、改行そのものは残す
-  // (表示側の.mfm-previewはwhite-space:pre-lineで改行を再現する想定)。
-  // 3行以上連続する空行はさすがに詰める。
-  plain = plain
-    .replace(/[^\S\n]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  if (!plain) return null;
-
-  const chars = [...plain];
+  const chars = [...stripped];
   return chars.length > TEXT_PREVIEW_SAFETY_CAP_LENGTH
     ? chars.slice(0, TEXT_PREVIEW_SAFETY_CAP_LENGTH).join("") + "…"
-    : plain;
+    : stripped;
 }
 
 async function ingestNotes(host: string, notes: MisskeyNote[]): Promise<AshiatoRecord[]> {
@@ -2339,7 +2676,7 @@ async function ingestNotes(host: string, notes: MisskeyNote[]): Promise<AshiatoR
     // 削除済みノート、本文が無いノートは対象外
     if (!note?.text || note.deletedAt) continue;
 
-    const preview = extractPreviewText(note.text);
+    const preview = extractPreviewSource(note.text);
     // カスタム絵文字・acct表示のホストはノートの投稿元インスタンスに属する
     // (フェデレーション対応)。note.user.hostがあればリモートユーザー
     // (=そのホストが投稿元インスタンス)、無ければローカルユーザー
@@ -2909,6 +3246,15 @@ if (splash) {
       mediaVisibilityMode = savedMediaVisibility;
       const radio = document.querySelector<HTMLInputElement>(
         `input[name="mediaVisibility"][value="${savedMediaVisibility}"]`,
+      );
+      if (radio) radio.checked = true;
+    }
+
+    const savedMfmDisplay = await getSetting<MfmDisplayMode>("mfmDisplayMode");
+    if (savedMfmDisplay === "simple" || savedMfmDisplay === "full") {
+      mfmDisplayMode = savedMfmDisplay;
+      const radio = document.querySelector<HTMLInputElement>(
+        `input[name="mfmDisplay"][value="${savedMfmDisplay}"]`,
       );
       if (radio) radio.checked = true;
     }
