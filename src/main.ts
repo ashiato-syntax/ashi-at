@@ -1513,6 +1513,7 @@ function setGpsEnabled(enabled: boolean): void {
     if (watchId !== null) navigator.geolocation.clearWatch(watchId);
     watchId = null;
     currentLocationLayer.hide();
+    stopHeadingTracking();
     lastKnownPosition = null; // OFFにしたら古い位置情報は使い回さない
     lastKnownAccuracy = null;
     updatePrecisionWarning();
@@ -1539,6 +1540,69 @@ function setGpsEnabled(enabled: boolean): void {
     handlePositionError,
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
   );
+
+  // iOS(13+)はコンパスの利用許可をユーザー操作由来の呼び出しでしか
+  // 求められないため、このトグルON操作にそのまま便乗する。
+  void startHeadingTracking();
+}
+
+// --- コンパス方位(現在地マーカーの矢印) -----------------------------------
+// マップ自体は回転させず、現在地マーカー上の矢印だけを端末のコンパス方位に
+// 合わせて回す(マップ回転はleaflet-rotate相当のプラグインが前提になり、
+// 主要な実装がGPLライセンスのため見送った)。
+let headingEventName: "deviceorientationabsolute" | "deviceorientation" | null = null;
+
+function computeCompassHeading(event: DeviceOrientationEvent): number | null {
+  // iOS SafariはwebkitCompassHeadingで真北基準の方位を直接くれる(画面回転補正込み)。
+  const webkitHeading = (event as DeviceOrientationEvent & { webkitCompassHeading?: number })
+    .webkitCompassHeading;
+  if (typeof webkitHeading === "number") return webkitHeading;
+
+  // それ以外(Android Chrome等)は絶対方位(event.absolute)が取れている場合のみ
+  // alphaから計算する。相対値(端末を構えた向きが基準の0度)しか無い場合は
+  // 実際の方位と無関係になるため使わない。
+  if (!event.absolute || event.alpha === null) return null;
+  const screenAngle = screen.orientation?.angle ?? 0;
+  return (((360 - event.alpha - screenAngle) % 360) + 360) % 360;
+}
+
+function handleDeviceOrientation(event: DeviceOrientationEvent): void {
+  const heading = computeCompassHeading(event);
+  if (heading === null) return;
+  currentLocationLayer.showHeading(heading);
+}
+
+async function startHeadingTracking(): Promise<void> {
+  if (headingEventName) return; // 既に購読中
+
+  const requestPermission = (
+    DeviceOrientationEvent as unknown as {
+      requestPermission?: () => Promise<"granted" | "denied">;
+    }
+  ).requestPermission;
+  if (typeof requestPermission === "function") {
+    try {
+      if ((await requestPermission()) !== "granted") return;
+    } catch (error) {
+      console.error(error);
+      return;
+    }
+  }
+
+  // 真北基準の絶対方位が取れるdeviceorientationabsoluteを優先し、
+  // 無ければdeviceorientation(iOSはこちら経由でwebkitCompassHeadingが載る)。
+  const eventName = "ondeviceorientationabsolute" in window
+    ? "deviceorientationabsolute"
+    : "deviceorientation";
+  window.addEventListener(eventName, handleDeviceOrientation as EventListener);
+  headingEventName = eventName;
+}
+
+function stopHeadingTracking(): void {
+  if (!headingEventName) return;
+  window.removeEventListener(headingEventName, handleDeviceOrientation as EventListener);
+  headingEventName = null;
+  currentLocationLayer.hideHeading();
 }
 
 function handlePositionError(error: GeolocationPositionError): void {

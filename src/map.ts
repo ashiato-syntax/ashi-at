@@ -860,6 +860,11 @@ export function createPrecisionPreviewLayer(map: L.Map): PrecisionPreviewLayer {
 export interface CurrentLocationLayer {
   show(lat: number, lon: number, accuracyM: number): void;
   hide(): void;
+  // 端末のコンパス方位(0=北、時計回り)を現在地マーカー上の矢印に反映する。
+  // マップ本体は回転させない(座標変換が絡む地図回転はGPL依存のプラグインが
+  // 前提になるため見送り、方位の可視化だけこの矢印で行う)。
+  showHeading(headingDeg: number): void;
+  hideHeading(): void;
 }
 
 // 現在地マーカー+精度円。専用paneに乗せ、Ashiatoより手前に表示する
@@ -884,10 +889,26 @@ export function createCurrentLocationLayer(map: L.Map): CurrentLocationLayer {
     interactive: false,
   });
 
+  // 矢印本体はdivIcon内のさらに子要素(.current-location-heading-arrow)を
+  // 回転させる。leaflet-marker-icon自体の transform はLeafletが位置決めに
+  // 使っているため、そこを直接上書きすると位置がずれてしまう。
+  const headingMarker = L.marker([0, 0], {
+    pane: "currentLocationPane",
+    interactive: false,
+    keyboard: false,
+    icon: L.divIcon({
+      className: "current-location-heading",
+      html: `<div class="current-location-heading-arrow" style="color: ${CURRENT_LOCATION_COLOR}">${createIcon("navigation-2").outerHTML}</div>`,
+      iconSize: [22, 22],
+      iconAnchor: [11, 11],
+    }),
+  });
+
   return {
     show(lat: number, lon: number, accuracyM: number) {
       const latlng: [number, number] = [lat, lon];
       dot.setLatLng(latlng);
+      headingMarker.setLatLng(latlng);
       accuracyCircle.setLatLng(latlng).setRadius(accuracyM);
       if (!map.hasLayer(dot)) dot.addTo(map);
       if (!map.hasLayer(accuracyCircle)) accuracyCircle.addTo(map);
@@ -895,6 +916,17 @@ export function createCurrentLocationLayer(map: L.Map): CurrentLocationLayer {
     hide() {
       if (map.hasLayer(dot)) map.removeLayer(dot);
       if (map.hasLayer(accuracyCircle)) map.removeLayer(accuracyCircle);
+      if (map.hasLayer(headingMarker)) map.removeLayer(headingMarker);
+    },
+    showHeading(headingDeg: number) {
+      if (!map.hasLayer(headingMarker)) headingMarker.addTo(map);
+      const arrow = headingMarker
+        .getElement()
+        ?.querySelector<HTMLElement>(".current-location-heading-arrow");
+      if (arrow) arrow.style.transform = `rotate(${headingDeg}deg)`;
+    },
+    hideHeading() {
+      if (map.hasLayer(headingMarker)) map.removeLayer(headingMarker);
     },
   };
 }
