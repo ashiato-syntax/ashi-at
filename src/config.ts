@@ -97,7 +97,7 @@ export const BAD_ACCURACY_RADIUS_M = 500;
 
 // 陸地の塗りつぶし色。
 export const LAND_FILL_COLOR_LIGHT = "#F7F2EC";
-export const LAND_FILL_COLOR_DARK = "#00383d";
+export const LAND_FILL_COLOR_DARK = "#00454a";
 
 // 都道府県境界線の一点鎖線(長い破線, 隙間, 点, 隙間 の繰り返し)。
 // 「点」はlineCap:'round'(Path options既定値)により短い線分が丸い点として描画される。
@@ -148,9 +148,8 @@ export const INSET_FRACTION = 0.05;
 // あしあとでは使っていない紫系で統一して表示する。
 export const PRECISION_PREVIEW_COLOR = "#8e24aa";
 
-// 現在地マーカー+精度円の色。テーマカラーがマゼンタになったので、
-// あしあとの丸(4桁=青緑, 5桁=緑, 6桁=黄, 7桁=赤)とも被らない青に戻せる。
-export const CURRENT_LOCATION_COLOR = "#4285f4";
+// 現在地マーカー+精度円の色。
+export const CURRENT_LOCATION_COLOR = "#f3e429";
 
 // --- タイマー・アニメーションの時間 -----------------------------------------
 

@@ -602,6 +602,11 @@ button.btn-danger:hover {
     opacity: 0;
     transform: translateY(8px) scale(0.96);
 }
+/* 各項目(現在のインスタンス表示を含む)の間に区切り線を入れる。
+   「設定」等の区切り線と同じ色に揃える。 */
+.menu-dropdown > *:not(:first-child) {
+    border-top: 1px solid var(--color-text-faint);
+}
 .menu-dropdown button {
     display: flex;
     align-items: center;
@@ -1147,6 +1152,10 @@ dialog#instanceDialog label {
     flex: 1; /* ダイアログ(flex column)内で残りの高さいっぱいに広がる */
     min-height: 0; /* flexアイテムの既定min-height:autoによる縮小阻害を防ぐ */
     overflow-y: auto;
+    /* overflow-y:autoだけだと(仕様上)overflow-xも暗黙にautoになり、
+       ほんの数px分の意図しない横方向のはみ出し(サブピクセルの丸め等)でも
+       スマホでは横スクロールできてしまう。明示的に禁止する。 */
+    overflow-x: hidden;
     scrollbar-gutter: stable;
 }
 /* 投稿と投稿の境目が分かりづらかったため、行ごとに区切り線+余白を入れる
@@ -1704,7 +1713,8 @@ dialog#mediaLightbox::backdrop {
     font-size: 0.8rem;
 }
 .toggle-panel-row:not(:last-child) {
-    border-bottom: 1px solid var(--color-border-lighter);
+    /* 「設定」の区切り線(dialog#settingsDialog .action-sheet-row等)と同じ色。 */
+    border-bottom: 1px solid var(--color-text-faint);
 }
 .toggle-panel-row.unavailable {
     opacity: 0.5;
@@ -1766,9 +1776,10 @@ dialog#mediaLightbox::backdrop {
 .toggle-panel-row[aria-pressed="true"] .gps-toggle-knob {
     transform: translateX(14px);
 }
-/* 「現在地」(GPS)・「既読エリアを隠す」がONのときだけ、少し発光している
-   感じを出す(.menu-fabと同じcolor-mixベースのグロー)。 */
+/* 「現在地」(GPS)・「24H以内」・「既読エリアを隠す」がONのときだけ、
+   少し発光している感じを出す(.menu-fabと同じcolor-mixベースのグロー)。 */
 #toggleGps[aria-pressed="true"] .gps-toggle-track,
+#toggle24h[aria-pressed="true"] .gps-toggle-track,
 #toggleHideRead[aria-pressed="true"] .gps-toggle-track {
     box-shadow: 0 0 6px 1px color-mix(in srgb, var(--color-accent-secondary) 65%, transparent);
 }
@@ -1787,7 +1798,14 @@ dialog#mediaLightbox::backdrop {
 }
 .precision-filter-chip {
     width: 26px;
-    height: 24px;
+    /* 22px+枠線1px×2=24px。.toggle-panel-rowのpadding(上下7pxずつ=14px)と
+       合わせてちょうど38pxになり、「現在地」等の他のトグル行(中身20px)と
+       行の高さが揃う(どちらもmin-height:38px側が効く形になる)。 */
+    height: 22px;
+    /* input/button/selectの共通ルール(min-height:42px)がheightより優先され、
+       意図した高さより高くなってしまう(その結果「表示レイヤー」の行だけ
+       他のトグル行より高くなる)のを防ぐ。 */
+    min-height: 22px;
     padding: 0;
     flex: none;
     display: flex;

@@ -980,6 +980,16 @@ function clearCellVisual(cell: AshiatoCell): void {
   if (cell.hitArea) removeAshiatoGroup(map, { visualLayers: cell.visualLayers!, hitArea: cell.hitArea });
 }
 
+// 「24H以内」トグル用。投稿日時(noteCreatedAt)が現在時刻から24時間以内かどうか。
+// 日時が取得できない場合は安全側(非表示)にfalseを返す。
+const WITHIN_24H_MS = 24 * 60 * 60 * 1000;
+function isPostedWithin24h(record: AshiatoRecord): boolean {
+  if (!record.noteCreatedAt) return false;
+  const postedMs = new Date(record.noteCreatedAt).getTime();
+  if (Number.isNaN(postedMs)) return false;
+  return Date.now() - postedMs <= WITHIN_24H_MS;
+}
+
 // セルの見た目(矩形)を、現在のrecords件数・状態に合わせて作り直す。
 // ロック中(未発見)のレコードは地図上に一切表示しない方針のため、
 // 表示対象は「発見済み(unlockedAtあり)」のレコードに絞る。ただし4桁・5桁は
@@ -1000,7 +1010,8 @@ function rebuildCellVisual(cell: AshiatoCell): void {
       (SHOW_LOCKED_ASHIATO_FOR_DEBUG ||
         r.unlockedAt ||
         !requiresOnSiteDiscovery(r.geohash.length)) &&
-      (!hideReadEnabled || !r.readAt),
+      (!hideReadEnabled || !r.readAt) &&
+      (!within24hEnabled || isPostedWithin24h(r)),
   );
 
   if (visibleRecords.length > 0) {
@@ -1230,7 +1241,11 @@ function showAshiatoCellPopup(geohash: string): void {
   if (!cell) return;
 
   const records = [...cell.records.values()]
-    .filter((r) => r.unlockedAt || !requiresOnSiteDiscovery(r.geohash.length))
+    .filter(
+      (r) =>
+        (r.unlockedAt || !requiresOnSiteDiscovery(r.geohash.length)) &&
+        (!within24hEnabled || isPostedWithin24h(r)),
+    )
     .sort((a, b) => sortKeyFor(b, "posted") - sortKeyFor(a, "posted"));
   if (records.length === 0) return; // 通常は来ないはずだが念のため
 
@@ -1804,6 +1819,17 @@ $<HTMLButtonElement>("#precisionFilterInfo").onclick = () => {
   line2.append(colorSwatch(6), colorSwatch(7), document.createTextNode("は現地で発見する必要があります"));
   message.append(line1, document.createElement("br"), line2);
   showConfirm(message, { okLabel: "閉じる", hideCancel: true });
+};
+
+// --- 「24H以内」トグル(投稿から24時間以内のAshiatoしか地図・吹き出しに表示しない) ---
+
+const toggle24hBtn = $<HTMLButtonElement>("#toggle24h");
+let within24hEnabled = false;
+
+toggle24hBtn.onclick = () => {
+  within24hEnabled = !within24hEnabled;
+  toggle24hBtn.setAttribute("aria-pressed", String(within24hEnabled));
+  for (const cell of ashiatoCells.values()) rebuildCellVisual(cell);
 };
 
 // --- 「既読を隠す」トグル(既読のAshiatoを地図に表示しない) -------------------

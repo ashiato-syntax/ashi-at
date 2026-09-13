@@ -862,10 +862,6 @@ export interface CurrentLocationLayer {
   hide(): void;
 }
 
-// 現在地マーカー+精度円の色(CURRENT_LOCATION_COLOR、config.ts参照)。
-// テーマカラーがマゼンタになったので、あしあとの丸(4桁=青緑, 5桁=緑, 6桁=黄,
-// 7桁=赤)とも被らない青に戻せる。
-
 // 現在地マーカー+精度円。専用paneに乗せ、Ashiatoより手前に表示する
 export function createCurrentLocationLayer(map: L.Map): CurrentLocationLayer {
   const accuracyCircle = L.circle([0, 0], {
@@ -881,7 +877,7 @@ export function createCurrentLocationLayer(map: L.Map): CurrentLocationLayer {
   const dot = L.circleMarker([0, 0], {
     radius: 6,
     pane: "currentLocationPane",
-    color: "#fff",
+    color: CURRENT_LOCATION_COLOR,
     weight: 2,
     fillColor: CURRENT_LOCATION_COLOR,
     fillOpacity: 1,
