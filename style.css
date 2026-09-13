@@ -68,11 +68,11 @@
     --color-surface-sunken: #0d272a;
     --color-overlay: rgba(0, 0, 0, 0.6);
 
-    --color-text: #f1bd00;
-    --color-text-strong: #f1bd00;
-    --color-text-muted: #9bc4c2;
+    --color-text: #f3e429;
+    --color-text-strong: #f3e429;
+    --color-text-muted: #0f8b8b;
     --color-text-subtle: #7aa8a6;
-    --color-text-faint: #5c8886;
+    --color-text-faint: #0f8b8b;
     --color-on-accent: #fff;
     --color-text-body: #eaf1f7;
 
@@ -80,11 +80,11 @@
     --color-border-light: #244244;
     --color-border-lighter: #1a3335;
 
-    --color-accent: #f1bd00;
-    --color-accent-pressed: #c19700;
-    --color-accent-hover-bg: rgba(241, 189, 0, 0.18);
-    --color-accent-hover-bg-soft: rgba(241, 189, 0, 0.1);
-    --color-accent-secondary: #f1bd00;
+    --color-accent: #f3e429;
+    --color-accent-pressed: #c2b621;
+    --color-accent-hover-bg: rgba(243, 228, 41, 0.18);
+    --color-accent-hover-bg-soft: rgba(243, 228, 41, 0.1);
+    --color-accent-secondary: #f3e429;
     --color-accent-contrast: #241f00;
 
     --color-danger: #ff7a7a;
@@ -100,6 +100,28 @@
 }
 * {
     box-sizing: border-box;
+}
+/* スクロールバーをテーマカラー(--color-accent)にする。scrollbar-colorは
+   継承されるプロパティなので:rootへの指定だけで全体に効く(Firefox・最近の
+   Chromium)。WebKit系の疑似要素は継承されないため、*で全要素に対して
+   宣言しておく(実際にスクロール可能な要素にだけ表示される)。 */
+:root {
+    scrollbar-color: var(--color-accent) var(--color-surface-sunken);
+    scrollbar-width: thin;
+}
+*::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+*::-webkit-scrollbar-track {
+    background: var(--color-surface-sunken);
+}
+*::-webkit-scrollbar-thumb {
+    background: var(--color-accent);
+    border: 2px solid var(--color-surface-sunken);
+}
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--color-accent-pressed);
 }
 html,
 body {
@@ -220,6 +242,7 @@ select {
     background-repeat: no-repeat;
     background-position: right 8px center;
     background-size: 16px;
+    border-color: var(--color-text-faint);
 }
 input:focus-visible,
 select:focus-visible {
@@ -380,7 +403,9 @@ button.btn-danger:hover {
     }
 }
 
-/* 新規発見時、画面中央に一時的に出す通知バンド(青、自動で消える)。 */
+/* 新規発見時、画面中央に一時的に出す通知バンド(自動で消える)。
+   「投稿する」等の主操作ボタン(button.btn-primary)と同じ配色(テーマカラーの
+   塗りつぶし+コントラスト文字色)にする。 */
 .discovery-banner {
     position: absolute;
     top: 50%;
@@ -390,8 +415,8 @@ button.btn-danger:hover {
     z-index: 26;
     padding: 10px 16px;
     text-align: center;
-    background: rgba(212, 109, 173, 0.92);
-    color: var(--color-on-accent);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
     font-size: 0.95rem;
     font-weight: 600;
     pointer-events: none;
@@ -411,10 +436,10 @@ button.btn-danger:hover {
 @keyframes discovery-banner-pulse {
     0%,
     100% {
-        box-shadow: 0 0 0 0 rgba(212, 109, 173, 0.5);
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 50%, transparent);
     }
     50% {
-        box-shadow: 0 0 16px 4px rgba(212, 109, 173, 0.5);
+        box-shadow: 0 0 16px 4px color-mix(in srgb, var(--color-accent) 50%, transparent);
     }
 }
 
@@ -435,7 +460,7 @@ button.btn-danger:hover {
     flex: 1;
     white-space: nowrap;
     /* トグルパネルの開閉ボタン(.toggle-panel-handle)と同じ枠線+影に揃える。 */
-    border: 1px solid var(--color-accent);
+    border: 2px solid var(--color-accent);
     border-radius: 0;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     color: var(--color-text-strong);
@@ -501,9 +526,12 @@ button.btn-danger:hover {
     width: 26px;
     height: 26px;
 }
-/* メニューFAB右上の未読バッジ。黄色地のボタンに埋もれないよう、テーマカラー
-   (黄色)とは別の警告色(--color-danger)にする。白の縁取りで輪郭もはっきり
-   させる。ボタンの丸からはみ出さないよう内側に置く。 */
+/* メニューFAB右上の未読バッジ。以前は警告色(赤系)で目立たせていたが、
+   全体が黄色基調の中でピンク寄りの色だけ浮いて見えるため、他の色を
+   持ち込まずに「黄色地に、暗い穴が開いたような点」で表現する。
+   ボタン自体の黄色(--color-accent)を縁取りリングに使い、中心は
+   ボタンの上の文字色と同じ--color-accent-contrast(濃い色)にすることで、
+   ボタンの黄色に埋もれずコントラストで目立たせる。 */
 .badge-dot {
     position: absolute;
     top: 8px;
@@ -511,8 +539,8 @@ button.btn-danger:hover {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: var(--color-danger);
-    box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.9);
+    background: var(--color-accent-contrast);
+    box-shadow: 0 0 0 1.5px var(--color-accent);
     animation: unread-glow 1.8s ease-in-out infinite;
 }
 .badge-dot[hidden] {
@@ -522,13 +550,13 @@ button.btn-danger:hover {
     0%,
     100% {
         box-shadow:
-            0 0 0 1.5px rgba(255, 255, 255, 0.9),
-            0 0 2px 0 color-mix(in srgb, var(--color-danger) 80%, transparent);
+            0 0 0 1.5px var(--color-accent),
+            0 0 2px 0 color-mix(in srgb, var(--color-accent) 80%, transparent);
     }
     50% {
         box-shadow:
-            0 0 0 1.5px rgba(255, 255, 255, 0.9),
-            0 0 7px 3px color-mix(in srgb, var(--color-danger) 95%, transparent);
+            0 0 0 1.5px var(--color-accent),
+            0 0 7px 3px color-mix(in srgb, var(--color-accent) 95%, transparent);
     }
 }
 
@@ -547,7 +575,7 @@ button.btn-danger:hover {
     top: auto;
     right: 0;
     background: var(--color-surface);
-    border: 1px solid var(--color-accent);
+    border: 2px solid var(--color-accent);
     border-radius: 0;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     display: grid;
@@ -583,11 +611,9 @@ button.btn-danger:hover {
     border-radius: 0;
     text-align: left;
     background: var(--color-surface);
-    /* 項目名は.toggle-panel-handle(地図右上の「<」ボタン、--color-text-subtle)
-       よりも少し明るいトーン(--color-text-muted)にする。「あしあとを投稿」
-       (.accent)も文字色はこれと揃える(太字だけで区別する。アイコンは
-       .accentも含め全項目共通でvar(--color-accent))。 */
-    color: var(--color-text-muted);
+    /* 項目名はテーマカラー(--color-accent)にする。「あしあとを投稿」
+       (.accent)も文字色はこれと揃える(太字だけで区別する)。 */
+    color: var(--color-accent);
 }
 .menu-dropdown button:not(.danger) .menu-item-icon {
     color: var(--color-accent);
@@ -606,6 +632,13 @@ button.btn-danger:hover {
 }
 .menu-dropdown button.accent:hover {
     background: var(--color-accent-hover-bg-soft);
+}
+/* drop-shadowをボタン自体に掛けると、不透明な背景(border-box全体)の輪郭が
+   光ってしまい隣の項目との境界にまで滲む。背景を持たないアイコン・ラベル
+   側にだけ掛けることで、文字・アイコンの見えている部分だけにグローを添える。 */
+.menu-dropdown button.accent .menu-item-icon,
+.menu-dropdown button.accent .menu-item-label {
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-accent) 65%, transparent));
 }
 .menu-item-icon {
     display: inline-flex;
@@ -699,8 +732,50 @@ dialog#settingsDialog {
    グループの手前だけ(gap12px+padding-top12px+行自身の12px=36px)と、
    グループ内の行間(行自身の12px×2=24px)とで間隔が違って見えていた。
    padding-topを外し、gapと各項目自身の余白だけに任せることで揃える。 */
-.settings-dialog-body > *:not(:first-child) {
-    border-top: 1px solid var(--color-border-lighter);
+.settings-dialog-body > *:not(:first-child):not(.settings-collapsible) {
+    border-top: 1px solid var(--color-text-faint);
+}
+/* 折りたたみ項目(テーマ/メディアの表示/レイヤーの表示)は、閉じている間は
+   上辺だけの区切り線、展開すると左右・下辺の色も同じ色になって四角い
+   囲み線になる(区切り線と囲み線を同じ境界線として統合する)。
+   border-widthは開閉に関わらず常に1px(色だけtransparent⇔本来の色を
+   切り替える)にすることで、開閉時にレイアウトがガタつかないようにする。 */
+.settings-dialog-body > .settings-collapsible {
+    border: 1px solid transparent;
+    border-top-color: var(--color-text-faint);
+    /* 以前はmargin:0 -4px+padding:0 4pxで見た目の横幅を保っていたが、
+       .settings-dialog-body側のoverflow-y:autoにより暗黙にoverflow-x:autoにも
+       なるため(CSS Overflow仕様の挙動)、負のmarginで左にはみ出した枠線が
+       ブラウザによって(Firefox・モバイル各種で)スクロール領域の外として
+       クリップされ、左辺だけ見えなくなっていた。負のmarginは使わず、
+       paddingだけで内側に余白を作る(見た目の横幅はその分わずかに狭くなるが、
+       全ブラウザで確実に枠線が見える方を優先する)。 */
+    padding: 0 4px;
+    /* margin-topも(隣接する2項目が両方展開中のときのgap打ち消し用)、
+       他のプロパティと同じ速さでアニメーションさせる。これが無いと、
+       展開した瞬間にmargin-topだけ即座に-12pxへ飛んでしまい、項目が
+       カクッと上にずれ動くように見えてしまう。 */
+    transition: border-color 0.15s ease, padding-bottom 0.15s ease, margin-top 0.15s ease;
+}
+.settings-dialog-body > .settings-collapsible:has(.settings-collapsible-toggle[aria-expanded="true"]) {
+    border-color: var(--color-text-faint);
+    padding-bottom: 8px;
+}
+/* 展開中の項目のすぐ次の項目は、自分の上辺の区切り線を持たない。
+   展開中の項目の下辺(囲み線)がその代わりを兼ねるため、そのままだと
+   同じ場所に2本線が並んでしまう(展開中の項目の下辺+次項目の上辺)。 */
+.settings-dialog-body > .settings-collapsible:has(.settings-collapsible-toggle[aria-expanded="true"]) + * {
+    border-top-color: transparent;
+}
+/* 展開中の項目のすぐ次も展開中の場合、両者の間のgap(12px)をそのままにすると
+   次項目の囲み線(上辺だけ無い「U」字)が前項目の下辺から離れて浮いて見える
+   (漢字の「目」のようにひと続きの箱にならない)。gapぶんだけ引き上げて
+   隙間を無くし、前項目の下辺=次項目の左右辺の起点として直接つながるように
+   する(次項目自身の上辺は上のルールで透明のまま)。 */
+.settings-dialog-body
+    > .settings-collapsible:has(.settings-collapsible-toggle[aria-expanded="true"])
+    + .settings-collapsible:has(.settings-collapsible-toggle[aria-expanded="true"]) {
+    margin-top: -12px;
 }
 dialog#aboutDialog::backdrop,
 dialog#instanceDialog::backdrop,
@@ -731,7 +806,7 @@ dialog#settingsDialog h2 {
     display: grid;
 }
 .action-sheet > *:not(:first-child) {
-    border-top: 1px solid var(--color-border-lighter);
+    border-top: 1px solid var(--color-text-faint);
 }
 .action-sheet-row {
     display: flex;
@@ -831,13 +906,38 @@ dialog#aboutDialog p {
 #aboutIntro {
     color: var(--color-text-muted);
 }
+:root[data-theme="dark"] #aboutIntro {
+    color: #efefef;
+    text-shadow: 0 0 6px rgba(239, 239, 239, 0.5);
+}
 /* 「利用規約」「ライセンス情報」。本文と区切るため、settingsDialogの
    「メディアの表示」等と同じ折りたたみ(.settings-collapsible)にした上で、
-   元のh3見出しにあった区切り線をこのラッパーに付け替える。 */
+   元のh3見出しにあった区切り線をこのラッパーに付け替える。
+   settingsDialog(.settings-dialog-body > .settings-collapsible)と同じ
+   「閉時は上辺だけの区切り線、展開すると四角い囲み線になる」仕組みを適用する。
+   こちらはflexのgapではなくmargin-topで項目間を空けているため、
+   「両方展開中」のときはmargin-topそのものを0にして打ち消す。 */
 .about-collapsible {
     margin-top: 20px;
-    padding-top: 12px;
-    border-top: 1px solid var(--color-border-lighter);
+    padding: 12px 4px 0;
+    border: 1px solid transparent;
+    border-top-color: var(--color-text-faint);
+    transition: border-color 0.15s ease, padding-bottom 0.15s ease, margin-top 0.15s ease;
+}
+.about-collapsible:has(.settings-collapsible-toggle[aria-expanded="true"]) {
+    border-color: var(--color-text-faint);
+    padding-bottom: 8px;
+}
+/* 展開中の項目のすぐ次の項目は、自分の上辺の区切り線を持たない
+   (settingsDialogと同じ理由。展開中の項目の下辺がその代わりを兼ねる)。 */
+.about-collapsible:has(.settings-collapsible-toggle[aria-expanded="true"]) + .about-collapsible {
+    border-top-color: transparent;
+}
+/* 両方展開中のときだけmargin-topを0にして密着させ、「目」の字のように
+   ひと続きの箱として繋がるようにする。 */
+.about-collapsible:has(.settings-collapsible-toggle[aria-expanded="true"])
+    + .about-collapsible:has(.settings-collapsible-toggle[aria-expanded="true"]) {
+    margin-top: 0;
 }
 /* 利用規約・プライバシーポリシー(Markdown文書、main.ts:loadMarkdownDocInto参照)。
    見出しはダイアログ自体の見出し(h2「Ashi@について」・折りたたみのラベル)より
@@ -1053,7 +1153,7 @@ dialog#instanceDialog label {
    (SNSのタイムライン表示に近い見た目)。最後の行だけ区切り線を省く。 */
 .unlocked-list li {
     padding: 10px 0;
-    border-bottom: 1px solid var(--color-border-lighter);
+    border-bottom: 1px solid var(--color-text-faint);
 }
 .unlocked-list li:last-child {
     border-bottom: none;
@@ -1081,6 +1181,14 @@ dialog#instanceDialog label {
                      縮められず、マップ吹き出しで横スクロールが出てしまうのを防ぐ */
     overflow-wrap: anywhere;
     text-align: left;
+}
+/* 投稿者アイコンと未読ドットをまとめる。本文の行数(main側)に関わらず、
+   常にアイコンの高さを基準にドットを縦中央揃えできるようにする。 */
+.ashiato-avatar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: none;
 }
 /* 投稿者アイコン。丸くクロップし、読み込み中/失敗時も同じ大きさの
    プレースホルダー(グレーの丸)として場所を確保する。 */
@@ -1121,6 +1229,12 @@ dialog#instanceDialog label {
     border-radius: 50%;
     background: currentColor;
     animation: unread-dot-glow 1.8s ease-in-out infinite;
+}
+/* 既読化後もvisibilityだけ隠し、場所は確保したままにする(renderAshiatoRow/
+   markRead参照)。displayやDOMからの削除だとアイコンが左へ詰まって見えるため。 */
+.unread-dot.is-read {
+    visibility: hidden;
+    animation: none;
 }
 @keyframes unread-dot-glow {
     0%,
@@ -1473,7 +1587,7 @@ dialog#mediaLightbox::backdrop {
        塗りつぶしボタンにする。 */
     background: var(--color-accent);
     color: var(--color-accent-contrast);
-    border: 1px solid var(--color-accent);
+    border: 2px solid var(--color-accent);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     /* leaflet.cssの.leaflet-bar a:first-child/:last-child(および
        .leaflet-touch版)が個別に角丸(4px/2px)を付けてくるため、ここで
@@ -1525,7 +1639,7 @@ dialog#mediaLightbox::backdrop {
     justify-content: center;
     width: 32px;
     height: 80px;
-    border: 1px solid var(--color-accent);
+    border: 2px solid var(--color-accent);
     border-radius: 0px;
     background: var(--color-surface);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
@@ -1550,7 +1664,7 @@ dialog#mediaLightbox::backdrop {
     top: 0;
     right: calc(100% + 6px);
     background: var(--color-surface);
-    border: 1px solid var(--color-accent);
+    border: 2px solid var(--color-accent);
     border-radius: 0px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     display: flex;
@@ -1652,6 +1766,12 @@ dialog#mediaLightbox::backdrop {
 .toggle-panel-row[aria-pressed="true"] .gps-toggle-knob {
     transform: translateX(14px);
 }
+/* 「現在地」(GPS)・「既読エリアを隠す」がONのときだけ、少し発光している
+   感じを出す(.menu-fabと同じcolor-mixベースのグロー)。 */
+#toggleGps[aria-pressed="true"] .gps-toggle-track,
+#toggleHideRead[aria-pressed="true"] .gps-toggle-track {
+    box-shadow: 0 0 6px 1px color-mix(in srgb, var(--color-accent-secondary) 65%, transparent);
+}
 
 /* 桁数ごとの表示フィルター。縦にトグルを積み増さず、1行に収まる1本のセグメント
    コントロールにする(丸いチップが個別に浮いて見えないよう、他の設定行の
@@ -1717,6 +1837,26 @@ dialog#mediaLightbox::backdrop {
     color: var(--color-text-strong);
     /* leaflet.cssの既定border-radius:12pxを、アプリ全体の角丸廃止方針に合わせて解除する。 */
     border-radius: 0;
+}
+/* 吹き出しの本体(content-wrapper)を、下端(=tip、マーカー位置に固定)を
+   起点に伸び上がるアニメーションにする。tipは本体の下端に張り付いているため
+   (leaflet.cssのmargin-top:-1pxで隙間なく接続)、transform-originをbottomに
+   すればtip側は動かさず本体だけが下から伸びるように見える。
+   Leafletは開閉のたびにこの要素をpaneへ着脱する(onAdd/onRemove)ため、
+   animationは毎回のDOM挿入時に自然に再生される(要素の使い回しでもOK)。 */
+#map .leaflet-popup-content-wrapper {
+    transform-origin: bottom center;
+    animation: ashiato-popup-grow 0.18s ease-out;
+}
+@keyframes ashiato-popup-grow {
+    from {
+        transform: scaleY(0.05);
+        opacity: 0;
+    }
+    to {
+        transform: scaleY(1);
+        opacity: 1;
+    }
 }
 #map .leaflet-popup-content {
     /* 縦方向はflexで.ashiato-popup-listに高さを委譲する(この箱自体は
@@ -1795,11 +1935,15 @@ dialog#mediaLightbox::backdrop {
     /* scrollbar-gutterだけでは投稿の内容(特に右端の「…」ボタン)とスクロール
        バーの間の余白が心もとなく感じられるため、右側に明示的な余白も足す。 */
     padding-right: 12px;
+    /* .unlocked-list(見つけたあしあと一覧)と同じ理由。overflow-x:hiddenな
+       このコンテナが未読ドット(.unread-dot)の明滅(box-shadow)の描画境界にも
+       なるため、左に余白が無いとドット左側のグローが見切れてしまう。 */
+    padding-left: 8px;
 }
 /* 見つけたあしあと一覧(.unlocked-list li)と同様、行の境目に区切り線を入れる。 */
 .ashiato-popup-rows > .ashiato-row {
     padding: 8px 0;
-    border-bottom: 1px solid var(--color-border-lighter);
+    border-bottom: 1px solid var(--color-text-faint);
 }
 .ashiato-popup-rows > .ashiato-row:first-child {
     padding-top: 0;
@@ -1896,13 +2040,8 @@ dialog#mediaLightbox::backdrop {
 .splash h1 {
     margin: 0;
     font-size: 2.2rem;
-    /* 夜明けの空をイメージした3色グラデーション(紺→ピンク→オレンジ)。
-       常時表示ではなく起動時のスプラッシュだけなので、主張が強めでも
-       うるさく感じにくい。 */
-    background: linear-gradient(135deg, #a73a8a, #df6ea1, #ffab73);
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
+    /* グラデーションなし、テーマカラー(黄色)の単色。 */
+    color: var(--color-accent);
 }
 .splash .subtitle {
     font-size: 1rem;
@@ -1915,7 +2054,8 @@ dialog#mediaLightbox::backdrop {
 
 /* 下書きカード(.draft-list li)と同じ、枠線+角丸+薄い影のカードの見た目に揃える。 */
 .precision-fieldset {
-    border: 1px solid var(--color-border-lighter);
+    /* 囲み線はレジェンド(「エリアサイズ」)の文字色と同じにする。 */
+    border: 1px solid var(--color-text-muted);
     border-radius: 0;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
     display: flex;
@@ -1937,7 +2077,8 @@ dialog#mediaLightbox::backdrop {
     color: var(--color-text-muted);
 }
 .precision-fieldset legend .action-sheet-icon {
-    color: var(--color-text-subtle);
+    /* レジェンドの文字色と揃える。 */
+    color: var(--color-text-muted);
 }
 .precision-fieldset label {
     display: flex;
@@ -1953,9 +2094,13 @@ dialog#mediaLightbox::backdrop {
 }
 
 /* 設定ダイアログ内のラジオ選択。precision-fieldsetと違い選択肢の文言が長いため、
-   横並びではなく縦積みにする。 */
+   横並びではなく縦積みにする。囲み線は.settings-collapsible側が展開時に
+   持つため、ここでは自前の枠線は持たない(二重の囲みを避ける)。 */
 .settings-fieldset {
-    border: 1px solid var(--color-border-light);
+    /* <fieldset>のUA既定枠線(ブラウザ組み込みのgroove border)を消す。
+       囲み線は.settings-collapsible側が展開時に持つため、ここで別に
+       枠線を持つと二重の囲みになってしまう。 */
+    border: none;
     border-radius: 0px;
     display: flex;
     flex-direction: column;
@@ -1990,11 +2135,17 @@ dialog#mediaLightbox::backdrop {
 dialog#settingsDialog .action-sheet-row {
     justify-content: flex-start;
 }
+/* 「検索キャッシュを消す」→「リセット」のようなグループ内の行間が、
+   他の項目間(gap+border+次項目のpadding)より狭く見えていたため、
+   グループ内の2行目以降にも余白を追加して揃える(実測で調整)。 */
+dialog#settingsDialog .action-sheet-row:not(:first-child) {
+    margin-top: 10px;
+}
 /* 「設定」の項目(インスタンスを変更/検索キャッシュを消す)も、折りたたみの
-   項目名と同じくメニュー項目(.menu-dropdown button)と同じ色+アイコンだけ
-   黄色にする。リセット(.danger)は破壊的操作の警告色のままにするため対象外。 */
+   項目名と同じくテーマカラー(--color-accent)にする。リセット(.danger)は
+   破壊的操作の警告色のままにするため対象外。 */
 dialog#settingsDialog .action-sheet-row:not(.danger) {
-    color: var(--color-text-muted);
+    color: var(--color-accent);
 }
 dialog#settingsDialog .action-sheet-row:not(.danger) .action-sheet-icon {
     color: var(--color-accent);
@@ -2017,9 +2168,8 @@ dialog#settingsDialog .action-sheet-row:not(.danger) .action-sheet-icon {
     padding: 4px;
     font: inherit;
     font-weight: 600;
-    /* 項目名はメニュー項目(.menu-dropdown button)と同じ色にする
-       (アイコンだけ下でvar(--color-accent)に戻す)。 */
-    color: var(--color-text-muted);
+    /* 項目名はテーマカラー(--color-accent)にする(「設定」「Ashi@について」共通)。 */
+    color: var(--color-accent);
 }
 .settings-collapsible-toggle-label {
     display: flex;
@@ -2095,7 +2245,7 @@ dialog#settingsDialog,
 dialog#draftListDialog,
 dialog#unlockedListDialog,
 dialog#composeDialog {
-    border: 1px solid var(--color-accent);
+    border: 2px solid var(--color-accent);
 }
 dialog#composeDialog[open],
 dialog#unlockedListDialog[open],
@@ -2146,7 +2296,7 @@ dialog#draftListDialog h2 {
     width: 36px;
     height: 4px;
     border-radius: 0;
-    background: var(--color-border-light);
+    background: var(--color-text-faint);
 }
 
 /* あしあとを投稿UIは、マップ操作(ドラッグ・ズーム・「エリア」トグル等)を
@@ -2253,7 +2403,7 @@ dialog#draftListDialog[open] {
     scrollbar-gutter: stable;
 }
 .draft-list li {
-    border: 1px solid var(--color-border-lighter);
+    border: 1px solid var(--color-text-faint);
     border-radius: 0px;
     padding: 12px;
     display: grid;

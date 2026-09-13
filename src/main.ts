@@ -772,12 +772,30 @@ function renderAshiatoRow(
 
   // 投稿者アイコン(丸くクロップ)。取得できない/読み込み失敗時は
   // 背景色だけのプレースホルダーになる(style.css参照)。
+  const avatarWrap = document.createElement("div");
+  avatarWrap.className = "ashiato-avatar-wrap";
+  {
+    // 未読/既読に関わらず常にドットの分の場所を確保しておく(visibilityだけ
+    // 切り替える)。既読化時にDOMから消す(旧実装)と、そのぶんアイコンが
+    // 左へ詰まって見えてしまうため(markRead参照)。
+    const dot = document.createElement("span");
+    dot.className = "unread-dot";
+    // テーマカラー(黄色)にする。.unread-dotのbackground/box-shadowは
+    // currentColorを参照しているため、ここでcolorを指定するだけで
+    // 明滅の色も追従する(style.css参照)。
+    dot.style.color = "var(--color-accent)";
+    dot.setAttribute("aria-label", "未読");
+    if (!isUnread) dot.classList.add("is-read");
+    avatarWrap.append(dot);
+  }
+
   const avatar = document.createElement("img");
   avatar.className = "ashiato-avatar";
   avatar.alt = "";
   avatar.loading = "lazy";
   if (record.avatarUrl) avatar.src = record.avatarUrl;
-  row.append(avatar);
+  avatarWrap.append(avatar);
+  row.append(avatarWrap);
 
   const main = document.createElement("div");
   main.className = "ashiato-row-main";
@@ -785,18 +803,6 @@ function renderAshiatoRow(
 
   const header = document.createElement("div");
   header.className = "ashiato-row-header";
-  if (isUnread) {
-    const dot = document.createElement("span");
-    dot.className = "unread-dot";
-    // メニューボタンの通知バッジ(.badge-dot、style.css参照)と同じ色に揃える
-    // (「未読がある」という同じ意味の印なので、同じ色で統一する)。
-    // .unread-dotのbackground/box-shadowはcurrentColorを参照しているため、
-    // ここでcolorを指定するだけで明滅の色も追従する(style.css参照)。
-    // var()を直接指定すればライト/ダーク両テーマの値に自動で追従する。
-    dot.style.color = "var(--color-danger)";
-    dot.setAttribute("aria-label", "未読");
-    header.append(dot);
-  }
   header.append(buildUserNameNode(record));
   const postedAt = document.createElement("span");
   postedAt.className = "ashiato-posted-at";
@@ -1117,7 +1123,9 @@ function observeRowsForRead(
 
     record.readAt = Date.now();
     markAshiatoRead(record.id, record.readAt);
-    target.querySelector(".unread-dot")?.remove();
+    // レイアウト幅を変えないよう、DOMから消すのではなくvisibilityだけ隠す
+    // (renderAshiatoRow参照)。
+    target.querySelector(".unread-dot")?.classList.add("is-read");
 
     const cell = ashiatoCells.get(record.geohash);
     if (cell) rebuildCellVisual(cell);
@@ -1883,7 +1891,9 @@ function buildTermsNoticeDocRow(
   dateSpan.textContent = date;
   button.append(iconSpan, labelSpan, dateSpan);
   button.onclick = () => {
-    confirmDialog.close(); // 通知を閉じる(.click()による合成イベントは使わない)
+    // 通知は閉じない(利用規約を読んだ後、続けてプライバシーポリシーも
+    // 読みたい場合があるため)。「Ashi@について」を通知の上に重ねて開き、
+    // 閉じれば通知に戻れるようにする。
     if (!aboutDialog.open) aboutDialog.showModal();
     expandCollapsible(targetToggleId, targetRowsId);
     $(`#${targetToggleId}`).scrollIntoView({ behavior: "smooth", block: "start" });
