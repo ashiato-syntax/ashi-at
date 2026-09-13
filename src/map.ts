@@ -904,29 +904,65 @@ export function createCurrentLocationLayer(map: L.Map): CurrentLocationLayer {
     }),
   });
 
+  // ●(dot)と▲(headingMarker)は同時には出さない。方位が取れている間は▲だけ、
+  // 取れていない(またはGPS自体OFF)間は●だけを表示する。
+  let hasPosition = false;
+  let hasHeading = false;
+  // 回転角は0〜360に丸めず、直前の角度からの連続値として保持する。丸めた値を
+  // そのままrotate()に渡すと、真北をまたぐ瞬間(例: 359度→1度)にCSS
+  // transitionが「358度分回転する」向きの最短距離を取ってしまい、ぐるっと
+  // 一回転して見えるバグになる。常に直前の角度に一番近い等価角(±360の倍数)
+  // へ寄せてから渡すことで、実際の回転方向と一致する最短経路だけを取らせる。
+  let continuousAngle: number | null = null;
+
+  function syncVisibility(): void {
+    if (!hasPosition) {
+      if (map.hasLayer(dot)) map.removeLayer(dot);
+      if (map.hasLayer(accuracyCircle)) map.removeLayer(accuracyCircle);
+      if (map.hasLayer(headingMarker)) map.removeLayer(headingMarker);
+      return;
+    }
+    if (!map.hasLayer(accuracyCircle)) accuracyCircle.addTo(map);
+    if (hasHeading) {
+      if (map.hasLayer(dot)) map.removeLayer(dot);
+      if (!map.hasLayer(headingMarker)) headingMarker.addTo(map);
+    } else {
+      if (!map.hasLayer(dot)) dot.addTo(map);
+      if (map.hasLayer(headingMarker)) map.removeLayer(headingMarker);
+    }
+  }
+
   return {
     show(lat: number, lon: number, accuracyM: number) {
       const latlng: [number, number] = [lat, lon];
       dot.setLatLng(latlng);
       headingMarker.setLatLng(latlng);
       accuracyCircle.setLatLng(latlng).setRadius(accuracyM);
-      if (!map.hasLayer(dot)) dot.addTo(map);
-      if (!map.hasLayer(accuracyCircle)) accuracyCircle.addTo(map);
+      hasPosition = true;
+      syncVisibility();
     },
     hide() {
-      if (map.hasLayer(dot)) map.removeLayer(dot);
-      if (map.hasLayer(accuracyCircle)) map.removeLayer(accuracyCircle);
-      if (map.hasLayer(headingMarker)) map.removeLayer(headingMarker);
+      hasPosition = false;
+      syncVisibility();
     },
     showHeading(headingDeg: number) {
-      if (!map.hasLayer(headingMarker)) headingMarker.addTo(map);
+      hasHeading = true;
+      if (continuousAngle === null) {
+        continuousAngle = headingDeg;
+      } else {
+        const delta = (((headingDeg - continuousAngle) % 360) + 540) % 360 - 180;
+        continuousAngle += delta;
+      }
+      syncVisibility();
       const arrow = headingMarker
         .getElement()
         ?.querySelector<HTMLElement>(".current-location-heading-arrow");
-      if (arrow) arrow.style.transform = `rotate(${headingDeg}deg)`;
+      if (arrow) arrow.style.transform = `rotate(${continuousAngle}deg)`;
     },
     hideHeading() {
-      if (map.hasLayer(headingMarker)) map.removeLayer(headingMarker);
+      hasHeading = false;
+      continuousAngle = null;
+      syncVisibility();
     },
   };
 }
