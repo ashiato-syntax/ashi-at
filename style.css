@@ -1719,9 +1719,14 @@ dialog#mediaLightbox::backdrop {
        明示的に0で上書きしないと四隅だけ塗り残しが出る。 */
     border-radius: 0;
 }
-.leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-in:hover,
-.leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-out:hover {
-    background: var(--color-accent-pressed);
+/* :hoverはマウス等ホバー可能なポインタを持つ端末限定にする。タッチ端末では
+   タップ後に指が離れても:hoverが疑似的に残り続け(次にどこか別の場所を
+   タップするまで色が戻らない)、押しっぱなしに見えてしまうため。 */
+@media (hover: hover) {
+    .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-in:hover,
+    .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-out:hover {
+        background: var(--color-accent-pressed);
+    }
 }
 .leaflet-control-zoom .icon {
     width: 22px;
@@ -1793,8 +1798,12 @@ dialog#mediaLightbox::backdrop {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     color: var(--color-accent-contrast);
 }
-.toggle-panel-handle:hover {
-    background: var(--color-accent-pressed);
+/* :hoverはマウス等ホバー可能なポインタを持つ端末限定にする(理由は
+   .leaflet-control-zoom-in:hover側の同じコメント参照)。 */
+@media (hover: hover) {
+    .toggle-panel-handle:hover {
+        background: var(--color-accent-pressed);
+    }
 }
 .toggle-panel-handle-icon .icon {
     width: 20px;
