@@ -193,6 +193,14 @@ $("#draftListCloseX").append(createIcon("x"));
 $("#aboutCloseX").append(createIcon("x"));
 $("#settingsCloseX").append(createIcon("x"));
 
+// 「下書き」「見つけたあしあと」はタイトルバー(h2)自体が摘まむハンドルを
+// 兼ねている(enableSheetDragResize参照)ため、中央に置いたこのアイコンは
+// クリック不可・純粋な視覚的な合図(「ここを摘まむと動かせる」)としてのみ置く。
+// 「あしあとを投稿」は高さ調整の意味が薄いため対象外(タイトルバーの見た目は
+// 揃えつつ、摘まんで動かす機能自体を持たない)。
+$("#unlockedListDragIndicator").append(createIcon("chevrons-up-down"));
+$("#draftListDragIndicator").append(createIcon("chevrons-up-down"));
+
 // 地図の表示位置(中心緯度経度・ズーム)をTTL無しで保存しておき、次回起動時に
 // 復元する(復元自体は起動処理の中でsetView()する形で行う。createMap()の
 // デフォルト位置で一瞬描画されてから復元位置へ飛ぶが、体感できるほどの
@@ -415,6 +423,18 @@ function enableSheetDragResize(dialog: HTMLDialogElement): void {
   const handle = dialog.querySelector<HTMLElement>(".sheet-handle");
   if (!handle) return;
 
+  // 見つけたあしあと/下書きはCSS側にmin-height(空リストでも表示領域を
+  // 確保するための下限、style.css参照)があり、min-heightはheightより
+  // 常に優先されるため、そのままだとドラッグでその下限より縮められない。
+  // 摘まんだ瞬間、今の実際の高さをそのままheightとして固定してから
+  // min-heightを打ち消すことで、見た目を変えずにドラッグでの縮小を
+  // 効くようにする。次に開いたときは(下のclose時のリセットで)既定の
+  // min-heightに戻る。
+  handle.addEventListener("pointerdown", () => {
+    dialog.style.height = `${dialog.getBoundingClientRect().height}px`;
+    dialog.style.minHeight = "0";
+  });
+
   enableDragResize({
     handle,
     getHeightPx: () => dialog.getBoundingClientRect().height,
@@ -427,10 +447,11 @@ function enableSheetDragResize(dialog: HTMLDialogElement): void {
     onDismiss: () => dialog.close(),
   });
 
-  // 次に開いたときは常にCSSで指定された既定の高さから始める
+  // 次に開いたときは常にCSSで指定された既定の高さ・min-heightから始める
   // (前回ドラッグで変更した高さを持ち越さない)。
   dialog.addEventListener("close", () => {
     dialog.style.height = "";
+    dialog.style.minHeight = "";
   });
 }
 
@@ -2531,7 +2552,6 @@ $<HTMLInputElement>("#instance").onkeydown = (e) => {
 // フォームまで開いた)時点でその下書きを削除する(役目を終えたとみなす)。
 
 const composeDialog = $<HTMLDialogElement>("#composeDialog");
-enableSheetDragResize(composeDialog);
 const composePrecisionNote = $("#composePrecisionNote");
 const draftListDialog = $<HTMLDialogElement>("#draftListDialog");
 enableSheetDragResize(draftListDialog);

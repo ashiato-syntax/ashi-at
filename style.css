@@ -372,7 +372,12 @@ button.btn-danger:hover {
 }
 
 /* GPS ON中、位置精度が低い(半径100m超=直径200m超)ときに画面中央へ帯状に出す警告。
-   常時点滅させると煩わしいため、opacityをゆっくり往復させる程度の穏やかな明滅にする。 */
+   常時点滅させると煩わしいため、opacityをゆっくり往復させる程度の穏やかな明滅にする。
+   配色は「削除する」等のbutton.btn-dangerと同じ、塗りつぶさずに枠線+文字だけ
+   --color-dangerにする表現に揃える(テーマカラーの--color-accentで塗りつぶすと
+   .discovery-banner(新規発見時の通知、同じ位置・形)と見分けが付かず紛らわしい
+   ため、こちらは警告らしく赤系にする。以前はここだけ独自のオレンジ固定値で
+   ダークモードにも追従していなかった)。 */
 .precision-warning {
     position: absolute;
     top: 50%;
@@ -380,10 +385,11 @@ button.btn-danger:hover {
     right: 0;
     transform: translateY(-50%);
     z-index: 25;
-    padding: 10px 16px;
+    padding: 9px 15px; /* 2px分の枠線を足しても外周サイズが変わらないよう1px減らす */
     text-align: center;
-    background: rgba(230, 126, 0, 0.85);
-    color: var(--color-on-accent);
+    background: var(--color-surface);
+    color: var(--color-danger);
+    border: 2px solid var(--color-danger);
     font-size: 0.9rem;
     font-weight: 600;
     pointer-events: none;
@@ -575,6 +581,12 @@ button.btn-danger:hover {
     right: 0;
     background: var(--color-surface);
     border: 2px solid var(--color-accent);
+    /* 先頭の.menu-current-host(「現在: {インスタンス}」)自体が
+       --color-accent塗りつぶしの帯になっているため、その上に同じ色の
+       border-topまで乗ると境目が同化し、帯が下にずれて見えてしまう。
+       上辺だけ枠線を外し、帯自身を上辺として扱う(aboutDialog等の
+       タイトルバーと同じ理由)。 */
+    border-top: none;
     border-radius: 0;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     display: grid;
@@ -796,19 +808,11 @@ dialog#ashiatoActionDialog::backdrop,
 dialog#settingsDialog::backdrop {
     background: var(--color-overlay);
 }
-dialog#aboutDialog h2,
-dialog#instanceDialog h2,
-dialog#settingsDialog h2 {
+/* aboutDialog/settingsDialogのh2は下のタイトルバー用ルール(dialog#aboutDialog h2,
+   dialog#settingsDialog h2)でmargin/paddingとも全て指定し直すため、ここでは
+   instanceDialogだけ残す。 */
+dialog#instanceDialog h2 {
     margin-top: 0;
-}
-dialog#settingsDialog h2 {
-    /* 見出しの下も.settings-dialog-body内のgapと同じ12pxに揃え、
-       見出し〜項目間だけ広くならないようにする。 */
-    margin-bottom: 12px;
-}
-dialog#aboutDialog h2,
-dialog#settingsDialog h2 {
-    padding-right: 36px; /* 右上の.dialog-close-xと重ならないように */
 }
 /* 「情報」ダイアログ(ashiatoActionDialog)。見出しの代わりに、情報行+詳細+
    アクション一覧(マップで表示する/SNSを開く/削除する)を1つのアクションシートに
@@ -895,6 +899,106 @@ button.action-sheet-row.danger:hover {
 dialog#aboutDialog {
     overflow: hidden;
 }
+/* 見出し+閉じるボタンを、Windowsのタイトルバーのような帯状デザインにする。
+   配色は「投稿する」等の主操作ボタン(button.btn-primary)と同じ
+   (--color-accent塗りつぶし+--color-accent-contrast文字色)。
+   dialog自体のpadding(20px、他のダイアログと共有)を負のmarginで打ち消して
+   帯を左右上の端まで届かせる(overflow:hiddenの無いunlockedListDialog/
+   draftListDialog/composeDialogも含め、border-radiusが現状すべて0pxなので
+   はみ出さない)。
+   unlockedListDialog/draftListDialogはこのh2自体が摘まむハンドルを兼ねる
+   (class="sheet-handle"、下の.sheet-handle定義のtouch-action/cursorを
+   そのまま流用しつつ、display/margin/padding等はここで上書きする)ため、
+   別立てのグレーのハンドル行を持たず、その分バーの高さがaboutDialog等と
+   同じ(38px)で済む。composeDialogは見た目(配色・高さ)だけ揃え、
+   摘まんで高さを変える意味が薄いため、h2にclass="sheet-handle"は
+   付けていない(=摘まめない、ドラッグリサイズも呼んでいない)。
+   マップの吹き出し(.ashiato-popup-list)は見出しテキストが無いため対象外で、
+   専用の.sheet-handle要素(グレーのグリップ)のまま。
+   いずれも直接の子(>)に限定する。aboutDialogは中に利用規約・
+   プライバシーポリシー・ライセンス情報のMarkdown文書(#termsContent等)を
+   展開表示しており、その本文にも見出し(##→h2)が含まれるため、
+   子孫セレクタ(h2だけ)のままだとそちらの見出しまでこのタイトルバー配色に
+   なってしまっていた。 */
+dialog#aboutDialog > h2,
+dialog#settingsDialog > h2,
+dialog#unlockedListDialog > h2,
+dialog#draftListDialog > h2,
+dialog#composeDialog > h2 {
+    margin: -20px -20px 20px;
+    /* バーの高さ(38px)は line-height(20px) + 上下padding(9px×2) で決まる。
+       .dialog-close-x側のtopも同じ38pxのY軸中心(19px)に合わせて計算している
+       (下のdialog#aboutDialog .dialog-close-x参照)。 */
+    padding: 9px 44px 9px 16px;
+    line-height: 20px;
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    /* 「利用規約」等の折りたたみ見出し(.settings-collapsible-toggle、
+       button既定のfont:inheritで1rem)と同じ文字サイズに揃える。 */
+    font-size: 1rem;
+    /* h2に.sheet-handleを兼用させているダイアログはdisplay:flex;
+       justify-content:center;も継承するため、他の見出しと同じ左寄せの
+       通常ブロックへ戻す(aboutDialog等はそもそも.sheet-handleクラスを
+       持たないため無関係、上書きしても影響はない)。 */
+    display: block;
+}
+dialog#settingsDialog > h2 {
+    /* 見出し下は.settings-dialog-body内のgapと同じ12pxに揃える
+       (aboutDialogは20px、左右のpaddingに揃えた値)。 */
+    margin-bottom: 12px;
+}
+dialog#aboutDialog .dialog-close-x,
+dialog#settingsDialog .dialog-close-x,
+dialog#unlockedListDialog .dialog-close-x,
+dialog#draftListDialog .dialog-close-x,
+dialog#composeDialog .dialog-close-x {
+    /* バー(高さ38px、Y軸中心19px)とボタン(32px)の中心が揃うよう
+       top:(38-32)/2=3pxにする(共通の.dialog-close-xはtop:5px)。 */
+    top: 3px;
+    color: var(--color-accent-contrast);
+}
+dialog#aboutDialog .dialog-close-x:hover,
+dialog#aboutDialog .dialog-close-x:focus-visible,
+dialog#settingsDialog .dialog-close-x:hover,
+dialog#settingsDialog .dialog-close-x:focus-visible,
+dialog#unlockedListDialog .dialog-close-x:hover,
+dialog#unlockedListDialog .dialog-close-x:focus-visible,
+dialog#draftListDialog .dialog-close-x:hover,
+dialog#draftListDialog .dialog-close-x:focus-visible,
+dialog#composeDialog .dialog-close-x:hover,
+dialog#composeDialog .dialog-close-x:focus-visible {
+    background: var(--color-accent-pressed);
+}
+/* 「下書き」「見つけたあしあと」用。h2自体が摘まむハンドルを兼ねており、
+   このアイコンはそのタイトルバーの上に重ねるオーバーレイになる。上下
+   ドラッグ可能であることを示すだけの、純粋に視覚的なアイコン(クリックは
+   できない。aria-hidden、pointer-eventsも念のため無効化)。
+   「あしあとを投稿」(composeDialog)は高さ調整の意味が薄いため摘まめない
+   ようにしており(h2にclass="sheet-handle"を付けない、main.tsで
+   enableSheetDragResizeも呼ばない)、このアイコンも置かない。
+   マップの吹き出し側は見出しテキストが無く専用のハンドル行のまま
+   (.sheet-handle-grip)で、このアイコンは使わない。
+   position:absoluteのcontaining blockはdialog全体(min-height:60vh等)の
+   ため、top:50%だとダイアログ全体の縦中央(リスト部分の途中)に来てしまう。
+   タイトルバー(高さ38px)の中央に合わせるため、top位置は固定値(19px=
+   38pxの半分)にし、そこからtranslateY(-50%)で自身の高さぶんだけ補正する。 */
+.sheet-drag-indicator {
+    display: flex;
+    pointer-events: none;
+}
+.sheet-drag-indicator .icon {
+    width: 18px;
+    height: 18px;
+}
+dialog#unlockedListDialog > .sheet-drag-indicator,
+dialog#draftListDialog > .sheet-drag-indicator {
+    position: absolute;
+    top: 19px;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--color-accent-contrast);
+    opacity: 0.6;
+}
 .about-dialog-body {
     max-height: 74vh;
     overflow-y: auto;
@@ -916,6 +1020,12 @@ dialog#aboutDialog p {
    区別し、.markdown-doc(利用規約等)の地の文と同じ--color-text-bodyにする。 */
 #aboutIntro {
     color: var(--color-text-muted);
+}
+/* 概要文の先頭段落はUA既定のmargin-top(1em)を持つため、そのままだと
+   h2のmargin-bottom(帯下の余白)に上乗せされて、上の余白だけ左右の
+   padding(20px)よりかなり広く見えてしまう。先頭段落だけ打ち消す。 */
+#aboutIntro > :first-child {
+    margin-top: 0;
 }
 :root[data-theme="dark"] #aboutIntro {
     color: #efefef;
@@ -2296,6 +2406,20 @@ dialog#unlockedListDialog,
 dialog#composeDialog {
     border: 2px solid var(--color-accent);
 }
+/* aboutDialog/settingsDialogは見出し(h2)自体がタイトルバー風の帯
+   (--color-accent塗りつぶし)になっているため、この上に同じ色のborder-topまで
+   乗ると、境目が同化して上辺だけ帯より太く見えてしまう。上辺だけ枠線を外し、
+   帯自身を上辺として扱う(左右・下辺は他のダイアログと同じ枠線のまま残す)。
+   unlockedListDialog/draftListDialogも、摘まむバーをタイトルバーへ統合した
+   ため同じ理由で対象に加える。composeDialogは摘まめないが、見た目は
+   同じく帯が真の上端まで届く構成のため、同じ理由でborder-topを外す。 */
+dialog#aboutDialog,
+dialog#settingsDialog,
+dialog#unlockedListDialog,
+dialog#draftListDialog,
+dialog#composeDialog {
+    border-top: none;
+}
 dialog#composeDialog[open],
 dialog#unlockedListDialog[open],
 dialog#draftListDialog[open] {
@@ -2321,15 +2445,12 @@ dialog#draftListDialog::backdrop {
         opacity: 0;
     }
 }
-dialog#composeDialog h2,
-dialog#unlockedListDialog h2,
-dialog#draftListDialog h2 {
-    margin-top: 0;
-    padding-right: 36px; /* 右上の.dialog-close-xと重ならないように */
-}
-
 /* シート上部の「つまめる」ハンドル。ドラッグで高さ調整、素早く下へフリック
-   (またはドラッグで一定以上小さく)すると閉じる(main.ts:enableSheetDragResize)。 */
+   (またはドラッグで一定以上小さく)すると閉じる(main.ts:enableSheetDragResize)。
+   composeDialog/unlockedListDialog/draftListDialogはh2自体にこのクラスを
+   付けてタイトルバーとハンドルを1つに統合しており(display/margin/padding
+   等は上のタイトルバー用ルールで上書き済み)、見出しテキストの無いマップの
+   吹き出し(.ashiato-popup-list)だけが専用の.sheet-handle要素を持つ。 */
 .sheet-handle {
     display: flex;
     justify-content: center;
@@ -2360,8 +2481,15 @@ dialog#unlockedListDialog,
 dialog#draftListDialog {
     max-height: 88vh;
     /* 中身が空/少ないときにダイアログ自体が中身の高さまで縮んでしまわないよう、
-       最小高さを決めておく。flex:1の.unlocked-list/.draft-listがこの高さの
-       残り分を埋めるため、0件時でも空メッセージの表示領域が確保される。 */
+       開いた直後の最小高さを決めておく。flex:1の.unlocked-list/.draft-listが
+       この高さの残り分を埋めるため、0件時でも空メッセージの表示領域が
+       確保される。
+       ただしmin-heightはheightより常に優先されるため、このままだと
+       タイトルバーを摘まんで縮めてもここより下には縮まらない。
+       main.ts:enableSheetDragResizeが摘まんだ瞬間にmin-heightを0へ
+       打ち消す(見た目が変わらないよう、その時点の実高さを先にheightとして
+       固定してから)ので、実際にドラッグで縮められる下限は
+       MIN_DRAG_RESIZE_HEIGHT_PX(config.ts)になる。 */
     min-height: 60vh;
     /* 中の.unlocked-list/.draft-listが自前でスクロールするため、ダイアログ自体は
        スクロールさせない(外側と内側でスクロールバーが2本出るのを防ぐ)。

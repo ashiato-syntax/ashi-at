@@ -17,6 +17,7 @@ import menu from "lucide-static/icons/menu.svg?raw";
 import refreshCw from "lucide-static/icons/refresh-cw.svg?raw";
 import history from "lucide-static/icons/history.svg?raw";
 import chevronDown from "lucide-static/icons/chevron-down.svg?raw";
+import chevronsUpDown from "lucide-static/icons/chevrons-up-down.svg?raw";
 import plus from "lucide-static/icons/plus.svg?raw";
 import minus from "lucide-static/icons/minus.svg?raw";
 import chevronLeft from "lucide-static/icons/chevron-left.svg?raw";
@@ -49,6 +50,7 @@ const ICONS = {
   "refresh-cw": refreshCw,
   history,
   "chevron-down": chevronDown,
+  "chevrons-up-down": chevronsUpDown,
   plus,
   minus,
   "chevron-left": chevronLeft,
