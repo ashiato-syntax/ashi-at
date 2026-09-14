@@ -62,6 +62,7 @@ import {
   getDrafts,
   deleteDraft,
   updateDraftPrecision,
+  updateDraftMemo,
   getEmojiImageBlob,
   putEmojiImageBlob,
   resetAllCache,
@@ -1917,11 +1918,20 @@ function colorSwatch(geohashLength: number): HTMLSpanElement {
 // (requiresOnSiteDiscovery参照)は色分けでしか示していないため、ここで補足する。
 $<HTMLButtonElement>("#precisionFilterInfo").onclick = () => {
   const message = document.createDocumentFragment();
+  // 色とエリアサイズの対応が分かりづらいため、まず凡例を出す
+  // (■(20km) ■(4km) ■(1km) ■(150m) のように、桁数ごとの色とサイズを並べる)。
+  const legend = document.createElement("span");
+  for (const length of [4, 5, 6, 7] as const) {
+    legend.append(
+      colorSwatch(length),
+      document.createTextNode(`(${PRECISION_LABELS[length].replace(/^約/, "")}) `),
+    );
+  }
   const line1 = document.createElement("span");
   line1.append(colorSwatch(4), colorSwatch(5), document.createTextNode("は現地に行かなくても見れます"));
   const line2 = document.createElement("span");
   line2.append(colorSwatch(6), colorSwatch(7), document.createTextNode("は現地で発見する必要があります"));
-  message.append(line1, document.createElement("br"), line2);
+  message.append(legend, document.createElement("br"), line1, document.createElement("br"), line2);
   showConfirm(message, { okLabel: "閉じる", hideCancel: true });
 };
 
@@ -2724,6 +2734,23 @@ async function ingestNotes(host: string, notes: MisskeyNote[]): Promise<AshiatoR
   return records;
 }
 
+// 検索結果内での最新/最古のノートIDを求める。Misskeyのnotes/search-by-tagは
+// untilId指定時は新しい順、sinceId指定時は古い順で返ってくる(取りこぼし無く
+// ページングできるようにするための仕様)ため、配列の並び順(notes[0]が最新か
+// 最古か)は呼び出し方によって変わってしまう。これは仕様として保証された
+// 契約ではなく、実装が変わる/インスタンスによって異なる可能性も否定できない
+// ため、並び順を信用せず、ID文字列を比較して求める(Misskeyのid形式は
+// aid/aidx/ulid/objectid/meidのいずれも生成時刻順にソート可能な文字列)。
+function newestAndOldestId(notes: MisskeyNote[]): { newestId: string; oldestId: string } {
+  let newestId = notes[0].id;
+  let oldestId = notes[0].id;
+  for (const note of notes) {
+    if (note.id > newestId) newestId = note.id;
+    if (note.id < oldestId) oldestId = note.id;
+  }
+  return { newestId, oldestId };
+}
+
 // 過去方向(untilId): 「過去を探す」(初回・2回目以降とも同じボタン)
 async function fetchOlder(): Promise<void> {
   const btn = $<HTMLButtonElement>("#search");
@@ -2745,8 +2772,8 @@ async function fetchOlder(): Promise<void> {
     await ingestNotes(host, notes);
 
     if (notes.length > 0) {
-      const oldestId = notes[notes.length - 1].id;
-      const newestId = cursor?.newestSeenNoteId ?? notes[0].id;
+      const { newestId: batchNewestId, oldestId } = newestAndOldestId(notes);
+      const newestId = cursor?.newestSeenNoteId ?? batchNewestId;
       cursor = { hostTag: `${host}::${TAG}`, host, tag: TAG, oldestSeenNoteId: oldestId, newestSeenNoteId: newestId };
       await putCursor(host, TAG, cursor);
     }
@@ -2801,8 +2828,7 @@ async function fetchNewer(): Promise<void> {
     await ingestNotes(host, notes);
 
     if (notes.length > 0) {
-      const newestId = notes[0].id;
-      const oldestId = notes[notes.length - 1].id;
+      const { newestId, oldestId } = newestAndOldestId(notes);
       // 中抜け対策: 今回取得したバッチの最古ノートで oldestSeenNoteId も進めておく。
       // これにより「過去を探す」の起点が必ずこのバッチの範囲を通過するようになり、
       // fetchNewer の limit 上限で取りこぼした区間が永久に未取得のまま残ることを防ぐ。
@@ -2814,8 +2840,8 @@ async function fetchNewer(): Promise<void> {
 
     setStatus(
       notes.length > 0
-        ? `${notes.length}件の新しいAshiatoを検索しました`
-        : "新しいAshiatoはありませんでした",
+        ? `${notes.length}件の新しいあしあとを検索しました`
+        : "新しいあしあとはありませんでした",
     );
   } catch (e) {
     console.error(e);
@@ -2890,6 +2916,7 @@ $<HTMLInputElement>("#instance").onkeydown = (e) => {
 
 const composeDialog = $<HTMLDialogElement>("#composeDialog");
 const composePrecisionNote = $("#composePrecisionNote");
+const composeMemoInput = $<HTMLTextAreaElement>("#composeMemo");
 const draftListDialog = $<HTMLDialogElement>("#draftListDialog");
 enableSheetDragResize(draftListDialog);
 const draftList = $("#draftList");
@@ -2978,6 +3005,7 @@ $<HTMLButtonElement>("#composeAshiatoMenuItem").onclick = () => {
   if (!lastKnownPosition || isPrecisionBad()) return;
 
   composePosition = { ...lastKnownPosition };
+  composeMemoInput.value = ""; // 前回開いたときの入力を持ち越さない
   updateComposeButtons();
   composeDialog.show(); // 非モーダル: マップ操作(ドラッグ/ズーム/エリアトグル等)を妨げない
   updateComposePreview();
@@ -3028,7 +3056,7 @@ $<HTMLButtonElement>("#composeSaveDraft").onclick = async () => {
     () => null,
   );
 
-  await putDraft(makeDraft(lat, lon, geohashLength, municipalityLabel));
+  await putDraft(makeDraft(lat, lon, geohashLength, municipalityLabel, composeMemoInput.value.trim()));
   await refreshDraftBadge();
   composeDialog.close();
   setStatus("下書きに保存しました");
@@ -3090,6 +3118,32 @@ async function refreshDraftList(): Promise<void> {
     deleteBtn.setAttribute("aria-label", "削除");
     deleteBtn.append(createIcon("trash-2"));
     header.append(headerMain, deleteBtn);
+
+    // メモ(「どこで投稿しようとしたか」等の覚え書き)。入力のたびに
+    // 少し待ってから保存する(このリストは60秒ごとに全体を再描画するため
+    // (下の setInterval 参照)、キー入力のたびに保存しておかないと、
+    // 保存前に再描画されて入力中の内容が消えてしまう)。
+    const memoRow = document.createElement("div");
+    memoRow.className = "draft-memo-row";
+    const memoIcon = document.createElement("span");
+    memoIcon.className = "action-sheet-icon";
+    memoIcon.append(createIcon("pencil-line"));
+    const memoInput = document.createElement("textarea");
+    memoInput.className = "draft-memo-input";
+    memoInput.rows = 2;
+    memoInput.placeholder = "メモ";
+    memoInput.value = draft.memo;
+    memoInput.setAttribute("aria-label", "メモ");
+    let memoSaveTimer: ReturnType<typeof setTimeout> | undefined;
+    memoInput.oninput = () => {
+      clearTimeout(memoSaveTimer);
+      const value = memoInput.value;
+      memoSaveTimer = setTimeout(() => {
+        draft.memo = value;
+        updateDraftMemo(draft.id, value);
+      }, 400);
+    };
+    memoRow.append(memoIcon, memoInput);
 
     // 精度・「投稿する」は同じ行に並べる。
     const footer = document.createElement("div");
@@ -3166,7 +3220,7 @@ async function refreshDraftList(): Promise<void> {
     };
 
     footer.append(precision, postBtn);
-    li.append(header, footer);
+    li.append(header, memoRow, footer);
     draftList.append(li);
   }
 }

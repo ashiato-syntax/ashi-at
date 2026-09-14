@@ -75,8 +75,8 @@ interface BoundaryNeighbor {
   coord: Position;
 }
 
-// 辺の集合(内陸の境界だけに絞り込み済みのもの)を、1本ずつの連続した線
-// (チェーン)として再構成する共通処理。extractInternalBoundaryChains/
+// 辺の集合(内陸の境界・海岸線等、絞り込み済みのもの)を、1本ずつの連続した線
+// (チェーン)として再構成する共通処理。extractPrefectureBoundaryChains/
 // extractMunicipalityBoundaryChainsの両方から使う。
 //
 // 1. 対象の辺だけで頂点の隣接グラフを作り、分岐点・端点(隣接する辺が
@@ -154,17 +154,28 @@ function chainEdges(internalEdges: BoundaryEdge[]): [number, number][][] {
   return chains.map((chain) => chain.map((c): [number, number] => [c[1], c[0]]));
 }
 
-// 都道府県境界(prefectures.json)から、海岸線を除いた「内陸の県境」だけを
+interface PrefectureBoundaryChains {
+  // 内陸の県境(隣の都道府県ポリゴンと共有している辺)
+  internalChains: [number, number][][];
+  // 海岸線(どの都道府県とも共有していない、1回しか出てこない辺)
+  coastlineChains: [number, number][][];
+}
+
+// 都道府県境界(prefectures.json)から、「内陸の県境」と「海岸線」をそれぞれ
 // 1本ずつの連続した線として再構成する。全ポリゴンの辺(隣接する2頂点の組)を
 // 数え上げ、2回出てくる辺(隣の都道府県のポリゴンにも同じ辺があり、境界を
-// 共有している=内陸の県境)だけを残す。1回しか出てこない辺(どの都道府県とも
-// 共有していない=海岸線)は除外する — 結果として海岸線には一切線を引かない。
+// 共有している=内陸の県境)と、1回しか出てこない辺(どの都道府県とも
+// 共有していない=海岸線)とに分ける。
+// ライトモードでは陸地の塗りと海の背景色の境目だけで海岸線が読み取れるため
+// coastlineChainsは使わないが、ダークモードでは陸地と海の明度差が付けにくく
+// 境目が分かりづらいため、市区町村境界線と同じ見た目で描画する
+// (loadPrefectureBoundaries参照)。
 //
 // 都道府県データは47件・頂点数は合計6万程度で、この処理は起動時に1回だけ
 // (loadPrefectureBoundaries内で)行うだけなので重くはならない。
-function extractInternalBoundaryChains(
+function extractPrefectureBoundaryChains(
   geojson: FeatureCollection<Geometry>,
-): [number, number][][] {
+): PrefectureBoundaryChains {
   const edges = new Map<string, BoundaryEdge>();
 
   for (const feature of geojson.features) {
@@ -183,7 +194,11 @@ function extractInternalBoundaryChains(
     }
   }
 
-  return chainEdges([...edges.values()].filter((e) => e.count === 2));
+  const allEdges = [...edges.values()];
+  return {
+    internalChains: chainEdges(allEdges.filter((e) => e.count === 2)),
+    coastlineChains: chainEdges(allEdges.filter((e) => e.count === 1)),
+  };
 }
 
 // フィーチャが政令指定都市の区(N03_003が「〜市」で終わる)なら親市名を返す。
@@ -207,7 +222,7 @@ interface MunicipalityBoundaryChains {
 }
 
 // 市区町村境界(1都道府県分のN03-21_{code}_...json)から、海岸線・都道府県境を
-// 除いた内陸の境界を再構成する。extractInternalBoundaryChainsとほぼ同じだが、
+// 除いた内陸の境界を再構成する。extractPrefectureBoundaryChainsとほぼ同じだが、
 // 2回出てくる辺(内陸の境界)をさらに2種類に分類する:
 // - 政令指定都市の区どうしが共有する辺(同じ親市の区+区) → wardInternalChains
 // - それ以外(政令市の外縁、区が無い市町村どうしの境界など) → cityBoundaryChains
@@ -363,6 +378,10 @@ export interface BoundaryResult {
 // モジュールスコープで保持しておく(main.ts: applyThemeからrestyleMapForTheme経由で呼ばれる)。
 let landLayer: L.GeoJSON | null = null;
 let prefectureBoundaryLayer: L.Polyline | null = null;
+// 海岸線(ダークモードのみ表示。restyleMapForTheme側でmap本体への
+// add/removeを切り替えるため、地図本体への参照も一緒に覚えておく)。
+let coastlineLayer: L.Polyline | null = null;
+let mapRef: L.Map | null = null;
 // 市区町村境界も同様(main.ts側のmunicipalityLayersキャッシュに対応する分だけ、
 // prefCodeごとに市区町村境界+区境界のポリラインを覚えておく)。
 const municipalityBoundaryLayersByPrefCode = new Map<
@@ -386,16 +405,31 @@ export async function loadPrefectureBoundaries(map: L.Map): Promise<BoundaryResu
     },
   }).addTo(map);
 
-  // 内陸の県境だけを一点鎖線で描画する(海岸線には一切線を引かない —
-  // extractInternalBoundaryChains参照)。海岸線自体は、上のlandPaneの
-  // 塗りつぶし(陸地)とmap.wrapのCSS背景色(海)の境目としてそのまま見える。
-  prefectureBoundaryLayer = L.polyline(extractInternalBoundaryChains(data), {
+  mapRef = map;
+
+  const { internalChains, coastlineChains } = extractPrefectureBoundaryChains(data);
+
+  // 内陸の県境だけを一点鎖線で描画する。海岸線はライトモードでは引かない
+  // (上のlandPaneの塗りつぶし(陸地)とmap.wrapのCSS背景色(海)の境目だけで
+  // 十分読み取れるため)。
+  prefectureBoundaryLayer = L.polyline(internalChains, {
     pane: "prefecturePane",
     color: prefectureBoundaryColor(),
     weight: PREFECTURE_BOUNDARY_WEIGHT,
     interactive: false,
     dashArray: PREFECTURE_DASH_ARRAY,
   }).addTo(map);
+
+  // 海岸線はダークモードのときだけ描画する(暗い背景では陸地と海の明度差が
+  // 付けにくく、境目が分かりづらいため)。線の色・種類は市区町村境界線と
+  // 同じにする(実線・同じ太さ・同じ色)。
+  coastlineLayer = L.polyline(coastlineChains, {
+    pane: "prefecturePane",
+    color: municipalityBoundaryColor(),
+    weight: MUNICIPALITY_BOUNDARY_WEIGHT,
+    interactive: false,
+  });
+  if (isDarkTheme()) coastlineLayer.addTo(map);
 
   const labelLayer = buildPrefectureLabelLayer(data);
 
@@ -531,6 +565,14 @@ export async function loadMunicipalityBoundaries(
 export function restyleMapForTheme(): void {
   landLayer?.setStyle({ fillColor: landFillColor() });
   prefectureBoundaryLayer?.setStyle({ color: prefectureBoundaryColor() });
+  if (coastlineLayer) {
+    coastlineLayer.setStyle({ color: municipalityBoundaryColor() });
+    // ダークモードのときだけ地図に乗せる(ライトモードでは海岸線を引かない)。
+    const shouldShow = isDarkTheme();
+    const isShown = mapRef?.hasLayer(coastlineLayer) ?? false;
+    if (shouldShow && !isShown) coastlineLayer.addTo(mapRef!);
+    else if (!shouldShow && isShown) mapRef!.removeLayer(coastlineLayer);
+  }
   for (const { cityBoundaryLine, wardBoundaryLine } of municipalityBoundaryLayersByPrefCode.values()) {
     cityBoundaryLine.setStyle({ color: municipalityBoundaryColor() });
     wardBoundaryLine.setStyle({ color: wardBoundaryColor() });

@@ -34,6 +34,7 @@ import shield from "lucide-static/icons/shield.svg?raw";
 import moon from "lucide-static/icons/moon.svg?raw";
 import navigation2 from "lucide-static/icons/navigation-2.svg?raw";
 import sparkles from "lucide-static/icons/sparkles.svg?raw";
+import pencilLine from "lucide-static/icons/pencil-line.svg?raw";
 
 const ICONS = {
   footprints,
@@ -68,6 +69,7 @@ const ICONS = {
   moon,
   "navigation-2": navigation2,
   sparkles,
+  "pencil-line": pencilLine,
 } as const;
 
 export type IconName = keyof typeof ICONS;

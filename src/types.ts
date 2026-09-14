@@ -51,6 +51,10 @@ export interface Draft {
   lon: number;
   geohashLength: GeohashLength;
   municipalityLabel: string | null;
+  // 自由記述のメモ(「どこで投稿しようとしたか」等、後から思い出すための
+  // 覚え書き)。投稿時に自動生成される情報ではないため、空なら空文字列
+  // (null許容にはせず、常に文字列として扱う)。
+  memo: string;
 }
 
 // map.jsのaddAshiatoGroup()が返す、地図上に実際に描画されている状態のハンドル。

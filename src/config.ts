@@ -97,26 +97,26 @@ export const BAD_ACCURACY_RADIUS_M = 500;
 
 // 陸地の塗りつぶし色。
 export const LAND_FILL_COLOR_LIGHT = "#F7F2EC";
-export const LAND_FILL_COLOR_DARK = "#00454a";
+export const LAND_FILL_COLOR_DARK = "#00000F";
 
 // 都道府県境界線の一点鎖線(長い破線, 隙間, 点, 隙間 の繰り返し)。
 // 「点」はlineCap:'round'(Path options既定値)により短い線分が丸い点として描画される。
 export const PREFECTURE_DASH_ARRAY = "10,4,1,4";
 // 都道府県境界線の色・太さ。
 export const PREFECTURE_BOUNDARY_COLOR_LIGHT = "#707070";
-export const PREFECTURE_BOUNDARY_COLOR_DARK = "#10b3b3";
-export const PREFECTURE_BOUNDARY_WEIGHT = 1.0;
+export const PREFECTURE_BOUNDARY_COLOR_DARK = "#52AC95";
+export const PREFECTURE_BOUNDARY_WEIGHT = 1.1;
 
 // 市区町村境界線(実線)の色・太さ。
 export const MUNICIPALITY_BOUNDARY_COLOR_LIGHT = "#B9B9B9";
-export const MUNICIPALITY_BOUNDARY_COLOR_DARK = "#0d8d8e";
-export const MUNICIPALITY_BOUNDARY_WEIGHT = 0.7;
+export const MUNICIPALITY_BOUNDARY_COLOR_DARK = "#52AC95";
+export const MUNICIPALITY_BOUNDARY_WEIGHT = 0.8;
 
 // 政令指定都市内部の区どうしの境界は、色は市区町村境界と同じまま、
 // 点線(dashArray)だけで見分けられるようにしている。
-export const WARD_DASH_ARRAY = "1,3";
+export const WARD_DASH_ARRAY = "1,2";
 export const WARD_BOUNDARY_COLOR_LIGHT = "#B9B9B9";
-export const WARD_BOUNDARY_COLOR_DARK = "#0d8d8e";
+export const WARD_BOUNDARY_COLOR_DARK = "#52AC95";
 
 // Geohashの桁数(精度)ごとの色。精度が細かい(=判定エリアが狭い)ほど暖色にして
 // 目立たせる。4桁=青, 5桁=緑, 6桁=黄色, 7桁=赤。Ashi@が扱うのはこの4種類の
@@ -149,7 +149,7 @@ export const INSET_FRACTION = 0.05;
 export const PRECISION_PREVIEW_COLOR = "#8e24aa";
 
 // 現在地マーカー+精度円の色。
-export const CURRENT_LOCATION_COLOR = "#f3e429";
+export const CURRENT_LOCATION_COLOR = "#f0a901";
 
 // --- タイマー・アニメーションの時間 -----------------------------------------
 

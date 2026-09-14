@@ -424,6 +424,7 @@ export function makeDraft(
   lon: number,
   geohashLength: GeohashLength,
   municipalityLabel: string | null,
+  memo: string,
 ): Draft {
   return {
     id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -432,6 +433,7 @@ export function makeDraft(
     lon,
     geohashLength,
     municipalityLabel,
+    memo,
   };
 }
 
@@ -459,7 +461,11 @@ export async function getDrafts(): Promise<Draft[]> {
       req.onsuccess = () => resolve(req.result ?? []);
       req.onerror = () => reject(req.error);
     });
-    return all.sort((a, b) => b.createdAt - a.createdAt);
+    // memoフィールド追加前に保存された下書きにはmemoが無い(undefined)ため、
+    // 空文字列として扱う(main.ts側でtextarea.valueにそのまま渡すため)。
+    return all
+      .map((d) => ({ ...d, memo: d.memo ?? "" }))
+      .sort((a, b) => b.createdAt - a.createdAt);
   } catch (error) {
     console.warn("cache: getDrafts failed:", error);
     return [];
@@ -501,6 +507,27 @@ export async function updateDraftPrecision(id: string, geohashLength: GeohashLen
     });
   } catch (error) {
     console.warn(`cache: updateDraftPrecision(${id}) failed:`, error);
+  }
+}
+
+/** 下書きのメモだけを後から変更する(get→マージ→put、updateDraftPrecisionと同じ形)。 */
+export async function updateDraftMemo(id: string, memo: string): Promise<void> {
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const t = db.transaction("drafts", "readwrite");
+      const store = t.objectStore("drafts");
+      const getReq = store.get(id);
+      getReq.onsuccess = () => {
+        const existing: Draft | undefined = getReq.result;
+        if (!existing) return; // 削除済み等。黙って無視する
+        store.put({ ...existing, memo });
+      };
+      t.oncomplete = () => resolve();
+      t.onerror = () => reject(t.error);
+    });
+  } catch (error) {
+    console.warn(`cache: updateDraftMemo(${id}) failed:`, error);
   }
 }
 
