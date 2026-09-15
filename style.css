@@ -638,10 +638,23 @@ button.btn-danger {
 :root[data-theme="dark"] .menu-fab {
     background: color-mix(in srgb, var(--color-accent) 22%, transparent);
 }
+/* ライトモードは、白っぽい背景/地図に対して黄色(明度が高い色)自体の
+   コントラストが弱く、ガラス風の薄い塗り+1px枠線だけでは視認しづらい
+   という指摘への対応。塗りをさらに濃くし、枠線も一段暗いゴールド
+   (--color-accent-pressed)にして輪郭をはっきりさせる
+   (+/-ボタン・トグル展開ボタンも同じ理由で同様に調整、それぞれの
+   :root[data-theme="light"]ブロック参照)。 */
+:root[data-theme="light"] .menu-fab {
+    background: color-mix(in srgb, var(--color-accent) 48%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent-pressed) 70%, var(--color-accent) 30%);
+}
 .menu-fab:active {
     background: color-mix(in srgb, var(--color-accent) 40%, transparent);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     transform: scale(0.92);
+}
+:root[data-theme="light"] .menu-fab:active {
+    background: color-mix(in srgb, var(--color-accent) 62%, transparent);
 }
 .menu-fab-icon .icon {
     width: 26px;
@@ -1913,6 +1926,12 @@ dialog#mediaLightbox::backdrop {
 :root[data-theme="dark"] .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-out {
     background: color-mix(in srgb, var(--color-accent) 22%, transparent);
 }
+/* ライトモードの視認性対応。.menu-fabの同種コメント参照。 */
+:root[data-theme="light"] .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-in,
+:root[data-theme="light"] .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-out {
+    background: color-mix(in srgb, var(--color-accent) 48%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent-pressed) 70%, var(--color-accent) 30%);
+}
 /* :hoverはマウス等ホバー可能なポインタを持つ端末限定にする。タッチ端末では
    タップ後に指が離れても:hoverが疑似的に残り続け(次にどこか別の場所を
    タップするまで色が戻らない)、押しっぱなしに見えてしまうため。 */
@@ -1920,6 +1939,10 @@ dialog#mediaLightbox::backdrop {
     .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-in:hover,
     .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-out:hover {
         background: color-mix(in srgb, var(--color-accent) 40%, transparent);
+    }
+    :root[data-theme="light"] .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-in:hover,
+    :root[data-theme="light"] .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-out:hover {
+        background: color-mix(in srgb, var(--color-accent) 62%, transparent);
     }
 }
 .leaflet-control-zoom .icon {
@@ -2001,11 +2024,19 @@ dialog#mediaLightbox::backdrop {
 :root[data-theme="dark"] .toggle-panel-handle {
     background: color-mix(in srgb, var(--color-accent) 22%, transparent);
 }
+/* ライトモードの視認性対応。.menu-fabの同種コメント参照。 */
+:root[data-theme="light"] .toggle-panel-handle {
+    background: color-mix(in srgb, var(--color-accent) 48%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent-pressed) 70%, var(--color-accent) 30%);
+}
 /* :hoverはマウス等ホバー可能なポインタを持つ端末限定にする(理由は
    .leaflet-control-zoom-in:hover側の同じコメント参照)。 */
 @media (hover: hover) {
     .toggle-panel-handle:hover {
         background: color-mix(in srgb, var(--color-accent) 40%, transparent);
+    }
+    :root[data-theme="light"] .toggle-panel-handle:hover {
+        background: color-mix(in srgb, var(--color-accent) 62%, transparent);
     }
 }
 .toggle-panel-handle-icon .icon {

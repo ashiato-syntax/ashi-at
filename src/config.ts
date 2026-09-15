@@ -159,7 +159,7 @@ export const CURRENT_LOCATION_COLOR = "#f0c100";
 // (青緑/緑/黄/赤)と紛れないよう、路線ごとの色分けはせず彩度の無いグレーで
 // 統一する(あくまで「路線がある」ことを示す参考レイヤー)。
 export const RAILWAY_COLOR_LIGHT = "#C8C8C8";
-export const RAILWAY_COLOR_DARK = "#727272";
+export const RAILWAY_COLOR_DARK = "#434343";
 export const RAILWAY_WEIGHT = 0.5;
 // 駅の位置に打つ小さい●の半径(px)。色は路線と同じ(RAILWAY_COLOR_*)を使う。
 export const STATION_RADIUS = 1;

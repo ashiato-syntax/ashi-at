@@ -3,6 +3,21 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   base: '/ashi-at/',
 
+  build: {
+    // Vite 8のデフォルトCSSミニファイア(lightningcss)には、同じ宣言内に
+    // 標準プロパティ(backdrop-filter)とベンダープレフィックス版
+    // (-webkit-backdrop-filter)を両方書くと「同じプロパティの重複」とみなし、
+    // 後に書いた方(-webkit-版)だけを残して標準プロパティを消してしまう
+    // 既知のバグがある(https://github.com/vitejs/vite/issues/22649,
+    // 上流: https://github.com/parcel-bundler/lightningcss/issues/695)。
+    // Chrome/FirefoxはWebKit接頭辞を理解しないため、すりガラス効果
+    // (backdrop-filter)が本番ビルドでのみ効かなくなる(devサーバでは
+    // このミニファイアを通らないため再現しない)。対象ブラウザ指定でも
+    // 解消しないとのことなので、CSSミニファイアをesbuild(Vite 7までの既定)
+    // に固定して回避する。
+    cssMinify: 'esbuild',
+  },
+
   server: {
     port: 5173,
     strictPort: true,
