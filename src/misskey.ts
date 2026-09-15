@@ -1,3 +1,5 @@
+import { API_REQUEST_TIMEOUT_MS } from "./config.js";
+
 export function normalizeInstanceUrl(value: string): string {
   const u = new URL(value.trim());
   if (!["http:", "https:"].includes(u.protocol))
@@ -20,12 +22,23 @@ export async function apiRequest<T>(
   const base =
     import.meta.env.DEV && origin === "https://misskey.io" ? "" : origin;
 
-  const res = await fetch(`${base}/api/${endpoint}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    credentials: "omit",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${base}/api/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      credentials: "omit",
+      // サーバーが応答を返さない(フリーズ等)場合に、呼び出し元が
+      // 「検索中…」のまま無限に待ち続けないようにする。
+      signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS),
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "TimeoutError") {
+      throw new Error("サーバーからの応答がありませんでした(タイムアウト)。");
+    }
+    throw e;
+  }
 
   if (!res.ok) throw new Error(`Misskey API error: HTTP ${res.status}`);
   return res.json();

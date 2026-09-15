@@ -23,3 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 Ashiato_Syntax_v1_0_EN.md
+
+# 国土数値情報「鉄道データ(N02)」の生データ(手動DL)。
+# scripts/build-railways.mjsで使う入力で、成果物(public/data/maps/s0010/railways/)
+# だけをコミットする。
+N02-25_GML/

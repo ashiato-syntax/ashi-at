@@ -28,6 +28,10 @@ export const CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90日
 // (発見済みレコードはこの上限の対象外。cache.ts: pruneCache参照)。
 export const MAX_RECORDS_PER_HOST_TAG = 1000;
 
+// Misskey側の応答が無い(サーバーがフリーズしている等)場合に、
+// 「検索中…」のまま無限に待ち続けないようにするタイムアウト(misskey.ts: apiRequest参照)。
+export const API_REQUEST_TIMEOUT_MS = 15 * 1000;
+
 // --- Ashiato Syntax・検索まわり ---------------------------------------------
 
 // 検索対象の固定タグ。将来複数タグに対応するなら cache.js のhostTagキーは
@@ -149,7 +153,16 @@ export const INSET_FRACTION = 0.05;
 export const PRECISION_PREVIEW_COLOR = "#8e24aa";
 
 // 現在地マーカー+精度円の色。
-export const CURRENT_LOCATION_COLOR = "#f0a901";
+export const CURRENT_LOCATION_COLOR = "#f0c100";
+
+// 鉄道路線の色・太さ。行政境界(グレー/ティール系)や、あしあとの色分け
+// (青緑/緑/黄/赤)と紛れないよう、路線ごとの色分けはせず彩度の無いグレーで
+// 統一する(あくまで「路線がある」ことを示す参考レイヤー)。
+export const RAILWAY_COLOR_LIGHT = "#C8C8C8";
+export const RAILWAY_COLOR_DARK = "#727272";
+export const RAILWAY_WEIGHT = 0.5;
+// 駅の位置に打つ小さい●の半径(px)。色は路線と同じ(RAILWAY_COLOR_*)を使う。
+export const STATION_RADIUS = 1;
 
 // --- タイマー・アニメーションの時間 -----------------------------------------
 
@@ -187,6 +200,12 @@ export const MIN_ZOOM_FOR_MUNICIPALITIES = 10;
 export const MIN_ZOOM_FOR_CAPITAL_LABELS = 10;
 // これよりズームしたら、区・区が無い市町村等、通常の市区町村名ラベルを表示。
 export const MIN_ZOOM_FOR_MUNICIPALITY_LABELS = 11;
+// これよりズームしたら、当該都道府県の鉄道路線GeoJsonを読み込む。
+export const MIN_ZOOM_FOR_RAILWAYS = 10;
+// これよりズームしたら、駅の位置の●を表示する(路線の線自体はMIN_ZOOM_FOR_RAILWAYSで表示)。
+export const MIN_ZOOM_FOR_STATIONS = 13;
+// これよりズームしたら、駅名ラベルを表示する(●自体はMIN_ZOOM_FOR_STATIONSで表示)。
+export const MIN_ZOOM_FOR_STATION_LABELS = 14;
 
 // --- 利用規約・プライバシーポリシーのバージョン -----------------------------
 

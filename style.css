@@ -33,10 +33,16 @@
     --color-border-lighter: #eee;
 
     /* アクセント(テーマカラー: 黄色) */
-    --color-accent: #f0a901;
-    --color-accent-pressed: #c08701; /* menu-fab:active */
-    --color-accent-hover-bg: #fdf2d9; /* btn-primary:hover */
-    --color-accent-secondary: #f0a901; /* ラジオボタン/GPSトグルON。--color-accentと統一 */
+    --color-accent: #f0c100;
+    --color-accent-pressed: #c09a00; /* menu-fab:active */
+    --color-accent-hover-bg: #fdf6da; /* btn-primary:hover */
+    --color-accent-secondary: #f0c100; /* ラジオボタン/GPSトグルON。--color-accentと統一 */
+    /* --color-accentを文字・アイコン色として(塗りつぶしの上ではなく、素の背景に
+       直接)使う箇所専用の色。--color-accent自体は塗りつぶしボタン(+/-ボタン等)
+       での視認性を優先した明るい黄色だが、白背景にそのまま文字として使うと
+       コントラストが低く読みづらいため、ダークモードの背景色(--color-surface)
+       と同じ濃い青緑にする。 */
+    --color-accent-text: #012e31;
     /* 黄色(--color-accent)を背景として塗りつぶす箇所(.menu-item-count.unread等)
        の上に乗せる文字・アイコン色。白だと黄色地でほとんど読めないため、
        濃い色にする(--color-on-accentは他の色付きバナー等でも共有しているため
@@ -51,6 +57,16 @@
        LAND_FILL_COLOR_LIGHT)で表現する。 */
     --color-map-sea: #A2D4FC;
     --color-map-label-halo: #fff;
+
+    /* HUD周り(ステータス・検索ボタン・メニュー・トグルカード等)の
+       「ガラスの縁が光っている」見た目に使う専用の色。ダークモードでは
+       #2f3f3e/#6a8583という独立した値を使っているため、ライトモードにも
+       同じ立ち位置の値を用意する(--color-surface等とは別枠)。 */
+    --color-hud-glass: #dbe9e6;
+    --color-hud-glass-border: #7fa89e;
+
+    /* GPSトグル等、OFF状態のトラックに使う緑系の色。 */
+    --color-toggle-off: #9dc2a8;
 }
 /* ダークモード。深海探索ゲーム「In Other Waters」の、深い青緑がかった暗闇+
    細い発光ラインという雰囲気を参考にしている。テーマカラー(黄)は
@@ -70,8 +86,8 @@
     --color-surface-sunken: #0d272a;
     --color-overlay: rgba(0, 0, 0, 0.6);
 
-    --color-text: #f0a901;
-    --color-text-strong: #f0a901;
+    --color-text: #f0c100;
+    --color-text-strong: #f0c100;
     --color-text-muted: #0f8b8b;
     --color-text-subtle: #7aa8a6;
     --color-text-faint: #0f8b8b;
@@ -82,11 +98,14 @@
     --color-border-light: #244244;
     --color-border-lighter: #1a3335;
 
-    --color-accent: #f0a901;
-    --color-accent-pressed: #c08701;
-    --color-accent-hover-bg: rgba(240, 169, 1, 0.18);
-    --color-accent-secondary: #f0a901;
+    --color-accent: #f0c100;
+    --color-accent-pressed: #c09a00;
+    --color-accent-hover-bg: rgba(240, 193, 0, 0.18);
+    --color-accent-secondary: #f0c100;
     --color-accent-contrast: #241f00;
+    /* 暗い背景では黄色そのままで読みやすいため、ライトモードのような
+       濃色化はしない。 */
+    --color-accent-text: #f0c100;
 
     --color-danger: #ff7a7a;
     --color-danger-hover-bg: rgba(255, 122, 122, 0.16);
@@ -98,6 +117,13 @@
        にじんだ白い帯のように強く浮いて見えて読みづらいため、地図に馴染む
        暗い色にする。 */
     --color-map-label-halo: #041012;
+
+    /* HUD周りの「ガラス」の色。これまで#2f3f3e/#6a8583と直書きしていた値を
+       変数化したもの(値そのものは変えていない)。 */
+    --color-hud-glass: #2f3f3e;
+    --color-hud-glass-border: #6a8583;
+
+    --color-toggle-off: #4b8869;
 }
 * {
     box-sizing: border-box;
@@ -107,7 +133,11 @@
    Chromium)。WebKit系の疑似要素は継承されないため、*で全要素に対して
    宣言しておく(実際にスクロール可能な要素にだけ表示される)。 */
 :root {
-    scrollbar-color: var(--color-accent) var(--color-surface-sunken);
+    /* トラック(スクロールバーの帯全体)は塗りを持たせずtransparentにする。
+       単色で塗ると、半透明+ぼかしの「ガラス」系ダイアログの上では実際の
+       背景と色がずれ、特にライトモードでは不透明な四角がはっきり浮いて
+       見えてしまうため(ラジオボタンの選択時の塗りと同じ理由)。 */
+    scrollbar-color: var(--color-accent) transparent;
     scrollbar-width: thin;
 }
 *::-webkit-scrollbar {
@@ -115,7 +145,7 @@
     height: 10px;
 }
 *::-webkit-scrollbar-track {
-    background: var(--color-surface-sunken);
+    background: transparent;
 }
 *::-webkit-scrollbar-thumb {
     background: var(--color-accent);
@@ -157,7 +187,7 @@ textarea {
     min-height: 42px;
     border: 1px solid var(--color-border);
     border-radius: 0;
-    background: #012e31;
+    background: var(--color-surface);
     padding: 8px 12px;
     font: inherit;
 }
@@ -177,10 +207,29 @@ input[type="checkbox"] {
     padding: 0;
     border: 2px solid var(--color-border);
     border-radius: 0;
-    background: var(--color-text-faint);
+    /* 未選択時の塗り。ライトモードでは--color-text-faintが薄すぎて見えづらいため
+       --color-text-mutedにする(ダークモードは下の:root[data-theme="dark"]の
+       上書きで元のままにする)。 */
+    background: var(--color-text-muted);
     position: relative;
     flex: none;
     transition: border-color 0.15s ease, background 0.15s ease;
+}
+:root[data-theme="dark"] input[type="checkbox"] {
+    background: var(--color-text-faint);
+}
+/* 以下、ライトモードで薄すぎて読みづらかったため--color-text-subtleから
+   --color-text-mutedに変えた箇所。ダークモードは元の--color-text-subtleに戻す。 */
+:root[data-theme="dark"] .draft-card-header .action-sheet-icon,
+:root[data-theme="dark"] .draft-meta,
+:root[data-theme="dark"] .draft-memo-row,
+:root[data-theme="dark"] .draft-precision,
+:root[data-theme="dark"] .draft-delete-btn,
+:root[data-theme="dark"] .unlocked-list-filter,
+:root[data-theme="dark"] .ashiato-handle,
+:root[data-theme="dark"] .ashiato-posted-at,
+:root[data-theme="dark"] .ashiato-more-btn {
+    color: var(--color-text-subtle);
 }
 input[type="checkbox"]:checked {
     border-color: var(--color-accent);
@@ -223,12 +272,25 @@ input[type="radio"] {
 }
 input[type="radio"]:checked {
     border-color: var(--color-accent-secondary);
-    background: #012e31;
+    /* var(--color-surface)のような単色で塗ると、ダイアログ側が半透明+ぼかし
+       (ガラス系UI)の場合に実際の背景と微妙に色がずれて見える(特にライト
+       モードの白は少しの差でも目立ちやすい)。塗りを持たずtransparentに
+       することで、常にその場の実際の背景がそのまま透けて見えるようにする。 */
+    background: transparent;
 }
 input[type="radio"]:checked::after {
     content: "";
     position: absolute;
-    inset: 3px;
+    /* inset:3pxのように4辺individually計算する書き方は、環境(特に画面の
+       拡大率が整数倍でない場合)によって辺ごとの丸め方がわずかに変わり、
+       中心から数px程度ずれて見えることがある。top/left:50%+transformの
+       1回の変形にまとめることで、ブラウザ側の中央寄せ計算に任せて
+       ずれにくくする(トグルスイッチのノブ(.gps-toggle-knob)と同じ手法)。 */
+    top: 50%;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    transform: translate(-50%, -50%);
     border-radius: 50%;
     background: var(--color-accent-secondary);
 }
@@ -245,6 +307,14 @@ select {
     background-size: 16px;
     border-color: var(--color-text-faint);
 }
+/* 展開時の選択肢一覧(ネイティブUIだが、多くのブラウザはoption自体の
+   background/colorは反映する)。selectを半透明にしても(.draft-precision
+   select等)、展開したリストはOS側の別レイヤーで描画されるためそのままだと
+   白背景になってしまう。ここだけは不透明な色を明示する。 */
+option {
+    background: var(--color-surface);
+    color: var(--color-text);
+}
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
@@ -256,11 +326,18 @@ button:disabled {
     cursor: not-allowed;
 }
 button.secondary {
-    background: #012e31;
-    /* 投稿者ID(.ashiato-handle)と同じ色にする。 */
-    color: var(--color-text-subtle);
+    /* ガラス系のダイアログの中では背景をそのまま透かす(不透明なダイアログの
+       中ではこれまで通り親のvar(--color-surface)がそのまま見える)。 */
+    background: transparent;
+    /* 投稿者ID(.ashiato-handle)と同じ--color-text-subtleにしていたが、
+       ライトモードでは薄すぎて読みづらいため--color-text-mutedにする
+       (ダークモードは下の:root[data-theme="dark"]の上書きで元のままにする)。 */
+    color: var(--color-text-muted);
     border-color: var(--color-text-faint);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+:root[data-theme="dark"] button.secondary {
+    color: var(--color-text-subtle);
 }
 /* :hoverはマウス等ホバー可能なポインタを持つ端末限定にする(理由は
    .leaflet-control-zoom-in:hover側の同じコメント参照)。 */
@@ -278,7 +355,7 @@ button.btn-primary {
 }
 /* 削除等、破壊的な操作の決定ボタン。 */
 button.btn-danger {
-    background: #012e31;
+    background: var(--color-surface);
     color: var(--color-danger);
     border-color: var(--color-danger);
 }
@@ -321,8 +398,15 @@ button.btn-danger {
     gap: 8px;
     padding: 8px 12px;
     border-radius: 0;
-    background: #2f3f3e;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    /* トグルカード等と同じ、ガラスの縁が光っているような見た目にする
+       (薄い半透明の塗り+背景を明るくした同系色の枠線)。 */
+    background: color-mix(in srgb, var(--color-hud-glass) 55%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--color-hud-glass-border);
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.12),
+        0 0 8px color-mix(in srgb, var(--color-hud-glass-border) 60%, transparent);
     font-size: 0.85rem;
     color: var(--color-text);
     opacity: 1;
@@ -351,7 +435,7 @@ button.btn-danger {
 .status-icon {
     flex: none;
     display: inline-flex;
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 .status-icon .icon {
     width: 18px;
@@ -403,7 +487,7 @@ button.btn-danger {
     z-index: 25;
     padding: 9px 15px; /* 2px分の枠線を足しても外周サイズが変わらないよう1px減らす */
     text-align: center;
-    background: #012e31;
+    background: var(--color-surface);
     color: var(--color-danger);
     border: 2px solid var(--color-danger);
     font-size: 0.9rem;
@@ -480,18 +564,23 @@ button.btn-danger {
 .bottom-toolbar .search-buttons button {
     flex: 1;
     white-space: nowrap;
-    /* トグルパネルの開閉ボタン(.toggle-panel-handle)と同じ影+背景+文字色に揃える。 */
-    background: #2f3f3e;
-    border: none;
+    /* トグルカード(.toggle-panel-rows)と同じ、ガラスの縁が光っているような
+       見た目にする(薄い半透明の塗り+背景を明るくした同系色の枠線)。 */
+    background: color-mix(in srgb, var(--color-hud-glass) 55%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--color-hud-glass-border);
     border-radius: 0;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-    color: var(--color-accent);
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.12),
+        0 0 8px color-mix(in srgb, var(--color-hud-glass-border) 60%, transparent);
+    color: var(--color-accent-text);
 }
 /* :hoverはマウス等ホバー可能なポインタを持つ端末限定にする(理由は
    .leaflet-control-zoom-in:hover側の同じコメント参照)。 */
 @media (hover: hover) {
     .bottom-toolbar .search-buttons button:hover {
-        background: var(--color-surface-hover);
+        background: color-mix(in srgb, var(--color-hud-glass) 80%, transparent);
     }
 }
 .toolbar-btn {
@@ -531,17 +620,26 @@ button.btn-danger {
     display: flex;
     align-items: center;
     justify-content: center;
-    /* 塗り(背景)を黄色にし、文字/アイコンは沈まないよう濃色にする。 */
-    background: var(--color-accent);
-    color: var(--color-accent-contrast);
+    /* +/-ボタン等と同じ、ガラスの縁が光っているような見た目にする
+       (薄い半透明の黄色の塗り+不透明な枠線・アイコン)。
+       ライトモードは白背景に対して薄すぎたため濃いめにしている
+       (ダークモード側は:root[data-theme="dark"] .menu-fabで元の22%に戻す)。 */
+    background: color-mix(in srgb, var(--color-accent) 32%, transparent);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid var(--color-accent);
+    color: var(--color-accent-text);
     /* 影に加えて、同じ黄色のごく控えめなグローを添える。 */
     box-shadow:
         0 1px 4px rgba(0, 0, 0, 0.18),
         0 0 14px color-mix(in srgb, var(--color-accent) 55%, transparent);
     transition: transform 0.1s ease, background 0.1s ease, box-shadow 0.1s ease;
 }
+:root[data-theme="dark"] .menu-fab {
+    background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
 .menu-fab:active {
-    background: var(--color-accent-pressed);
+    background: color-mix(in srgb, var(--color-accent) 40%, transparent);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     transform: scale(0.92);
 }
@@ -597,12 +695,21 @@ button.btn-danger {
     bottom: calc(100% + 6px);
     top: auto;
     right: 0;
-    background: #2f3f3e;
-    border: none;
+    /* トグルカード(.toggle-panel-rows)と同じ、ガラスの縁が光っているような
+       見た目にする(薄い半透明の塗り+背景を明るくした同系色の枠線)。 */
+    background: color-mix(in srgb, var(--color-hud-glass) 55%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--color-hud-glass-border);
     border-radius: 0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.1),
+        0 0 8px color-mix(in srgb, var(--color-hud-glass-border) 60%, transparent);
     display: grid;
     min-width: 230px;
+    /* 画面幅の狭い端末でコンテンツ側の要求幅がmin-widthを超えても、
+       ドロップダウン自体が画面外にはみ出さないようにする保険。 */
+    max-width: calc(100vw - 24px);
     overflow: hidden;
     z-index: 30;
     /* menu-fabの上に、フェード+わずかに下からせり上がる形で開く。 */
@@ -642,13 +749,14 @@ button.btn-danger {
     border: none;
     border-radius: 0;
     text-align: left;
-    background: #2f3f3e;
+    /* .menu-dropdown自体の半透明+ぼかし背景をそのまま透かす。 */
+    background: transparent;
     /* 項目名はテーマカラーにする。「あしあとを投稿」(.accent)も
        文字色はこれと揃える(太字だけで区別する)。 */
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 .menu-dropdown button:not(.danger) .menu-item-icon {
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 .menu-dropdown button.danger {
     color: var(--color-danger); /* .iconのstroke=currentColorにも効く */
@@ -660,7 +768,8 @@ button.btn-danger {
    .leaflet-control-zoom-in:hover側の同じコメント参照)。 */
 @media (hover: hover) {
     .menu-dropdown button:hover {
-        background: var(--color-surface-hover);
+        /* 「最新を確認」等(.bottom-toolbar .search-buttons button)と同じホバー色。 */
+        background: color-mix(in srgb, var(--color-hud-glass) 80%, transparent);
     }
     .menu-dropdown button.danger:hover {
         background: var(--color-danger-hover-bg);
@@ -668,10 +777,12 @@ button.btn-danger {
 }
 /* drop-shadowをボタン自体に掛けると、不透明な背景(border-box全体)の輪郭が
    光ってしまい隣の項目との境界にまで滲む。背景を持たないアイコン・ラベル
-   側にだけ掛けることで、文字・アイコンの見えている部分だけにグローを添える。 */
-.menu-dropdown button.accent .menu-item-icon,
-.menu-dropdown button.accent .menu-item-label {
-    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-accent) 65%, transparent));
+   側にだけ掛けることで、文字・アイコンの見えている部分だけにグローを添える。
+   ライトモードは--color-accent-textが濃い青緑(#012e31)で、明るい色の
+   グローのように光って見えず、暗い滲みにしか見えないため対象外にする。 */
+:root[data-theme="dark"] .menu-dropdown button.accent .menu-item-icon,
+:root[data-theme="dark"] .menu-dropdown button.accent .menu-item-label {
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-accent-text) 65%, transparent));
 }
 .menu-item-icon {
     display: inline-flex;
@@ -680,11 +791,14 @@ button.btn-danger {
 .menu-item-label {
     flex: 1;
     white-space: nowrap;
-}
-.menu-dropdown button .badge-dot {
-    position: static;
-    flex: none;
-    border: none;
+    /* flexアイテムの既定min-width:autoは、nowrapのテキストだと「そのテキスト
+       全体の幅」になり、画面幅やフォント設定によっては行の合計幅が
+       .menu-dropdownの幅を超えて、右端の件数バッジ(.menu-item-count)が
+       はみ出す原因になる。min-width:0で縮小を許可し、溢れる場合は
+       省略記号で切り詰める。 */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 /* メールの受信トレイ風の件数バッジ(下書きの総数・見つけたあしあとの未読数)。
    .menu-item-labelがflex:1で幅を埋めるので、ラベルの右側に自然と収まる。 */
@@ -699,25 +813,32 @@ button.btn-danger {
     justify-content: center;
     font-size: 0.75rem;
     font-weight: 700;
-    background: var(--color-surface-sunken);
-    color: var(--color-text-muted);
+    /* ガラス系になったメニュー背景の上だと、元の--color-surface-sunken(暗い塗り
+       だけ)+--color-text-mutedの組み合わせは沈んで見えづらいため、枠線を足し
+       文字も一段明るい色にする。 */
+    background: color-mix(in srgb, var(--color-text-muted) 18%, transparent);
+    border: 1px solid var(--color-text-muted);
+    color: var(--color-text-subtle);
 }
 .menu-item-count[hidden] {
     display: none;
 }
-/* 未読(見つけたあしあと)は他と見分けが付くよう、テーマカラーで強調する。 */
+/* 未読(見つけたあしあと)は他と見分けが付くよう、テーマカラーで強調する。
+   .menu-fabと同じcolor-mixベースのグローを添えて、より目立たせる。 */
 .menu-item-count.unread {
     background: var(--color-accent);
+    border: none;
     color: var(--color-accent-contrast);
+    box-shadow: 0 0 8px 1px color-mix(in srgb, var(--color-accent) 55%, transparent);
 }
 /* 「投稿する」等の主操作ボタン(button.btn-primary)と同じ配色(テーマカラーの
    塗りつぶし+コントラスト文字色)にして、現在の接続先だと分かりやすくする。 */
 .menu-current-host {
     margin: 0;
-    padding: 10px 14px;
+    padding: 2px 14px;
     font-size: 0.75rem;
-    /* テーマカラーで塗りつぶし、文字は沈まないよう濃色にする
-       (.menu-fabと同じ「塗り=黄色、文字=濃色」の組み合わせ)。 */
+    font-weight: 700;
+    /* 元のスタイル(黄色の塗りつぶし+濃色文字、ガラス感なし)に戻したもの。 */
     background: var(--color-accent);
     color: var(--color-accent-contrast);
     overflow-wrap: anywhere;
@@ -733,7 +854,7 @@ dialog#settingsDialog {
        だけだと、アプリ独自のdata-theme切り替えには反応せず常に白いままになる
        (canvas色は"ブラウザ自体"のダークモード設定に従うもので、このアプリの
        テーマ設定とは別物のため)。明示的に背景色を指定する。 */
-    background: #012e31;
+    background: var(--color-surface);
     color: var(--color-text);
     border: none;
     border-radius: 0px;
@@ -831,7 +952,7 @@ dialog#instanceDialog h2 {
 }
 /* 「情報」ダイアログ(ashiatoActionDialog)。見出しの代わりに、情報行+詳細+
    アクション一覧(マップで表示する/SNSを開く/削除する)を1つのアクションシートに
-   まとめる。区切り線で仕切った縦積み形式で、各行の右端にアイコンを揃える。 */
+   まとめる。区切り線で仕切った縦積み形式で、各行の左端にアイコンを揃える。 */
 .action-sheet {
     display: grid;
 }
@@ -856,7 +977,9 @@ button.action-sheet-row {
     width: 100%;
     border: none;
     border-radius: 0;
-    background: #012e31;
+    /* 親ダイアログの背景(半透明+ぼかし)をそのまま透かす。不透明な
+       ダイアログの中では、これまで通り親のvar(--color-surface)がそのまま見える。 */
+    background: transparent;
     text-align: left;
     font: inherit;
 }
@@ -887,7 +1010,9 @@ button.action-sheet-row {
     height: 18px;
 }
 .action-sheet-info {
-    padding-bottom: 6px;
+    /* 見出し(「情報」)とこの下の詳細一覧、および次のアクション一覧との間に
+       少し余裕を持たせる。 */
+    padding-bottom: 10px;
 }
 /* 「投稿者/投稿/発見/当たり判定エリア」の詳細。ラベル列+値列の2カラムで、
    コロン(：)なしでも読み取りやすいように揃える。 */
@@ -895,9 +1020,11 @@ button.action-sheet-row {
     display: grid;
     grid-template-columns: auto 1fr;
     column-gap: 12px;
-    row-gap: 6px;
+    row-gap: 8px;
     margin: 0;
-    padding: 2px 4px 0;
+    /* 左は見出し(「情報」)のテキスト開始位置(行のpadding-left 4px+アイコン18px+
+       gap12px=34px)に揃える。 */
+    padding: 4px 4px 0 34px;
     font-size: 0.85rem;
 }
 .ashiato-info-details dt {
@@ -906,7 +1033,8 @@ button.action-sheet-row {
 }
 .ashiato-info-details dd {
     margin: 0;
-    color: var(--color-text);
+    /* 他の説明文・地の文(.dialog-message等)と同じ--color-text-bodyにする。 */
+    color: var(--color-text-body);
     overflow-wrap: anywhere;
 }
 /* settingsDialog(dialog#settingsDialog/.settings-dialog-body)と同じ理由・
@@ -950,6 +1078,7 @@ dialog#composeDialog > h2 {
        (下のdialog#aboutDialog .dialog-close-x参照)。 */
     padding: 9px 44px 9px 16px;
     line-height: 20px;
+    /* 元のスタイル(黄色の塗りつぶし+濃色文字、ガラス感なし)に戻したもの。 */
     background: var(--color-accent);
     color: var(--color-accent-contrast);
     /* 「利用規約」等の折りたたみ見出し(.settings-collapsible-toggle、
@@ -1128,7 +1257,7 @@ dialog#aboutDialog p {
     margin-bottom: 4px;
 }
 .markdown-doc a {
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 .markdown-doc > :last-child {
     margin-bottom: 0;
@@ -1153,14 +1282,16 @@ dialog#aboutDialog p {
     gap: 8px;
     padding: 10px 12px;
     border: none;
-    background: var(--color-surface-alt);
+    /* 親ダイアログ(半透明+ぼかし)を透かしつつ、周りとの区切りが分かるよう
+       元の--color-surface-altを半透明にして残す。 */
+    background: color-mix(in srgb, var(--color-surface-alt) 55%, transparent);
     border-radius: 0;
     box-shadow: none;
     text-align: left;
     font: inherit;
     /* アイコン(.action-sheet-icon)・ラベルとも、テーマカラー(黄色)にする
        (日時(.terms-notice-date)は自前の色を持つため対象外)。 */
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 /* :hoverはマウス等ホバー可能なポインタを持つ端末限定にする(理由は
    .leaflet-control-zoom-in:hover側の同じコメント参照)。 */
@@ -1266,16 +1397,15 @@ dialog#instanceDialog label {
     gap: 6px;
     margin: 0;
     font-size: 0.85rem;
-    /* 未選択時は他のチェックボックス/ラジオボタンと同じ色(投稿者IDと同じ
-       --color-text-subtle)にする。 */
-    color: var(--color-text-subtle);
+    /* 未選択時は他のチェックボックス/ラジオボタンと同じ色にする。 */
+    color: var(--color-text-muted);
     cursor: pointer;
     white-space: nowrap;
 }
 /* 選択中(「未読のみ」ON)はテーマカラーにして目立たせる
    (.precision-fieldset label等と同じパターン)。 */
 .unlocked-list-filter:has(input:checked) {
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 .unlocked-list-filter input {
     min-height: auto;
@@ -1297,6 +1427,8 @@ dialog#instanceDialog label {
     background-position: right 6px center;
     background-size: 14px;
     font-size: 0.85rem;
+    /* ダイアログ自体の半透明+ぼかし背景をそのまま透かす。 */
+    background-color: transparent;
 }
 
 .unlocked-list {
@@ -1444,12 +1576,12 @@ dialog#instanceDialog label {
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.8rem;
-    color: var(--color-text-subtle);
+    color: var(--color-text-muted);
 }
 .ashiato-posted-at {
     flex: none;
     font-size: 0.78rem;
-    color: var(--color-text-subtle);
+    color: var(--color-text-muted);
     white-space: nowrap;
 }
 .ashiato-row-footer {
@@ -1475,7 +1607,7 @@ dialog#instanceDialog label {
     box-shadow: none;
     background: transparent;
     /* 投稿者ID(.ashiato-handle)と同じ色にする。 */
-    color: var(--color-text-subtle);
+    color: var(--color-text-muted);
 }
 /* :hoverはマウス等ホバー可能なポインタを持つ端末限定にする(理由は
    .leaflet-control-zoom-in:hover側の同じコメント参照)。 */
@@ -1758,11 +1890,16 @@ dialog#mediaLightbox::backdrop {
     justify-content: center;
     /* leaflet.cssの.leaflet-bar a { background-color: #fff; }
        (詳細度0,1,1)より、このセレクタ(0,3,0)の方が高いため確実に上書きできる。
-       fill(背景)とstroke(アイコン色)を入れ替えて、黄色地に濃色アイコンの
-       塗りつぶしボタンにする。 */
-    background: var(--color-accent);
-    color: var(--color-accent-contrast);
-    border: 2px solid var(--color-accent);
+       あしあとセルの矩形(薄い塗り+内側に不透明な枠線)と同じ考え方で、
+       塗りは薄い半透明、枠線とアイコンは不透明なテーマカラーにすることで
+       縁だけがガラスのように光って見えるようにしている。ライトモードは
+       白背景に対して薄すぎたため濃いめにする(ダークモード側は下の
+       :root[data-theme="dark"]の上書きで元の22%に戻す)。 */
+    background: color-mix(in srgb, var(--color-accent) 32%, transparent);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: var(--color-accent-text);
+    border: 1px solid var(--color-accent);
     /* .menu-fabと同じ考え方で、ごく控えめなグローを添える。 */
     box-shadow:
         0 1px 3px rgba(0, 0, 0, 0.12),
@@ -1772,13 +1909,17 @@ dialog#mediaLightbox::backdrop {
        明示的に0で上書きしないと四隅だけ塗り残しが出る。 */
     border-radius: 0;
 }
+:root[data-theme="dark"] .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-in,
+:root[data-theme="dark"] .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-out {
+    background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
 /* :hoverはマウス等ホバー可能なポインタを持つ端末限定にする。タッチ端末では
    タップ後に指が離れても:hoverが疑似的に残り続け(次にどこか別の場所を
    タップするまで色が戻らない)、押しっぱなしに見えてしまうため。 */
 @media (hover: hover) {
     .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-in:hover,
     .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-out:hover {
-        background: var(--color-accent-pressed);
+        background: color-mix(in srgb, var(--color-accent) 40%, transparent);
     }
 }
 .leaflet-control-zoom .icon {
@@ -1843,20 +1984,28 @@ dialog#mediaLightbox::backdrop {
     justify-content: center;
     width: 28px;
     height: 80px;
-    /* +/-ボタン(.leaflet-control-zoom)と同じ色使いにする(黄色地に濃色アイコン)。 */
-    border: 2px solid var(--color-accent);
+    /* +/-ボタン(.leaflet-control-zoom)と同じガラスの縁が光っているような
+       見た目にする(薄い半透明の塗り+不透明な枠線・アイコン)。ライトモードは
+       白背景に対して薄すぎたため濃いめにする(ダークモード側は下の
+       :root[data-theme="dark"]の上書きで元の22%に戻す)。 */
+    border: 1px solid var(--color-accent);
     border-radius: 0px;
-    background: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 32%, transparent);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     box-shadow:
         0 1px 3px rgba(0, 0, 0, 0.12),
         0 0 8px color-mix(in srgb, var(--color-accent) 40%, transparent);
-    color: var(--color-accent-contrast);
+    color: var(--color-accent-text);
+}
+:root[data-theme="dark"] .toggle-panel-handle {
+    background: color-mix(in srgb, var(--color-accent) 22%, transparent);
 }
 /* :hoverはマウス等ホバー可能なポインタを持つ端末限定にする(理由は
    .leaflet-control-zoom-in:hover側の同じコメント参照)。 */
 @media (hover: hover) {
     .toggle-panel-handle:hover {
-        background: var(--color-accent-pressed);
+        background: color-mix(in srgb, var(--color-accent) 40%, transparent);
     }
 }
 .toggle-panel-handle-icon .icon {
@@ -1876,13 +2025,22 @@ dialog#mediaLightbox::backdrop {
     position: absolute;
     top: 0;
     right: calc(100% + 6px);
-    background: #2f3f3e;
+    /* +/-ボタン・トグル開閉ボタンと同じ、ガラスの縁が光っているような見た目に
+       する(薄い半透明の塗り+不透明な枠線)。塗りを薄くする分、背後の地図が
+       透けても文字が読めるようbackdrop-filterでぼかす。
+       枠線はテーマカラー(黄色)ではなく、背景(var(--color-hud-glass))を
+       明るくした同系色(var(--color-hud-glass-border))にしている。 */
+    background: color-mix(in srgb, var(--color-hud-glass) 55%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     /* テーマカラーを子要素(行のラベル文字等)にも継承させる(表示レイヤーの
        チップは独自の--chip-colorを使うため影響されない)。 */
-    color: var(--color-accent);
-    border: none;
+    color: var(--color-accent-text);
+    border: 1px solid var(--color-hud-glass-border);
     border-radius: 0px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.12),
+        0 0 8px color-mix(in srgb, var(--color-hud-glass-border) 60%, transparent);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -1922,7 +2080,7 @@ dialog#mediaLightbox::backdrop {
        グローバルなbutton{color:var(--color-text)}が直接効いてしまい、
        .toggle-panel-rows側のcolor指定が継承されない(「表示レイヤー」の
        行は<div>なので継承されて効いていた)。ここで明示的に上書きする。 */
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 .toggle-panel-row:not(:last-child) {
     border-bottom: none;
@@ -1953,7 +2111,7 @@ dialog#mediaLightbox::backdrop {
     border: none;
     background: transparent;
     box-shadow: none;
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 .toggle-info-btn .icon {
     width: 16px;
@@ -1963,28 +2121,40 @@ dialog#mediaLightbox::backdrop {
     width: 34px;
     height: 20px;
     border-radius: 0px;
-    background: #4b8869;
+    /* 他のガラス系UIと同じ、薄い半透明の塗り+不透明な枠線にする。 */
+    background: color-mix(in srgb, var(--color-toggle-off) 30%, transparent);
+    border: 1px solid var(--color-toggle-off);
     position: relative;
     flex: none;
-    transition: background 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease;
 }
 .gps-toggle-knob {
     position: absolute;
-    top: 2px;
-    left: 2px;
+    /* top:1px等の固定px指定だと、トラックの枠線を足したときの計算がずれて
+       中央から数pxとはいえ視覚的にずれて見えることがあるため、
+       top:50%+transform:translateY(-50%)でブラウザに正確な垂直中央を
+       計算させる(横方向はON/OFFで左右に動かす都合上、leftの固定値のまま)。 */
+    top: 50%;
+    left: 1px;
     width: 16px;
     height: 16px;
     border-radius: 0%;
-    background: #012e31;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    transition: transform 0.15s ease;
+    background: var(--color-surface);
+    /* トラックが半透明になり地色に埋もれやすくなったため、トラックの枠線色と
+       同じ色でノブにも縁取りを付けて可動部だとわかるようにする。 */
+    border: 1px solid var(--color-toggle-off);
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
+    transform: translateY(-50%);
+    transition: transform 0.15s ease, border-color 0.15s ease;
 }
 .toggle-panel-row[aria-pressed="true"] .gps-toggle-track {
     /* ラジオボタンと同じ色に揃える。 */
-    background: var(--color-accent-secondary);
+    background: color-mix(in srgb, var(--color-accent-secondary) 30%, transparent);
+    border-color: var(--color-accent-secondary);
 }
 .toggle-panel-row[aria-pressed="true"] .gps-toggle-knob {
-    transform: translateX(14px);
+    transform: translateY(-50%) translateX(14px);
+    border-color: var(--color-accent-secondary);
 }
 /* 「現在地」(GPS)・「24H以内」・「既読エリアを隠す」がONのときだけ、
    少し発光している感じを出す(.menu-fabと同じcolor-mixベースのグロー)。 */
@@ -2025,7 +2195,7 @@ dialog#mediaLightbox::backdrop {
     /* OFF状態でも「これは何色のレイヤーか」が分かるよう、塗りつぶしではなく
        自身の色(--chip-color)の枠線で表示する。 */
     border: 1px solid var(--chip-color, #999);
-    background: #012e31;
+    background: var(--color-surface);
     color: var(--chip-color, #999);
     font-size: 0.72rem;
     font-weight: 600;
@@ -2042,7 +2212,7 @@ dialog#mediaLightbox::backdrop {
 .precision-filter-chip[aria-pressed="true"] {
     /* フルの彩度で塗りつぶすと派手すぎるため、背景色(--color-surface)を
        混ぜて少し落ち着いたトーンにする(枠線は引き続きフルの--chip-color)。 */
-    background: color-mix(in srgb, var(--chip-color, #999) 55%, #012e31);
+    background: color-mix(in srgb, var(--chip-color, #999) 55%, var(--color-surface));
     color: var(--color-accent-contrast);
 }
 
@@ -2061,10 +2231,20 @@ dialog#mediaLightbox::backdrop {
    leaflet.css上書きと同じ理由)。 */
 #map .leaflet-popup-content-wrapper,
 #map .leaflet-popup-tip {
-    background: #012e31;
+    /* 他のガラス系UIと同じ、薄い半透明の塗りにする。 */
+    background: color-mix(in srgb, var(--color-surface) 70%, transparent);
     color: var(--color-text-strong);
     /* leaflet.cssの既定border-radius:12pxを、アプリ全体の角丸廃止方針に合わせて解除する。 */
     border-radius: 0;
+}
+/* tip(吹き出しの先端)は45度回転した正方形のため、枠線を付けると
+   本体(content-wrapper)の枠線と繋がらずひし形の輪郭が浮いて見える。
+   本体側にだけ、縁が光っているような枠線+ぼかしを付ける。 */
+#map .leaflet-popup-content-wrapper {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--color-hud-glass-border);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--color-hud-glass-border) 60%, transparent);
 }
 /* 吹き出しの本体(content-wrapper)を、下端(=tip、マーカー位置に固定)を
    起点に伸び上がるアニメーションにする。tipは本体の下端に張り付いているため
@@ -2256,7 +2436,7 @@ dialog#mediaLightbox::backdrop {
     border: none;
     background: none;
     font-size: 0.75rem;
-    color: var(--color-accent);
+    color: var(--color-accent-text);
     text-align: left;
     cursor: pointer;
 }
@@ -2268,10 +2448,10 @@ dialog#mediaLightbox::backdrop {
    簡易表示(プレーンテキスト化)では使われない。main.ts:appendMfmNodeFull参照。 */
 .mfm-mention,
 .mfm-hashtag {
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 .mfm-link {
-    color: var(--color-accent);
+    color: var(--color-accent-text);
     text-decoration: underline;
 }
 .mfm-code {
@@ -2519,7 +2699,7 @@ dialog#mediaLightbox::backdrop {
     margin: 0;
     font-size: 2.2rem;
     /* グラデーションなし、テーマカラー(黄色)の単色。 */
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 .splash .subtitle {
     font-size: 1rem;
@@ -2563,12 +2743,18 @@ dialog#mediaLightbox::backdrop {
     align-items: center;
     gap: 6px;
     font-size: 0.9rem;
-    /* 未選択時は「見つけたあしあと」の投稿者ID(.ashiato-handle)と同じ色にする。 */
+    /* 未選択時は「見つけたあしあと」の投稿者ID(.ashiato-handle)と同じ
+       --color-text-subtleにしていたが、ライトモードでは薄すぎて読みづらいため
+       --color-text-muted(legendと同じ濃さ)にする(ダークモードは下の
+       :root[data-theme="dark"]の上書きで元のままにする)。 */
+    color: var(--color-text-muted);
+}
+:root[data-theme="dark"] .precision-fieldset label {
     color: var(--color-text-subtle);
 }
 /* 選択中の「約○○km」だけテーマカラーにして目立たせる。 */
 .precision-fieldset label:has(input:checked) {
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 
 /* 投稿UIのメモ欄(「どこで投稿しようとしたか」等、あとで見返すための覚え書き)。 */
@@ -2585,6 +2771,8 @@ dialog#mediaLightbox::backdrop {
     line-height: 1.4;
     /* 「エリアサイズ」の囲み線(.precision-fieldset)と同じ色にする。 */
     border-color: var(--color-text-muted);
+    /* ダイアログ自体の半透明+ぼかし背景をそのまま透かす。 */
+    background: transparent;
 }
 
 /* 設定ダイアログ内のラジオ選択。precision-fieldsetと違い選択肢の文言が長いため、
@@ -2612,20 +2800,29 @@ dialog#mediaLightbox::backdrop {
     align-items: center;
     gap: 8px;
     font-size: 0.9rem;
-    /* 未選択時は「見つけたあしあと」の投稿者ID(.ashiato-handle)と同じ色にする。 */
+    /* 未選択時は「見つけたあしあと」の投稿者ID(.ashiato-handle)と同じ
+       --color-text-subtleにしていたが、ライトモードでは薄すぎて読みづらいため
+       --color-text-muted(legendと同じ濃さ)にする(ダークモードは下の
+       :root[data-theme="dark"]の上書きで元のままにする)。 */
+    color: var(--color-text-muted);
+}
+:root[data-theme="dark"] .settings-fieldset label {
     color: var(--color-text-subtle);
 }
 /* 選択中の選択肢(テーマ/メディアの表示のラジオボタン等)だけテーマカラーに
    して目立たせる(.precision-fieldset labelと同じパターン)。 */
 .settings-fieldset label:has(input:checked) {
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
-/* 設定ダイアログ下部の操作一覧(インスタンス変更/検索キャッシュを消す/リセット)。
-   「情報」ダイアログ(ashiatoActionDialog)と同じaction-sheetを再利用するが、
-   こちらはアイコンを左揃えにする(HTML側もアイコン→テキストの順)。
-   項目間の間隔は.settings-dialog-body側のgapで揃えるため、ここでは
-   margin-topを持たない。 */
-dialog#settingsDialog .action-sheet-row {
+/* 設定ダイアログ下部の操作一覧(インスタンス変更/検索キャッシュを消す/リセット)、
+   および「情報」ダイアログ(ashiatoActionDialog、マップで表示する/SNSで開く/削除)。
+   どちらもアイコンを左揃えにする(HTML側もアイコン→テキストの順)。
+   .action-sheet-row既定のjustify-content:space-betweenのままだと、アイコンが
+   左端、テキストが右端に離れて表示されてしまうため、flex-startで詰める。
+   settingsDialog側は項目間の間隔を.settings-dialog-body側のgapで揃えるため、
+   ここでは margin-topを持たない。 */
+dialog#settingsDialog .action-sheet-row,
+dialog#ashiatoActionDialog .action-sheet-row {
     justify-content: flex-start;
 }
 /* 「検索キャッシュを消す」→「リセット」のようなグループ内の行間が、
@@ -2638,10 +2835,10 @@ dialog#settingsDialog .action-sheet-row:not(:first-child) {
    項目名と同じくテーマカラー(--color-accent)にする。リセット(.danger)は
    破壊的操作の警告色のままにするため対象外。 */
 dialog#settingsDialog .action-sheet-row:not(.danger) {
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 dialog#settingsDialog .action-sheet-row:not(.danger) .action-sheet-icon {
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 
 /* 「メディアの表示」セクション。選択肢が3つあり縦に長いため、既定では
@@ -2658,11 +2855,15 @@ dialog#settingsDialog .action-sheet-row:not(.danger) .action-sheet-icon {
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-    padding: 4px;
+    /* 横方向のpaddingは持たない: 親の.settings-collapsible(.settings-dialog-body側)が
+       既に左右4pxのpaddingを持っており、ここにも横paddingを足すと
+       .action-sheet-row(横paddingは自分の4pxだけ)よりアイコンの開始位置が
+       右にずれてしまう。 */
+    padding: 4px 0;
     font: inherit;
     font-weight: 600;
     /* 項目名はテーマカラー(--color-accent)にする(「設定」「Ashi@について」共通)。 */
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 .settings-collapsible-toggle-label {
     display: flex;
@@ -2670,7 +2871,7 @@ dialog#settingsDialog .action-sheet-row:not(.danger) .action-sheet-icon {
     gap: 12px;
 }
 .settings-collapsible-toggle .action-sheet-icon {
-    color: var(--color-accent);
+    color: var(--color-accent-text);
 }
 .settings-collapsible-toggle-icon .icon {
     width: 16px;
@@ -2703,7 +2904,7 @@ dialog#unlockedListDialog,
 dialog#draftListDialog {
     /* dialog#aboutDialog等と同じ理由(UA既定背景はcanvas色でこのアプリの
        テーマ設定に追従しない)で明示指定する。 */
-    background: #012e31;
+    background: var(--color-surface);
     color: var(--color-text);
     position: fixed; /* 子要素の.dialog-close-xの基準にもなる */
     top: auto;
@@ -2732,28 +2933,26 @@ dialog#draftListDialog {
 /* メニューから直接開く主要な5つのダイアログ(Ashi@について/設定/下書き/
    見つけたあしあと/あしあとを投稿)だけ、外枠線を黄色にする
    (instanceDialog/confirmDialog/ashiatoActionDialog等は対象外)。
-   上のborder:noneのグループルールより後に書いて上書きする。 */
+   上のborder:noneのグループルールより後に書いて上書きする。
+   他のガラス系UIと同じく、塗りを半透明+ぼかしにして縁(枠線)が
+   光っているような見た目にする。 */
 dialog#aboutDialog,
 dialog#settingsDialog,
 dialog#draftListDialog,
 dialog#unlockedListDialog,
 dialog#composeDialog {
-    border: 2px solid var(--color-accent);
+    background: color-mix(in srgb, var(--color-surface) 78%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    /* メニュー(.menu-dropdown)と同じ枠線・グロー(太さ・色とも)にする。 */
+    border: 1px solid var(--color-hud-glass-border);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--color-hud-glass-border) 60%, transparent);
 }
-/* aboutDialog/settingsDialogは見出し(h2)自体がタイトルバー風の帯
-   (--color-accent塗りつぶし)になっているため、この上に同じ色のborder-topまで
-   乗ると、境目が同化して上辺だけ帯より太く見えてしまう。上辺だけ枠線を外し、
-   帯自身を上辺として扱う(左右・下辺は他のダイアログと同じ枠線のまま残す)。
-   unlockedListDialog/draftListDialogも、摘まむバーをタイトルバーへ統合した
-   ため同じ理由で対象に加える。composeDialogは摘まめないが、見た目は
-   同じく帯が真の上端まで届く構成のため、同じ理由でborder-topを外す。 */
-dialog#aboutDialog,
-dialog#settingsDialog,
-dialog#unlockedListDialog,
-dialog#draftListDialog,
-dialog#composeDialog {
-    border-top: none;
-}
+/* 以前は見出し(h2)がダイアログの枠線と同じ黄色の帯だったため、border-topまで
+   同じ黄色だと境目が同化して上辺だけ帯より太く見えてしまい、border-topを
+   外していた。今はダイアログの外枠がメニューと同じグレー系
+   (var(--color-hud-glass-border))、帯(h2)は黄色のガラスと色が分かれたため、
+   この問題は起きない。外枠は上辺も含め四辺ともそのまま表示する。 */
 dialog#composeDialog[open],
 dialog#unlockedListDialog[open],
 dialog#draftListDialog[open] {
@@ -2884,6 +3083,12 @@ dialog#draftListDialog[open] {
     border-radius: 0%;
     background: transparent; /* ホバー/フォーカス時だけ丸背景を出す */
     box-shadow: none;
+    /* HTML上はこのボタンの方がタイトルバー(h2)より先(上)にあるが、h2に
+       backdrop-filterを付けた(ガラス化)ことでh2がposition:absoluteの
+       positioned要素と同じ重ね合わせレイヤーに昇格し、DOM順で後にある
+       h2がこのボタンの上に描画される(=タップが effectively h2に奪われる)
+       ようになってしまった。z-indexで明示的に最前面に固定して解消する。 */
+    z-index: 1;
     color: var(--color-text-muted);
     display: flex;
     align-items: center;
@@ -2907,7 +3112,10 @@ dialog#draftListDialog[open] {
 .draft-list {
     list-style: none;
     margin: 0;
-    padding: 0 6px 0 0; /* スクロールバーが投稿内容に被らないよう余白を確保 */
+    /* スクロールバー避けの余白は、下のscrollbar-gutter: stable both-edgesの
+       reserveだけに任せる(手動paddingを重ねるとPCで実スクロールバー幅+
+       手動分が二重に効き、左右の余白が広すぎになる)。 */
+    padding: 0;
     display: grid;
     /* align-contentの既定(normal)はgridではstretch相当になり、件数が少ないと
        残りの高さを各行(li)に均等配分してカードが縦に間延びしてしまう。
@@ -2917,7 +3125,11 @@ dialog#draftListDialog[open] {
     flex: 1; /* ダイアログ(flex column)内で残りの高さいっぱいに広がる */
     min-height: 0; /* flexアイテムの既定min-height:autoによる縮小阻害を防ぐ */
     overflow-y: auto;
-    scrollbar-gutter: stable;
+    /* PC(実スクロールバー)では、stable単体だと右にだけスクロールバー分の
+       幅が確保され、上のpaddingを左右対称にしても右だけ余白が広く見える
+       (モバイルはオーバーレイスクロールバーで幅がほぼ0のため気づかなかった)。
+       both-edgesで左右対称にreserveする(モバイルでは幅が0なので影響なし)。 */
+    scrollbar-gutter: stable both-edges;
 }
 .draft-list li {
     border: 1px solid var(--color-text-faint);
@@ -2943,7 +3155,7 @@ dialog#draftListDialog[open] {
     flex-wrap: wrap;
 }
 .draft-card-header .action-sheet-icon {
-    color: var(--color-text-subtle);
+    color: var(--color-text-muted);
     align-self: center;
 }
 .draft-place {
@@ -2957,7 +3169,7 @@ dialog#draftListDialog[open] {
     gap: 4px;
     margin: 0;
     font-size: 0.8rem;
-    color: var(--color-text-subtle);
+    color: var(--color-text-muted);
 }
 .draft-meta .icon {
     width: 14px;
@@ -2970,7 +3182,7 @@ dialog#draftListDialog[open] {
     display: flex;
     align-items: flex-start;
     gap: 6px;
-    color: var(--color-text-subtle);
+    color: var(--color-text-muted);
 }
 .draft-memo-row .icon {
     width: 16px;
@@ -2990,6 +3202,8 @@ dialog#draftListDialog[open] {
     line-height: 1.4;
     /* 「エリアサイズ」の囲み線(.precision-fieldset)と同じ色にする。 */
     border-color: var(--color-text-muted);
+    /* ダイアログ自体の半透明+ぼかし背景をそのまま透かす。 */
+    background: transparent;
 }
 /* 精度セレクトと「投稿する」を同じ行に並べる。精度は他の入力欄と揃った
    四角いボックスのままだとカード内で浮いて見えるため、ラベルアイコン付きの
@@ -3007,7 +3221,7 @@ dialog#draftListDialog[open] {
     align-items: center;
     gap: 6px;
     flex: none;
-    color: var(--color-text-subtle);
+    color: var(--color-text-muted);
 }
 .draft-precision .icon {
     width: 16px;
@@ -3022,6 +3236,9 @@ dialog#draftListDialog[open] {
     background-size: 14px;
     font-size: 0.85rem;
     border-radius: 0;
+    /* ダイアログ自体の半透明+ぼかし背景をそのまま透かす(background-imageの
+       矢印は上のbackground-position/-size指定を維持するため、background-colorだけ変える)。 */
+    background-color: transparent;
 }
 /* 「あしあとを投稿」の投稿ボタン(#composePost)と横幅を揃える。composePostは
    dialog#composeDialogの中で.dialog-actions(gap:10px)内の2つのbutton
@@ -3062,13 +3279,13 @@ dialog#draftListDialog[open] {
     box-shadow: none;
     background: transparent;
     /* 下書きカードの他のアイコン(地名・日時・精度)と同じ色にする。 */
-    color: var(--color-text-subtle);
+    color: var(--color-text-muted);
 }
 /* :hoverはマウス等ホバー可能なポインタを持つ端末限定にする(理由は
    .leaflet-control-zoom-in:hover側の同じコメント参照)。 */
 @media (hover: hover) {
     .draft-delete-btn:hover {
-        background: rgba(198, 40, 40, 0.08);
+        background: color-mix(in srgb, var(--color-danger) 8%, transparent);
         color: var(--color-danger);
     }
 }
@@ -3094,6 +3311,20 @@ dialog#draftListDialog[open] {
     transform: translate(-50%, -50%);
     font:
         10px system-ui,
+        sans-serif;
+    color: var(--color-text-subtle);
+    white-space: nowrap;
+    text-shadow:
+        0 0 3px var(--color-map-label-halo),
+        0 0 3px var(--color-map-label-halo);
+}
+/* 駅名ラベル。駅の●(map.ts: STATION_RADIUS)に重ならないよう、中心ではなく
+   右横に寄せて表示する。 */
+.station-label {
+    display: inline-block;
+    transform: translate(6px, -50%);
+    font:
+        9px system-ui,
         sans-serif;
     color: var(--color-text-subtle);
     white-space: nowrap;

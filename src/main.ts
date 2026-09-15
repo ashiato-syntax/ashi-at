@@ -26,6 +26,8 @@ import {
   removeAshiatoGroup,
   loadPrefectureBoundaries,
   loadMunicipalityBoundaries,
+  loadRailways,
+  type RailwayResult,
   createCurrentLocationLayer,
   createPrecisionPreviewLayer,
   ashiatoColor,
@@ -101,6 +103,9 @@ import {
   MIN_ZOOM_FOR_MUNICIPALITIES,
   MIN_ZOOM_FOR_CAPITAL_LABELS,
   MIN_ZOOM_FOR_MUNICIPALITY_LABELS,
+  MIN_ZOOM_FOR_RAILWAYS,
+  MIN_ZOOM_FOR_STATIONS,
+  MIN_ZOOM_FOR_STATION_LABELS,
   TERMS_VERSION_DATE,
   PRIVACY_VERSION_DATE,
 } from "./config.js";
@@ -183,6 +188,7 @@ $("#licenseIcon").append(createIcon("copyright"));
 $("#termsToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
 $("#privacyToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
 $("#licenseToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
+$("#ashiatoInfoHeadingIcon").append(createIcon("info"));
 $("#ashiatoActionShowOnMapIcon").append(createIcon("map-pin"));
 $("#ashiatoActionOpenPostIcon").append(createIcon("external-link"));
 $("#ashiatoActionDeleteIcon").append(createIcon("trash-2"));
@@ -223,6 +229,11 @@ const municipalityLayers = new Map<string, "loading" | MunicipalityBoundaryResul
 let municipalitiesVisible = false;
 let municipalityLabelsVisible = false;
 let capitalLabelsVisible = false;
+
+const railwayLayers = new Map<string, "loading" | RailwayResult>();
+let railwaysVisible = false;
+let stationsVisible = false;
+let stationLabelsVisible = false;
 
 // ページング/キャッシュ用の状態。host(インスタンスのorigin)ごとに区画が分かれる。
 let currentHost: string | null = null;
@@ -466,9 +477,11 @@ async function initBoundaries(): Promise<void> {
     prefectureLabelLayer = labelLayer;
     syncLabelVisibility();
     await syncMunicipalityLayers();
+    await syncRailwayLayers();
     map.on("moveend", () => {
       syncLabelVisibility();
       syncMunicipalityLayers();
+      syncRailwayLayers();
     });
   } catch (error) {
     console.error(error);
@@ -509,6 +522,30 @@ function syncLabelVisibility(): void {
       else map.removeLayer(entry.prominentLabelLayer);
     }
     capitalLabelsVisible = wantCapitalLabels;
+  }
+
+  // 駅の●は、路線の線(MIN_ZOOM_FOR_RAILWAYS)より近くまでズームしたときだけ
+  // 表示する独立した閾値(MIN_ZOOM_FOR_STATIONS)を持つ。
+  const wantStations = zoom >= MIN_ZOOM_FOR_STATIONS;
+  if (wantStations !== stationsVisible) {
+    for (const entry of railwayLayers.values()) {
+      if (entry === "loading") continue;
+      if (wantStations) entry.stationLayer.addTo(map);
+      else map.removeLayer(entry.stationLayer);
+    }
+    stationsVisible = wantStations;
+  }
+
+  // 駅名ラベルは、●自体(MIN_ZOOM_FOR_STATIONS)よりさらに近くまでズームした
+  // ときだけ表示する。
+  const wantStationLabels = zoom >= MIN_ZOOM_FOR_STATION_LABELS;
+  if (wantStationLabels !== stationLabelsVisible) {
+    for (const entry of railwayLayers.values()) {
+      if (entry === "loading") continue;
+      if (wantStationLabels) entry.stationLabelLayer.addTo(map);
+      else map.removeLayer(entry.stationLabelLayer);
+    }
+    stationLabelsVisible = wantStationLabels;
   }
 }
 
@@ -568,6 +605,67 @@ async function syncMunicipalityLayers(): Promise<void> {
     } catch (error) {
       console.error(`市区町村境界の読み込みに失敗(${pref.name}):`, error);
       municipalityLayers.delete(pref.code); // 後の moveend で再試行
+    }
+  }
+}
+
+// 市区町村境界(syncMunicipalityLayers)と同じ考え方: ズームが閾値未満なら
+// 読み込み済みのものもまとめて非表示にし、閾値以上ならviewport内の都道府県の
+// 鉄道路線だけを(未読み込みなら取得して)表示する。
+async function syncRailwayLayers(): Promise<void> {
+  if (map.getZoom() < MIN_ZOOM_FOR_RAILWAYS) {
+    if (railwaysVisible) {
+      for (const entry of railwayLayers.values()) {
+        if (entry === "loading") continue;
+        map.removeLayer(entry.lineLayer);
+        map.removeLayer(entry.stationLayer);
+        map.removeLayer(entry.stationLabelLayer);
+      }
+      railwaysVisible = false;
+    }
+    return;
+  }
+
+  if (!railwaysVisible) {
+    for (const entry of railwayLayers.values()) {
+      if (entry === "loading") continue;
+      entry.lineLayer.addTo(map);
+      if (stationsVisible) entry.stationLayer.addTo(map);
+      if (stationLabelsVisible) entry.stationLabelLayer.addTo(map);
+    }
+    railwaysVisible = true;
+  }
+
+  const b = map.getBounds();
+  const viewRect = {
+    minLat: b.getSouth(),
+    maxLat: b.getNorth(),
+    minLon: b.getWest(),
+    maxLon: b.getEast(),
+  };
+  const needed = findPrefecturesInView(prefectureIndex, viewRect);
+
+  for (const pref of needed) {
+    if (railwayLayers.has(pref.code)) continue; // 読み込み済み or 読み込み中
+
+    railwayLayers.set(pref.code, "loading");
+    try {
+      const entry = await loadRailways(map, pref.code);
+      // loadRailwaysは内部でlineLayerを無条件にaddTo(map)しているため、取得を
+      // 待っている間にズームアウトされてrailwaysVisibleがfalseに戻っていた
+      // 場合は、ここで取り除いておく(市区町村境界と同じ理由)。stationLayer/
+      // stationLabelLayerはloadRailways側では追加しない(現在のstationsVisible/
+      // stationLabelsVisibleに従う)。
+      if (!railwaysVisible) {
+        map.removeLayer(entry.lineLayer);
+      } else {
+        if (stationsVisible) entry.stationLayer.addTo(map);
+        if (stationLabelsVisible) entry.stationLabelLayer.addTo(map);
+      }
+      railwayLayers.set(pref.code, entry);
+    } catch (error) {
+      console.error(`鉄道路線の読み込みに失敗(${pref.name}):`, error);
+      railwayLayers.delete(pref.code); // 後の moveend で再試行
     }
   }
 }

@@ -22,6 +22,10 @@ import {
   INSET_FRACTION,
   PRECISION_PREVIEW_COLOR,
   CURRENT_LOCATION_COLOR,
+  RAILWAY_COLOR_LIGHT,
+  RAILWAY_COLOR_DARK,
+  RAILWAY_WEIGHT,
+  STATION_RADIUS,
 } from "./config.js";
 
 // NOTE: ここでは意図的に L.tileLayer(...) を追加していない
@@ -47,6 +51,9 @@ function municipalityBoundaryColor(): string {
 }
 function wardBoundaryColor(): string {
   return isDarkTheme() ? WARD_BOUNDARY_COLOR_DARK : WARD_BOUNDARY_COLOR_LIGHT;
+}
+function railwayColor(): string {
+  return isDarkTheme() ? RAILWAY_COLOR_DARK : RAILWAY_COLOR_LIGHT;
 }
 
 function ringsOf(geometry: Geometry): Position[][] {
@@ -304,6 +311,18 @@ export function createMap(el: string | HTMLElement): L.Map {
   // 都道府県の境界線が常に市区町村の境界線より前面に描画されるように、専用のペインを割り当て
   map.createPane("municipalityPane");
   map.getPane("municipalityPane")!.style.zIndex = "410";
+  // 鉄道路線は市区町村境界より前面、都道府県境界より背面に描画する。
+  map.createPane("railwayPane");
+  map.getPane("railwayPane")!.style.zIndex = "415";
+  // 駅は路線の線より前面に描画する(線の上に点が乗る見た目にする)。
+  map.createPane("stationPane");
+  map.getPane("stationPane")!.style.zIndex = "416";
+  // 路線・駅は東京のような密集地域だと点数(セグメント数・駅数)がかなり多く、
+  // 既定のSVGレンダラー(要素1つ1つが個別のDOM要素になる)だと重くなるため、
+  // 1枚のcanvasにまとめて描くCanvasレンダラーを使う。都道府県をまたいで
+  // 全て同じレンダラーを使い回す(loadRailways参照)。
+  railwayRenderer = L.canvas({ pane: "railwayPane" });
+  stationRenderer = L.canvas({ pane: "stationPane" });
   map.createPane("prefecturePane");
   map.getPane("prefecturePane")!.style.zIndex = "420";
 
@@ -359,11 +378,11 @@ export function createMap(el: string | HTMLElement): L.Map {
   return map;
 }
 
-export interface PrefectureProperties {
+interface PrefectureProperties {
   N03_001?: string;
 }
 
-export interface BoundaryResult {
+interface BoundaryResult {
   data: FeatureCollection<Geometry, PrefectureProperties>;
   labelLayer: L.LayerGroup;
 }
@@ -382,15 +401,22 @@ let prefectureBoundaryLayer: L.Polyline | null = null;
 // add/removeを切り替えるため、地図本体への参照も一緒に覚えておく)。
 let coastlineLayer: L.Polyline | null = null;
 let mapRef: L.Map | null = null;
+// 鉄道路線・駅の描画に使う共有Canvasレンダラー(createMap内で生成、loadRailways参照)。
+let railwayRenderer: L.Canvas | null = null;
+let stationRenderer: L.Canvas | null = null;
 // 市区町村境界も同様(main.ts側のmunicipalityLayersキャッシュに対応する分だけ、
 // prefCodeごとに市区町村境界+区境界のポリラインを覚えておく)。
 const municipalityBoundaryLayersByPrefCode = new Map<
   string,
   { cityBoundaryLine: L.Polyline; wardBoundaryLine: L.Polyline }
 >();
+// 鉄道路線・駅も同様(main.ts側のrailwayLayersキャッシュに対応する分だけ、
+// prefCodeごとに描画済みのL.GeoJSONレイヤーを覚えておく)。
+const railwayLineLayersByPrefCode = new Map<string, L.GeoJSON>();
+const stationLayersByPrefCode = new Map<string, L.GeoJSON>();
 
 export async function loadPrefectureBoundaries(map: L.Map): Promise<BoundaryResult> {
-  const res = await fetch("./data/maps/s0010/prefectures.json");
+  const res = await fetch("./data/maps/prefectures.json");
   if (!res.ok) throw new Error("都道府県境界GeoJSONの読み込みに失敗しました。");
   const data: FeatureCollection<Geometry, PrefectureProperties> = await res.json();
 
@@ -497,7 +523,7 @@ export function fetchMunicipalityGeoJson(
   prefCode: string,
 ): Promise<FeatureCollection<Geometry, MunicipalityProperties>> {
   if (!municipalityGeoJsonCache.has(prefCode)) {
-    const promise = fetch(`./data/maps/s0010/N03-21_${prefCode}_210101.json`).then((res) => {
+    const promise = fetch(`./data/maps/municipalities/N03-21_${prefCode}_210101.json`).then((res) => {
       if (!res.ok)
         throw new Error(`市区町村境界GeoJSONの読み込みに失敗しました(都道府県コード ${prefCode})。`);
       return res.json();
@@ -558,6 +584,134 @@ export async function loadMunicipalityBoundaries(
   return { boundaryLayer, labelLayer, prominentLabelLayer };
 }
 
+interface RailwayProperties {
+  N02_003?: string; // 路線名
+  N02_004?: string; // 運営会社
+}
+
+interface StationProperties extends RailwayProperties {
+  N02_005?: string; // 駅名
+  N02_005g?: string; // グループコード(同じ物理的な駅を束ねるID。路線ごとに別フィーチャでも共通)
+}
+
+// 都道府県別の鉄道路線/駅GeoJson(N02-25_{code}.json、scripts/build-railways.mjs
+// で全国データを都道府県ごとに分割・簡略化したもの)を取得する。
+// 市区町村境界(fetchMunicipalityGeoJson)と同じ理由でPromiseをキャッシュする。
+const railwayGeoJsonCache = new Map<
+  string,
+  Promise<FeatureCollection<Geometry, RailwayProperties>>
+>(); // prefCode -> Promise<GeoJSON>
+const stationGeoJsonCache = new Map<
+  string,
+  Promise<FeatureCollection<Geometry, StationProperties>>
+>();
+
+function fetchRailwayGeoJson(
+  prefCode: string,
+): Promise<FeatureCollection<Geometry, RailwayProperties>> {
+  if (!railwayGeoJsonCache.has(prefCode)) {
+    const promise = fetch(`./data/maps/railways/N02-25_${prefCode}.json`).then((res) => {
+      if (!res.ok)
+        throw new Error(`鉄道路線GeoJSONの読み込みに失敗しました(都道府県コード ${prefCode})。`);
+      return res.json();
+    });
+    promise.catch(() => railwayGeoJsonCache.delete(prefCode));
+    railwayGeoJsonCache.set(prefCode, promise);
+  }
+  return railwayGeoJsonCache.get(prefCode)!;
+}
+
+function fetchStationGeoJson(
+  prefCode: string,
+): Promise<FeatureCollection<Geometry, StationProperties>> {
+  if (!stationGeoJsonCache.has(prefCode)) {
+    const promise = fetch(`./data/maps/stations/N02-25_${prefCode}.json`).then((res) => {
+      if (!res.ok)
+        throw new Error(`駅GeoJSONの読み込みに失敗しました(都道府県コード ${prefCode})。`);
+      return res.json();
+    });
+    promise.catch(() => stationGeoJsonCache.delete(prefCode));
+    stationGeoJsonCache.set(prefCode, promise);
+  }
+  return stationGeoJsonCache.get(prefCode)!;
+}
+
+export interface RailwayResult {
+  lineLayer: L.GeoJSON;
+  stationLayer: L.GeoJSON;
+  stationLabelLayer: L.LayerGroup;
+}
+
+// 鉄道路線・駅も市区町村境界と同じく必要になったときだけ読み込む。
+// 元データが都道府県境で機械的に分割されておらず、県境をまたぐ路線・駅は
+// 隣接する都道府県のファイルにも重複して含まれているため、そのまま重ねて
+// 描画しても隙間や二重線・二重の点にはならない(単純な重ね描き)。
+export async function loadRailways(map: L.Map, prefCode: string): Promise<RailwayResult> {
+  const [lineData, stationData] = await Promise.all([
+    fetchRailwayGeoJson(prefCode),
+    fetchStationGeoJson(prefCode),
+  ]);
+
+  const lineLayer = L.geoJSON(lineData, {
+    // GeoJSONOptionsの型定義自体にはrendererが無いため、PathOptionsを
+    // 受け付けるstyle側に含める(実行時はここからPolylineの構築optionsに
+    // マージされ、rendererとして機能する)。
+    style: { color: railwayColor(), weight: RAILWAY_WEIGHT, renderer: railwayRenderer! },
+    interactive: false,
+  }).addTo(map);
+  railwayLineLayersByPrefCode.set(prefCode, lineLayer);
+
+  // 駅データはgml上「短い線」だが、build-railways.mjs側でPointに変換済み。
+  // 小さい●として打つ(路線と同じ色に揃える)。
+  // 注意: L.geoJSONのトップレベルのrenderer/paneオプションは、pointToLayerで
+  // 自前生成するレイヤーには伝播しない。circleMarker自身のoptionsに明示しないと
+  // 既定のSVGレンダラー・overlayPane(z-index 400、landPaneの405より背面)に
+  // 描画され、陸地の塗りつぶしの下に隠れてしまう(実際にこの不具合が発生した)。
+  // 路線の線より近くまでズームしないと表示しない(main.ts: MIN_ZOOM_FOR_STATIONS)
+  // ため、こちらはlineLayerと違ってここではmapに追加せず、呼び出し側に委ねる。
+  const stationLayer = L.geoJSON(stationData, {
+    pointToLayer: (_feature, latlng) =>
+      L.circleMarker(latlng, {
+        renderer: stationRenderer!,
+        radius: STATION_RADIUS,
+        color: railwayColor(),
+        weight: 1,
+        fillColor: railwayColor(),
+        fillOpacity: 1,
+      }),
+    interactive: false,
+  });
+  stationLayersByPrefCode.set(prefCode, stationLayer);
+
+  // 同じ物理的な駅でも路線ごとに別フィーチャになっている(例: 大阪梅田駅が
+  // 阪急神戸線・宝塚線・京都線でそれぞれ1件ずつ)。groupCode(N02_005g)が
+  // 同じフィーチャは同じ駅とみなし、ラベルは重複させず最初の1件だけ出す。
+  // ●自体(stationLayer)は路線ごとに重なって描かれても実害が無いためそのまま。
+  const stationLabelLayer = L.layerGroup();
+  const seenStationGroups = new Set<string>();
+  for (const feature of stationData.features) {
+    const name = feature.properties?.N02_005;
+    if (!name) continue;
+    const groupKey = feature.properties?.N02_005g ?? name;
+    if (seenStationGroups.has(groupKey)) continue;
+    seenStationGroups.add(groupKey);
+
+    const geom = feature.geometry;
+    if (!geom || geom.type !== "Point") continue;
+    const [lon, lat] = geom.coordinates;
+    L.marker([lat, lon], {
+      icon: L.divIcon({
+        className: "",
+        html: `<span class="station-label">${name}</span>`,
+        iconSize: [0, 0],
+      }),
+      interactive: false,
+    }).addTo(stationLabelLayer);
+  }
+
+  return { lineLayer, stationLayer, stationLabelLayer };
+}
+
 // テーマ切り替え時(main.ts: applyTheme)に呼ぶ。陸地の塗りつぶし・都道府県境界線・
 // これまでに読み込み済みの市区町村境界線(すべてloadPrefectureBoundaries/
 // loadMunicipalityBoundariesが保持しているモジュールスコープの参照)を、
@@ -576,6 +730,12 @@ export function restyleMapForTheme(): void {
   for (const { cityBoundaryLine, wardBoundaryLine } of municipalityBoundaryLayersByPrefCode.values()) {
     cityBoundaryLine.setStyle({ color: municipalityBoundaryColor() });
     wardBoundaryLine.setStyle({ color: wardBoundaryColor() });
+  }
+  for (const lineLayer of railwayLineLayersByPrefCode.values()) {
+    lineLayer.setStyle({ color: railwayColor() });
+  }
+  for (const stationLayer of stationLayersByPrefCode.values()) {
+    stationLayer.setStyle({ color: railwayColor(), fillColor: railwayColor() });
   }
 }
 
@@ -853,7 +1013,7 @@ export function removeAshiatoGroup(
 
 
 
-export interface PrecisionPreviewLayer {
+interface PrecisionPreviewLayer {
   show(lat: number, lon: number, geohashLength: number): string;
   hide(): void;
 }
@@ -899,7 +1059,7 @@ export function createPrecisionPreviewLayer(map: L.Map): PrecisionPreviewLayer {
   };
 }
 
-export interface CurrentLocationLayer {
+interface CurrentLocationLayer {
   show(lat: number, lon: number, accuracyM: number): void;
   hide(): void;
   // 端末のコンパス方位(0=北、時計回り)を現在地マーカー上の矢印に反映する。
