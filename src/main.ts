@@ -2853,10 +2853,10 @@ function newestAndOldestId(notes: MisskeyNote[]): { newestId: string; oldestId: 
 async function fetchOlder(): Promise<void> {
   const btn = $<HTMLButtonElement>("#search");
   btn.disabled = true;
-  setStatus("Misskeyから検索中…");
 
   try {
     const host = await ensureHost();
+    setStatus(`${stripProtocol(host)}から検索中…`);
 
     const notes = await searchNotesByTag(host, TAG, {
       limit: PAGE_SIZE,
@@ -2905,10 +2905,10 @@ async function fetchOlder(): Promise<void> {
 async function fetchNewer(): Promise<void> {
   const btn = $<HTMLButtonElement>("#loadNewer");
   btn.disabled = true;
-  setStatus("Misskeyから検索中…(最新)");
 
   try {
     const host = await ensureHost();
+    setStatus(`${stripProtocol(host)}から検索中…(最新)`);
     if (!cursor) {
       await fetchOlder();
       return;
@@ -3175,10 +3175,16 @@ async function refreshDraftBadge(): Promise<void> {
   setDraftBadgeCount((await getDrafts()).length);
 }
 
+// 「投稿する」ボタンの残り時間表示だけを、リスト全体を作り直さずに更新する
+// ためのコールバック一覧(下のsetIntervalから毎秒呼ぶ)。refreshDraftListが
+// 呼ばれるたびに(=行を作り直すたびに)ここを空にしてから積み直す。
+let draftPostButtonRenderers: (() => void)[] = [];
+
 async function refreshDraftList(): Promise<void> {
   const drafts = await getDrafts();
   setDraftBadgeCount(drafts.length);
   draftList.replaceChildren();
+  draftPostButtonRenderers = [];
 
   if (drafts.length === 0) {
     const empty = document.createElement("p");
@@ -3266,22 +3272,32 @@ async function refreshDraftList(): Promise<void> {
     postBtn.type = "button";
     postBtn.className = "btn-primary draft-post-btn";
 
-    // 残り時間は「下書きリストを開いた(=このリストを描画した)タイミング」で
-    // 計算する。ダイアログを開いたままの秒単位カウントダウンはしない
-    // (open中は既存のsetIntervalで1分ごとに再描画されるので、その都度更新される)。
+    // 残り時間は、下の draftPostButtonRenderers 経由で毎秒呼び直される
+    // (リスト全体は作り直さず、このボタンの表示だけをその都度更新する)。
+    // 表示は分単位なので、実際に文字列が変わるのは60回に1回だけ。
+    // textContentへの代入は値が同じでも子ノードを作り直すコストがかかる
+    // (postableになった後は永久に変化しない)ため、前回と同じ文字列なら
+    // 書き込みそのものをスキップする。
+    let lastPostButtonLabel: string | null = null;
     function renderPostButton() {
       const postable = isDraftPostable(draft);
       postBtn.disabled = !postable;
-      if (postable) {
-        postBtn.textContent = "投稿する";
-      } else {
-        const remainingMs =
-          DRAFT_POST_DELAY_MS_BY_LENGTH[draft.geohashLength] - (Date.now() - draft.createdAt);
-        const remainingMin = Math.max(1, Math.ceil(remainingMs / 60000));
-        postBtn.textContent = `あと${remainingMin}分`;
+      const label = postable
+        ? "投稿する"
+        : `あと${Math.max(
+            1,
+            Math.ceil(
+              (DRAFT_POST_DELAY_MS_BY_LENGTH[draft.geohashLength] - (Date.now() - draft.createdAt)) /
+                60000,
+            ),
+          )}分`;
+      if (label !== lastPostButtonLabel) {
+        postBtn.textContent = label;
+        lastPostButtonLabel = label;
       }
     }
     renderPostButton();
+    draftPostButtonRenderers.push(renderPostButton);
 
     precisionSelect.onchange = async () => {
       draft.geohashLength = Number(precisionSelect.value) as GeohashLength;
@@ -3323,10 +3339,15 @@ async function refreshDraftList(): Promise<void> {
   }
 }
 
-// 遅延経過による投稿可否の変化を、リストを開いたまま待っていても反映されるように
+// 遅延経過による投稿可否の変化(6桁=約1km/7桁=約150mの「あとN分」表示・
+// 「投稿する」への切り替わり)を、リストを開いたまま待っていてもリアルタイムに
+// 反映されるようにする。リスト全体(draftList.replaceChildren)は作り直さず、
+// 各行のボタン表示だけを毎秒更新することで、メモ入力欄にフォーカス中でも
+// 打鍵の邪魔をしない。
 setInterval(() => {
-  if (draftListDialog.open) refreshDraftList();
-}, 60 * 1000);
+  if (!draftListDialog.open) return;
+  for (const render of draftPostButtonRenderers) render();
+}, 1000);
 
 $<HTMLButtonElement>("#draftListToggle").onclick = () => {
   closeMenu();
