@@ -55,6 +55,10 @@ export interface Draft {
   // 覚え書き)。投稿時に自動生成される情報ではないため、空なら空文字列
   // (null許容にはせず、常に文字列として扱う)。
   memo: string;
+  // ONの場合、この下書きから投稿するときにmemoの内容を投稿本文へ自動挿入する。
+  // メモは元々「自分用の覚え書き」であり投稿内容ではないため、既定はOFF
+  // (下書きごとに明示的にONへ切り替えてもらう)。
+  insertMemoIntoPost: boolean;
 }
 
 // map.jsのaddAshiatoGroup()が返す、地図上に実際に描画されている状態のハンドル。

@@ -19,7 +19,7 @@ import privacyMd from "./docs/プライバシーポリシー.md?raw";
 import licenseMd from "./docs/ライセンス情報.md?raw";
 import composeWarningMd from "./docs/投稿前の注意.md?raw";
 import resetConfirmMd from "./docs/リセット確認.md?raw";
-import clearSearchCacheConfirmMd from "./docs/検索キャッシュ削除確認.md?raw";
+import clearSearchCacheConfirmMd from "./docs/マップ上のタイムラインのクリア確認.md?raw";
 import {
   createMap,
   addAshiatoGroup,
@@ -65,6 +65,7 @@ import {
   deleteDraft,
   updateDraftPrecision,
   updateDraftMemo,
+  updateDraftInsertMemoIntoPost,
   getEmojiImageBlob,
   putEmojiImageBlob,
   resetAllCache,
@@ -202,14 +203,6 @@ $("#draftListCloseX").append(createIcon("x"));
 $("#aboutCloseX").append(createIcon("x"));
 $("#settingsCloseX").append(createIcon("x"));
 $("#onboardingCloseX").append(createIcon("x"));
-
-// 「下書き」「見つけたあしあと」はタイトルバー(h2)自体が摘まむハンドルを
-// 兼ねている(enableSheetDragResize参照)ため、中央に置いたこのアイコンは
-// クリック不可・純粋な視覚的な合図(「ここを摘まむと動かせる」)としてのみ置く。
-// 「あしあとを投稿」は高さ調整の意味が薄いため対象外(タイトルバーの見た目は
-// 揃えつつ、摘まんで動かす機能自体を持たない)。
-$("#unlockedListDragIndicator").append(createIcon("chevrons-up-down"));
-$("#draftListDragIndicator").append(createIcon("chevrons-up-down"));
 
 // 地図の表示位置(中心緯度経度・ズーム)をTTL無しで保存しておき、次回起動時に
 // 復元する(復元自体は起動処理の中でsetView()する形で行う。createMap()の
@@ -1764,11 +1757,15 @@ function handlePositionError(error: GeolocationPositionError): void {
     3: "現在地の取得がタイムアウトしました",
   };
   setStatus(messages[error.code] ?? "位置情報の取得に失敗しました", true);
-  // 権限拒否(1)、取得不能(2: 端末側の位置情報サービスがOFFの場合もこのコードで
-  // 返ってくることが多い)、タイムアウト(3)のいずれでも、トグルをOFFに戻す。
-  // タップした時点で見た目上ON表示にしている(setGpsEnabled参照)ため、
-  // 現在地が一向に取れない状態のままONの見た目だけが残ることを防ぐ。
-  setGpsEnabled(false);
+  // 権限拒否(1)は再度許可し直すまで絶対に回復しないため、トグルをOFFに戻す
+  // (タップした時点で見た目上ON表示にしている(setGpsEnabled参照)ため、
+  // 現在地が一向に取れない状態のままONの見た目だけが残ることを防ぐ)。
+  // 取得不能(2)・タイムアウト(3)は、建物内に入った等の一時的な電波状況でも
+  // 起こりうる。watchPositionは元々その場合も監視を継続し続けるAPIなので、
+  // ここでOFFに戻して監視自体を止めてしまうと、電波が回復しても自動で
+  // 再取得されず、ユーザーが気づいてトグルを再度ONにし直す必要が生じる。
+  // トーストで一時的な失敗を知らせるだけにして、watchPosition自体は継続させる。
+  if (error.code === error.PERMISSION_DENIED) setGpsEnabled(false);
 }
 
 // 現在地(lastKnownPosition)と全セルを突き合わせて、未発見のものを判定する。
@@ -2023,6 +2020,18 @@ function colorSwatch(geohashLength: number): HTMLSpanElement {
   return swatch;
 }
 
+// エリアサイズ4種の色見本+ラベルの並び。トグルカード「表示レイヤー」の
+// インフォ(#precisionFilterInfo)と同じ考え方で、使い方スライド
+// (ONBOARDING_SLIDES、「投稿するには」)でも同じ色見本を流用する。
+function buildPrecisionLegend(): HTMLSpanElement {
+  const legend = document.createElement("span");
+  legend.className = "precision-legend";
+  for (const length of [4, 5, 6, 7] as const) {
+    legend.append(colorSwatch(length), document.createTextNode(`${PRECISION_LABELS[length]} `));
+  }
+  return legend;
+}
+
 // 色だけでは何を切り替えているか分からないため、簡単な説明を出す入口。
 // 「現地に行かなくても見れる/見るには現地で発見が必要」という区別
 // (requiresOnSiteDiscovery参照)は色分けでしか示していないため、ここで補足する。
@@ -2199,6 +2208,11 @@ interface OnboardingSlide {
   icon: IconName;
   title: string;
   body: string;
+  // エリアサイズの色見本(「投稿するには」スライドのみ)。bodyの直後・
+  // bodyAfterLegendの手前に差し込む(showOnboardingSlide参照)。
+  legend?: () => Node;
+  // legendのさらに後に続けるテキスト(legendが無いスライドでは使わない)。
+  bodyAfterLegend?: string;
 }
 
 const ONBOARDING_SLIDES: OnboardingSlide[] = [
@@ -2210,7 +2224,10 @@ const ONBOARDING_SLIDES: OnboardingSlide[] = [
   {
     icon: "ruler",
     title: "投稿するには",
-    body: "あしあとを投稿するには、位置情報をONにする必要があります。\n投稿時には、投稿エリアのサイズを選択できます。選べるエリアのサイズは、縦横 約20km・約4km・約1km・約150mの4種類です。\n小さいほど、位置情報の精度が高いです。詳細な位置情報を投稿したくない場合は、サイズを大きくしましょう。",
+    body: "あしあとを投稿するには、位置情報をONにする必要があります。\n投稿時には、投稿エリアのサイズを選択できます。選べるエリアのサイズは次の4種類です。\n",
+    legend: buildPrecisionLegend,
+    bodyAfterLegend:
+      "\n小さいほど、位置情報の精度が高いです。詳細な位置情報を投稿したくない場合は、サイズを大きくしましょう。",
   },
   {
     icon: "triangle-alert",
@@ -2249,7 +2266,14 @@ function showOnboardingSlide(index: number): void {
   const slide = ONBOARDING_SLIDES[index];
   onboardingTitle.textContent = slide.title;
   onboardingIcon.replaceChildren(createIcon(slide.icon));
-  onboardingText.textContent = slide.body;
+  // legendが無いスライドはこれまで通りテキストのみ。ある場合は
+  // 色見本(要素)を間に挟み、bodyAfterLegend(あれば)をその後ろに続ける
+  // (white-space:pre-lineは子要素の混在でもテキストノードには効き続ける)。
+  onboardingText.replaceChildren(
+    document.createTextNode(slide.body),
+    ...(slide.legend ? [slide.legend()] : []),
+    ...(slide.bodyAfterLegend ? [document.createTextNode(slide.bodyAfterLegend)] : []),
+  );
 
   onboardingDotButtons.forEach((dot, i) => dot.classList.toggle("active", i === index));
   // 1枚目は「戻る」を押せなくする(場所は確保したまま、消えて詰まって
@@ -3060,7 +3084,7 @@ async function fetchNewer(): Promise<void> {
   }
 }
 
-// 「検索キャッシュを消す」。まだ発見していない(unlockedAtが無い)レコードと
+// 「マップ上のタイムラインをクリア」。まだ発見していない(unlockedAtが無い)レコードと
 // カーソルだけを消す。「見つけたあしあと」(発見済み)は地図上にもそのまま残す。
 async function handleClearSearchCache(): Promise<void> {
   await clearSearchCache();
@@ -3078,7 +3102,7 @@ async function handleClearSearchCache(): Promise<void> {
   }
 
   cursor = null;
-  setStatus("検索キャッシュを消去しました");
+  setStatus("マップ上のタイムラインをクリアしました");
 }
 
 $<HTMLButtonElement>("#search").onclick = fetchOlder;
@@ -3232,10 +3256,19 @@ document.addEventListener("keydown", (e) => {
 composeDialog.addEventListener("close", () => precisionPreview.hide());
 
 // 投稿本文(Ashiato Syntax + #Ashiatoタグ)を組み立てる。
-// 自由記述コメントはAshi@側では持たない(共有フォーム側で書けるため)。
-function shareTextFor(lat: number, lon: number, geohashLength: GeohashLength): string {
+// 自由記述コメントはAshi@側では持たない(共有フォーム側で書けるため)が、
+// 下書きの「メモを本文に挿入」がONの場合だけ、memoを機械可読部分の上に
+// 添える(⟦...⟧の候補文字列はextractCandidatesがテキスト中のどこにあっても
+// 拾えるため、前に自由文を足しても解析に影響しない)。
+function shareTextFor(
+  lat: number,
+  lon: number,
+  geohashLength: GeohashLength,
+  memo?: string,
+): string {
   const geohash = encodeGeohash(lat, lon, geohashLength);
-  return `${buildMinimalCandidate(geohash, ASHIATO_CONTEXT_ID)} #Ashiato`;
+  const base = `${buildMinimalCandidate(geohash, ASHIATO_CONTEXT_ID)} #Ashiato`;
+  return memo ? `${memo}\n${base}` : base;
 }
 
 $<HTMLButtonElement>("#composePost").onclick = async () => {
@@ -3310,7 +3343,10 @@ async function refreshDraftList(): Promise<void> {
 
     const header = document.createElement("div");
     header.className = "draft-card-header";
-    const headerMain = document.createElement("div");
+    // 場所をタップすると、下書き一覧を閉じてその場所を地図上に表示する。
+    // <button>にすることでキーボード操作・スクリーンリーダーでも扱える。
+    const headerMain = document.createElement("button");
+    headerMain.type = "button";
     headerMain.className = "draft-card-header-main";
     const placeIcon = document.createElement("span");
     placeIcon.className = "action-sheet-icon";
@@ -3326,6 +3362,22 @@ async function refreshDraftList(): Promise<void> {
     meta.append(createIcon("clock"), document.createTextNode(formatDateTime(draft.createdAt) ?? ""));
 
     headerMain.append(placeIcon, place, meta);
+    headerMain.onclick = () => {
+      draftListDialog.close();
+      // 投稿UI(composeDialog)と同じ紫のセルプレビューを使って場所を示す
+      // (下書きはまだ投稿されていないため、実際のあしあと吹き出しは無い)。
+      // 地図を次に操作した時点で消す(ずっと残り続けないように)。
+      const hash = precisionPreview.show(draft.lat, draft.lon, draft.geohashLength);
+      const b = decodeGeohash(hash);
+      map.fitBounds(
+        [
+          [b.minLat, b.minLon],
+          [b.maxLat, b.maxLon],
+        ],
+        { maxZoom: 18, padding: [40, 40] },
+      );
+      map.once("click", () => precisionPreview.hide());
+    };
 
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
@@ -3359,6 +3411,20 @@ async function refreshDraftList(): Promise<void> {
       }, 400);
     };
     memoRow.append(memoIcon, memoInput);
+
+    // 「メモを本文に挿入」。メモは元々「自分用の覚え書き」であり投稿内容では
+    // ないため、既定はOFFで下書きごとに明示的に選んでもらう(設定でON/OFFを
+    // 一括にすると、投稿するつもりのなかったメモまで混ざる恐れがあるため)。
+    const insertMemoLabel = document.createElement("label");
+    insertMemoLabel.className = "draft-memo-insert";
+    const insertMemoCheckbox = document.createElement("input");
+    insertMemoCheckbox.type = "checkbox";
+    insertMemoCheckbox.checked = draft.insertMemoIntoPost;
+    insertMemoCheckbox.onchange = () => {
+      draft.insertMemoIntoPost = insertMemoCheckbox.checked;
+      updateDraftInsertMemoIntoPost(draft.id, insertMemoCheckbox.checked);
+    };
+    insertMemoLabel.append(insertMemoCheckbox, document.createTextNode("メモを本文に挿入"));
 
     // 精度・「投稿する」は同じ行に並べる。
     const footer = document.createElement("div");
@@ -3427,7 +3493,12 @@ async function refreshDraftList(): Promise<void> {
       const wantsToPost = await showConfirm(draftPostWarning, { okLabel: "理解して進む" });
       if (!wantsToPost) return;
 
-      const text = shareTextFor(draft.lat, draft.lon, draft.geohashLength);
+      const text = shareTextFor(
+        draft.lat,
+        draft.lon,
+        draft.geohashLength,
+        draft.insertMemoIntoPost ? draft.memo.trim() : undefined,
+      );
       window.open(buildShareUrl(text), "_blank", "noopener");
 
       await deleteDraft(draft.id);
@@ -3445,7 +3516,7 @@ async function refreshDraftList(): Promise<void> {
     };
 
     footer.append(precision, postBtn);
-    li.append(header, memoRow, footer);
+    li.append(header, insertMemoLabel, memoRow, footer);
     draftList.append(li);
   }
 }

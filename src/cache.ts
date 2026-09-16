@@ -342,7 +342,7 @@ export function markAshiatoRead(id: string, readAt: number = Date.now()): Promis
 }
 
 /**
- * 「検索キャッシュを消す」で呼ぶ。まだ発見していない(unlockedAtが無い)レコードと
+ * 「マップ上のタイムラインをクリア」で呼ぶ。まだ発見していない(unlockedAtが無い)レコードと
  * カーソル(検索位置)だけを消す。「見つけたあしあと」(unlockedAtがあるレコード)は
  * ここでは一切消さない。全host・全tag対象。
  */
@@ -434,6 +434,7 @@ export function makeDraft(
     geohashLength,
     municipalityLabel,
     memo,
+    insertMemoIntoPost: false, // 既定OFF。下書き一覧側で個別にONへ切り替える
   };
 }
 
@@ -461,10 +462,10 @@ export async function getDrafts(): Promise<Draft[]> {
       req.onsuccess = () => resolve(req.result ?? []);
       req.onerror = () => reject(req.error);
     });
-    // memoフィールド追加前に保存された下書きにはmemoが無い(undefined)ため、
-    // 空文字列として扱う(main.ts側でtextarea.valueにそのまま渡すため)。
+    // memo/insertMemoIntoPostフィールド追加前に保存された下書きには無い
+    // (undefined)ため、それぞれ空文字列・falseとして扱う。
     return all
-      .map((d) => ({ ...d, memo: d.memo ?? "" }))
+      .map((d) => ({ ...d, memo: d.memo ?? "", insertMemoIntoPost: d.insertMemoIntoPost ?? false }))
       .sort((a, b) => b.createdAt - a.createdAt);
   } catch (error) {
     console.warn("cache: getDrafts failed:", error);
@@ -528,6 +529,27 @@ export async function updateDraftMemo(id: string, memo: string): Promise<void> {
     });
   } catch (error) {
     console.warn(`cache: updateDraftMemo(${id}) failed:`, error);
+  }
+}
+
+/** 「メモを本文に挿入」のON/OFFだけを後から変更する(updateDraftMemoと同じ形)。 */
+export async function updateDraftInsertMemoIntoPost(id: string, insertMemoIntoPost: boolean): Promise<void> {
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const t = db.transaction("drafts", "readwrite");
+      const store = t.objectStore("drafts");
+      const getReq = store.get(id);
+      getReq.onsuccess = () => {
+        const existing: Draft | undefined = getReq.result;
+        if (!existing) return; // 削除済み等。黙って無視する
+        store.put({ ...existing, insertMemoIntoPost });
+      };
+      t.oncomplete = () => resolve();
+      t.onerror = () => reject(t.error);
+    });
+  } catch (error) {
+    console.warn(`cache: updateDraftInsertMemoIntoPost(${id}) failed:`, error);
   }
 }
 
