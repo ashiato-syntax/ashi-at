@@ -201,6 +201,7 @@ $("#composeCloseX").append(createIcon("x"));
 $("#draftListCloseX").append(createIcon("x"));
 $("#aboutCloseX").append(createIcon("x"));
 $("#settingsCloseX").append(createIcon("x"));
+$("#onboardingCloseX").append(createIcon("x"));
 
 // 「下書き」「見つけたあしあと」はタイトルバー(h2)自体が摘まむハンドルを
 // 兼ねている(enableSheetDragResize参照)ため、中央に置いたこのアイコンは
@@ -285,16 +286,27 @@ statusCloseBtn.onclick = () => {
 // ダイアログの外側(::backdrop)をクリックしたら閉じる、というほぼ全ダイアログ
 // 共通の挙動をまとめたヘルパー。矩形の内外判定でrect.top/left等を毎回
 // 書き下すのではなく、Element.contains()同等の簡易版として使う。
+// キャプチャフェーズ(第3引数true)で判定する: バブリングフェーズだと、
+// クリックされたボタン自身のonclick(例: オンボーディングの「次へ」で
+// スライドの中身が変わり、ダイアログの高さが縮む)が先に実行されてから
+// この判定が走ってしまい、「クリックした瞬間はダイアログの中だったのに、
+// 中身が変わって縮んだ後の矩形と比べたら外に見える」という誤判定で
+// 閉じてしまうことがあった。キャプチャフェーズなら、中身を変える
+// ボタン自身のハンドラより前に、変化前の矩形で正しく判定できる。
 function closeOnBackdropClick(dialog: HTMLDialogElement): void {
-  dialog.addEventListener("click", (e) => {
-    const rect = dialog.getBoundingClientRect();
-    const inside =
-      rect.top <= e.clientY &&
-      e.clientY <= rect.top + rect.height &&
-      rect.left <= e.clientX &&
-      e.clientX <= rect.left + rect.width;
-    if (!inside) dialog.close(); // キャンセル扱い(showConfirm等ではresultはfalseのまま)
-  });
+  dialog.addEventListener(
+    "click",
+    (e) => {
+      const rect = dialog.getBoundingClientRect();
+      const inside =
+        rect.top <= e.clientY &&
+        e.clientY <= rect.top + rect.height &&
+        rect.left <= e.clientX &&
+        e.clientX <= rect.left + rect.width;
+      if (!inside) dialog.close(); // キャンセル扱い(showConfirm等ではresultはfalseのまま)
+    },
+    true,
+  );
 }
 
 const confirmDialog = $<HTMLDialogElement>("#confirmDialog");
@@ -2178,6 +2190,105 @@ async function maybeShowTermsNotice(): Promise<void> {
   putSetting("acknowledgedPrivacyVersion", PRIVACY_VERSION_DATE);
 }
 
+// --- 初回オンボーディング(アプリの使い方スライド) ---------------------------
+// 利用規約・プライバシーポリシーの確認(maybeShowTermsNotice)が終わった後、
+// 本当の初回だけ表示する(利用規約のバージョン更新時は再表示しない、独立した
+// フラグ"hasSeenOnboarding"で管理する)。「Ashi@について」の「アプリの使い方を
+// 見る」からはいつでも見返せる(その場合はhasSeenOnboardingに触れない)。
+interface OnboardingSlide {
+  icon: IconName;
+  title: string;
+  body: string;
+}
+
+const ONBOARDING_SLIDES: OnboardingSlide[] = [
+  {
+    icon: "footprints",
+    title: "Ashi@とは",
+    body: "Ashi@は、現実世界の場所にMisskeyノートを投稿したり、それを現地で発見できたりする、Misskeyクライアントです。\n\nAshi@で投稿するノートのことを「あしあと」といいます。",
+  },
+  {
+    icon: "ruler",
+    title: "投稿するには",
+    body: "あしあとを投稿するには、位置情報をONにする必要があります。\n投稿時には、投稿エリアのサイズを選択できます。選べるエリアのサイズは、縦横 約20km・約4km・約1km・約150mの4種類です。\n小さいほど、位置情報の精度が高いです。詳細な位置情報を投稿したくない場合は、サイズを大きくしましょう。",
+  },
+  {
+    icon: "triangle-alert",
+    title: "プライバシーにご注意",
+    body: "位置情報は、投稿の本文に直接挿入されます。これは誰でも解読できる仕様なので、プライバシーには十分ご注意ください。",
+  },
+  {
+    icon: "eye",
+    title: "みんなの投稿を見る",
+    body: "みんなの投稿はマップ上で閲覧できます。約20km・約4kmの投稿は、現地に行かなくても表示できます。\n\n約1km・約150mの投稿は、現地に行き、そのエリア内に入らないと表示されません。現地で見つけたあしあとは、「見つけたあしあと」に記録されます。",
+  },
+];
+
+const onboardingDialog = $<HTMLDialogElement>("#onboardingDialog");
+const onboardingTitle = $("#onboardingTitle");
+const onboardingIcon = $("#onboardingIcon");
+const onboardingText = $("#onboardingText");
+const onboardingDots = $("#onboardingDots");
+const onboardingBack = $<HTMLButtonElement>("#onboardingBack");
+const onboardingNext = $<HTMLButtonElement>("#onboardingNext");
+
+const onboardingDotButtons: HTMLButtonElement[] = ONBOARDING_SLIDES.map((_, i) => {
+  const dot = document.createElement("button");
+  dot.type = "button";
+  dot.className = "onboarding-dot";
+  dot.setAttribute("aria-label", `${i + 1}枚目`);
+  dot.onclick = () => showOnboardingSlide(i);
+  onboardingDots.append(dot);
+  return dot;
+});
+
+let onboardingIndex = 0;
+
+function showOnboardingSlide(index: number): void {
+  onboardingIndex = index;
+  const slide = ONBOARDING_SLIDES[index];
+  onboardingTitle.textContent = slide.title;
+  onboardingIcon.replaceChildren(createIcon(slide.icon));
+  onboardingText.textContent = slide.body;
+
+  onboardingDotButtons.forEach((dot, i) => dot.classList.toggle("active", i === index));
+  // 1枚目は「戻る」を押せなくする(場所は確保したまま、消えて詰まって
+  // 見えないようvisibilityで隠す)。
+  onboardingBack.style.visibility = index === 0 ? "hidden" : "visible";
+  onboardingNext.textContent = index === ONBOARDING_SLIDES.length - 1 ? "はじめる" : "次へ";
+}
+
+onboardingBack.onclick = () => showOnboardingSlide(Math.max(0, onboardingIndex - 1));
+onboardingNext.onclick = () => {
+  if (onboardingIndex < ONBOARDING_SLIDES.length - 1) {
+    showOnboardingSlide(onboardingIndex + 1);
+  } else {
+    onboardingDialog.close();
+  }
+};
+$<HTMLButtonElement>("#onboardingCloseX").onclick = () => onboardingDialog.close();
+closeOnBackdropClick(onboardingDialog);
+
+function openOnboarding(): void {
+  showOnboardingSlide(0);
+  onboardingDialog.showModal();
+}
+
+// 閉じ方(最後まで進めた/×で閉じた/背景クリック)に関わらず、一度開いたら
+// 「見た」ことにする(closeイベント経由なら閉じ方を問わず一箇所で拾える)。
+onboardingDialog.addEventListener("close", () => {
+  putSetting("hasSeenOnboarding", true);
+});
+
+$("#showOnboardingIcon").append(createIcon("info"));
+$<HTMLButtonElement>("#showOnboarding").onclick = () => openOnboarding();
+
+async function maybeShowOnboarding(): Promise<void> {
+  const seen = await getSetting<boolean>("hasSeenOnboarding");
+  if (seen) return;
+  openOnboarding();
+}
+
 // --- 設定ダイアログ(メディアの表示モード) -----------------------------------
 // 「リセット」(resetAllCache、IndexedDBごと削除)を実行しない限り、
 // settingsストア経由で永続する(他の設定値と同じ扱い)。
@@ -3373,7 +3484,7 @@ if (splash) {
     splashHidden = true;
     splash.classList.add("hide");
     appRoot.removeAttribute("inert");
-    maybeShowTermsNotice();
+    maybeShowTermsNotice().then(() => maybeShowOnboarding());
   };
   splash.addEventListener("click", hideSplash);
   setTimeout(hideSplash, 1600);

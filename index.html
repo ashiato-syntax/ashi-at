@@ -642,6 +642,12 @@
             <h2>// Ashi@について</h2>
             <div class="about-dialog-body">
                 <div id="aboutIntro"></div>
+                <div class="action-sheet">
+                    <button id="showOnboarding" type="button" class="action-sheet-row">
+                        <span class="action-sheet-icon" id="showOnboardingIcon"></span>
+                        <span>アプリの使い方を見る</span>
+                    </button>
+                </div>
                 <div class="settings-collapsible about-collapsible">
                     <button
                         type="button"
@@ -698,6 +704,30 @@
                             <div id="licenseContent" class="markdown-doc"></div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </dialog>
+        <dialog id="onboardingDialog">
+            <button
+                type="button"
+                class="dialog-close-x"
+                id="onboardingCloseX"
+                aria-label="閉じる"
+            ></button>
+            <h2 id="onboardingTitle"></h2>
+            <div class="onboarding-body">
+                <span class="onboarding-icon" id="onboardingIcon"></span>
+                <p class="onboarding-text" id="onboardingText"></p>
+            </div>
+            <div class="onboarding-footer">
+                <div class="onboarding-dots" id="onboardingDots"></div>
+                <div class="onboarding-nav">
+                    <button type="button" id="onboardingBack" class="secondary">
+                        戻る
+                    </button>
+                    <button type="button" id="onboardingNext" class="btn-primary">
+                        次へ
+                    </button>
                 </div>
             </div>
         </dialog>
