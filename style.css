@@ -37,6 +37,7 @@
     --color-accent-pressed: #c09a00; /* menu-fab:active */
     --color-accent-hover-bg: #fdf6da; /* btn-primary:hover */
     --color-accent-secondary: #f0c100; /* ラジオボタン/GPSトグルON。--color-accentと統一 */
+
     /* --color-accentを文字・アイコン色として(塗りつぶしの上ではなく、素の背景に
        直接)使う箇所専用の色。--color-accent自体は塗りつぶしボタン(+/-ボタン等)
        での視認性を優先した明るい黄色だが、白背景にそのまま文字として使うと
@@ -89,7 +90,12 @@
 
     --color-text: #f0c100;
     --color-text-strong: #f0c100;
-    --color-text-muted: #0f8b8b;
+    /* ライトモードの--color-text-mutedは「--color-text-subtleだと薄すぎる
+       箇所向けの濃色版」として使われ、そのほぼ全ての利用箇所でダークモードは
+       個別に--color-text-subtleへ戻す上書きが必要になっていた(戻し忘れの
+       バグを繰り返し起こしていた)。ダークモードでは最初から同じ値にして、
+       この上書き忘れ自体を起きなくする。 */
+    --color-text-muted: #7aa8a6;
     --color-text-subtle: #7aa8a6;
     --color-text-faint: #0f8b8b;
     --color-on-accent: #fff;
@@ -225,19 +231,6 @@ input[type="checkbox"] {
 :root[data-theme="dark"] input[type="checkbox"]:checked {
     background: var(--color-accent);
 }
-/* 以下、ライトモードで薄すぎて読みづらかったため--color-text-subtleから
-   --color-text-mutedに変えた箇所。ダークモードは元の--color-text-subtleに戻す。 */
-:root[data-theme="dark"] .draft-card-header .action-sheet-icon,
-:root[data-theme="dark"] .draft-meta,
-:root[data-theme="dark"] .draft-memo-row,
-:root[data-theme="dark"] .draft-precision,
-:root[data-theme="dark"] .draft-delete-btn,
-:root[data-theme="dark"] .unlocked-list-filter,
-:root[data-theme="dark"] .ashiato-handle,
-:root[data-theme="dark"] .ashiato-posted-at,
-:root[data-theme="dark"] .ashiato-more-btn {
-    color: var(--color-text-subtle);
-}
 input[type="checkbox"]:checked {
     border-color: var(--color-accent);
     background: var(--color-accent);
@@ -327,6 +320,13 @@ select {
     background-position: right 8px center;
     background-size: 16px;
     border-color: var(--color-text-faint);
+}
+/* SVGデータURI内のstrokeはCSS変数を参照できないため、ダークモード用に
+   別途--color-text-faint(このルールの枠線と同じ色)のダーク値を直書きした
+   バージョンで丸ごと差し替える(ライトモードの#666のまま固定だと、
+   ダーク背景の上で他のUIと色味が揃わないため)。 */
+:root[data-theme="dark"] select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f8b8b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
 }
 /* 展開時の選択肢一覧(ネイティブUIだが、多くのブラウザはoption自体の
    background/colorは反映する)。selectを半透明にしても(.draft-precision
@@ -445,7 +445,9 @@ button.btn-danger {
         0 1px 3px rgba(0, 0, 0, 0.12),
         0 0 16px color-mix(in srgb, var(--color-hud-glass-border) 60%, transparent);
     font-size: 0.85rem;
-    color: var(--color-text);
+    /* 検索ボタン・メニュー・トグルカードと同じ濃い青緑に揃える
+       (エラー時は.status-toast.errorが--color-dangerで上書きする)。 */
+    color: var(--color-accent-text);
     opacity: 1;
     transform: translateY(0);
     /* 出現/消滅時にふわっとスライド+フェードさせる。hidden属性の付け外し
@@ -691,7 +693,7 @@ button.btn-danger {
    (+/-ボタン・トグル展開ボタンも同じ理由で同様に調整、それぞれの
    :root[data-theme="light"]ブロック参照)。 */
 :root[data-theme="light"] .menu-fab {
-    background: color-mix(in srgb, var(--color-accent) 48%, transparent);
+    background: color-mix(in srgb, var(--color-accent) 56%, transparent);
     border-color: color-mix(in srgb, var(--color-accent-pressed) 70%, var(--color-accent) 30%);
 }
 .menu-fab:active {
@@ -700,7 +702,7 @@ button.btn-danger {
     transform: scale(0.92);
 }
 :root[data-theme="light"] .menu-fab:active {
-    background: color-mix(in srgb, var(--color-accent) 62%, transparent);
+    background: color-mix(in srgb, var(--color-accent) 70%, transparent);
 }
 .menu-fab-icon .icon {
     width: 26px;
@@ -878,8 +880,8 @@ button.btn-danger {
     border: 1px solid var(--color-text-muted);
     color: var(--color-text-subtle);
 }
-/* ダークモードの--color-text-subtle(#7aa8a6)・--color-text-muted(#0f8b8b、枠線)は
-   どちらも青緑みがあってかっこいいが、ライトモードの同じ変数(#888/#666)は
+/* ダークモードの--color-text-subtle・--color-text-muted(枠線、どちらも#7aa8a6)は
+   青緑みがあってかっこいいが、ライトモードの同じ変数(#888/#666)は
    ただのグレーで青緑みが無いため、ライトモードだけ--color-accent-text(濃い青緑)を
    少し混ぜて色味を寄せる。
    .unread(見つけたあしあとの未読数)は別の色・枠線指定(border:noneも含む)を
@@ -913,7 +915,6 @@ button.btn-danger {
     display: flex;
     align-items: center;
     font-size: 0.75rem;
-    font-weight: 700;
     /* 元のスタイル(黄色の塗りつぶし+濃色文字、ガラス感なし)に戻したもの。 */
     background: var(--color-accent);
     color: var(--color-accent-contrast);
@@ -1075,7 +1076,11 @@ button.action-sheet-row {
 }
 .action-sheet-heading {
     font-weight: 600;
-    color: var(--color-text-strong);
+    /* 「情報」ダイアログの他のアクション行(マップで表示する/SNSで開く、
+       --color-accent-text)と揃える。ダークモードでは元々
+       --color-text-strongも--color-accent-textも同じ黄色で揃っていたが、
+       ライトモードだけ違う色(グレー寄り/濃い青緑)になっていた。 */
+    color: var(--color-accent-text);
     padding-right: 36px; /* 右上の.dialog-close-xと重ならないように */
 }
 .action-sheet-icon {
@@ -1256,9 +1261,11 @@ dialog#aboutDialog p {
     line-height: 1.6;
 }
 /* 概要文(overviewMd)。項目名(見出し・折りたたみラベル、--color-text)とは
-   区別し、.markdown-doc(利用規約等)の地の文と同じ--color-text-bodyにする。 */
+   区別し、.markdown-doc(利用規約等)の地の文と同じ--color-text-bodyにする。
+   (以前はここだけ--color-text-mutedになっていて、コメントの意図と食い違って
+   おり、ライトモードで他の長文より薄く読みづらくなっていた)。 */
 #aboutIntro {
-    color: var(--color-text-muted);
+    color: var(--color-text-body);
 }
 /* 概要文の先頭段落はUA既定のmargin-top(1em)を持つため、そのままだと
    h2のmargin-bottom(帯下の余白)に上乗せされて、上の余白だけ左右の
@@ -1267,9 +1274,8 @@ dialog#aboutDialog p {
     margin-top: 0;
 }
 :root[data-theme="dark"] #aboutIntro {
-    /* 他の長文(.markdown-doc等)と同じ--color-text-bodyを使う
-       (以前は独自の白#efefefを使っていて、微妙に色味が違っていた)。 */
-    color: var(--color-text-body);
+    /* colorは共通ルール(#aboutIntro)の--color-text-bodyがそのまま効くため、
+       ここではダークモード専用のtext-shadowだけ追加する。 */
     text-shadow: 0 0 6px color-mix(in srgb, var(--color-text-body) 50%, transparent);
 }
 /* 「利用規約」「ライセンス情報」。本文と区切るため、settingsDialogの
@@ -1554,16 +1560,8 @@ dialog#instanceDialog label {
     white-space: nowrap;
 }
 /* 選択中(「未読のみ」ON)はテーマカラーにして目立たせる
-   (.precision-fieldset label等と同じパターン)。
-   ダークモード用に.unlocked-list-filterの文字色を--color-text-subtleへ
-   戻す上のルール(:root[data-theme="dark"] .unlocked-list-filter、
-   詳細度(0,3,0))の方が、この:has()ルール単体(詳細度(0,2,0))より詳細度が
-   高く、チェック状態に関わらず後者を上書きしてしまっていた。ダークモード
-   では下の専用ルールで詳細度(0,4,0)にして確実に勝たせる。 */
+   (.precision-fieldset label等と同じパターン)。 */
 .unlocked-list-filter:has(input:checked) {
-    color: var(--color-accent-text);
-}
-:root[data-theme="dark"] .unlocked-list-filter:has(input:checked) {
     color: var(--color-accent-text);
 }
 .unlocked-list-filter input {
@@ -1772,7 +1770,8 @@ dialog#instanceDialog label {
    .leaflet-control-zoom-in:hover側の同じコメント参照)。 */
 @media (hover: hover) {
     .ashiato-more-btn:hover {
-        background: rgba(0, 0, 0, 0.06);
+        /* .dialog-close-x:hover等、他のアイコンボタンのホバー背景と同じ濃さに揃える。 */
+        background: rgba(0, 0, 0, 0.12);
     }
 }
 .ashiato-more-btn .icon {
@@ -2075,7 +2074,7 @@ dialog#mediaLightbox::backdrop {
 /* ライトモードの視認性対応。.menu-fabの同種コメント参照。 */
 :root[data-theme="light"] .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-in,
 :root[data-theme="light"] .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-out {
-    background: color-mix(in srgb, var(--color-accent) 48%, transparent);
+    background: color-mix(in srgb, var(--color-accent) 56%, transparent);
     border-color: color-mix(in srgb, var(--color-accent-pressed) 70%, var(--color-accent) 30%);
 }
 /* :hoverはマウス等ホバー可能なポインタを持つ端末限定にする。タッチ端末では
@@ -2088,7 +2087,7 @@ dialog#mediaLightbox::backdrop {
     }
     :root[data-theme="light"] .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-in:hover,
     :root[data-theme="light"] .leaflet-bar.leaflet-control-zoom .leaflet-control-zoom-out:hover {
-        background: color-mix(in srgb, var(--color-accent) 62%, transparent);
+        background: color-mix(in srgb, var(--color-accent) 70%, transparent);
     }
 }
 .leaflet-control-zoom .icon {
@@ -2172,7 +2171,7 @@ dialog#mediaLightbox::backdrop {
 }
 /* ライトモードの視認性対応。.menu-fabの同種コメント参照。 */
 :root[data-theme="light"] .toggle-panel-handle {
-    background: color-mix(in srgb, var(--color-accent) 48%, transparent);
+    background: color-mix(in srgb, var(--color-accent) 56%, transparent);
     border-color: color-mix(in srgb, var(--color-accent-pressed) 70%, var(--color-accent) 30%);
 }
 /* :hoverはマウス等ホバー可能なポインタを持つ端末限定にする(理由は
@@ -2182,7 +2181,7 @@ dialog#mediaLightbox::backdrop {
         background: color-mix(in srgb, var(--color-accent) 40%, transparent);
     }
     :root[data-theme="light"] .toggle-panel-handle:hover {
-        background: color-mix(in srgb, var(--color-accent) 62%, transparent);
+        background: color-mix(in srgb, var(--color-accent) 70%, transparent);
     }
 }
 .toggle-panel-handle-icon .icon {
@@ -2920,21 +2919,11 @@ dialog#mediaLightbox::backdrop {
     font-size: 0.9rem;
     /* 未選択時は「見つけたあしあと」の投稿者ID(.ashiato-handle)と同じ
        --color-text-subtleにしていたが、ライトモードでは薄すぎて読みづらいため
-       --color-text-muted(legendと同じ濃さ)にする(ダークモードは下の
-       :root[data-theme="dark"]の上書きで元のままにする)。 */
+       --color-text-muted(legendと同じ濃さ)にする。 */
     color: var(--color-text-muted);
 }
-:root[data-theme="dark"] .precision-fieldset label {
-    color: var(--color-text-subtle);
-}
-/* 選択中の「約○○km」だけテーマカラーにして目立たせる。
-   .settings-fieldset labelと同じ詳細度の問題(ダークモードの
-   --color-text-subtle戻しルールの方が詳細度が高く上書きされてしまう)が
-   あるため、同じくダークモード専用の高詳細度ルールで確実に勝たせる。 */
+/* 選択中の「約○○km」だけテーマカラーにして目立たせる。 */
 .precision-fieldset label:has(input:checked) {
-    color: var(--color-accent-text);
-}
-:root[data-theme="dark"] .precision-fieldset label:has(input:checked) {
     color: var(--color-accent-text);
 }
 
@@ -2983,25 +2972,13 @@ dialog#mediaLightbox::backdrop {
     font-size: 0.9rem;
     /* 未選択時は「見つけたあしあと」の投稿者ID(.ashiato-handle)と同じ
        --color-text-subtleにしていたが、ライトモードでは薄すぎて読みづらいため
-       --color-text-muted(legendと同じ濃さ)にする(ダークモードは下の
-       :root[data-theme="dark"]の上書きで元のままにする)。 */
+       --color-text-muted(legendと同じ濃さ)にする。 */
     color: var(--color-text-muted);
-}
-:root[data-theme="dark"] .settings-fieldset label {
-    color: var(--color-text-subtle);
 }
 /* 選択中の選択肢(テーマ/メディアの表示のラジオボタン、自動でONにする
    チェックボックス等)だけテーマカラーにして目立たせる(.precision-fieldset
-   labelと同じパターン)。
-   ダークモード用に.settings-fieldset labelの文字色を--color-text-subtleへ
-   戻す上のルール(:root[data-theme="dark"] .settings-fieldset label、
-   詳細度(0,3,1))の方が、この:has()ルール単体(詳細度(0,2,1))より詳細度が
-   高く、選択状態に関わらず後者を上書きしてしまっていた。ダークモードでは
-   下の専用ルールで詳細度(0,4,1)にして確実に勝たせる。 */
+   labelと同じパターン)。 */
 .settings-fieldset label:has(input:checked) {
-    color: var(--color-accent-text);
-}
-:root[data-theme="dark"] .settings-fieldset label:has(input:checked) {
     color: var(--color-accent-text);
 }
 /* 設定ダイアログ下部の操作一覧(インスタンス変更/マップ上のタイムラインをクリア/リセット)、
@@ -3024,12 +3001,24 @@ dialog#settingsDialog .action-sheet-row:not(:first-child) {
     margin-top: 10px;
 }
 /* 「設定」の項目(インスタンスを変更/マップ上のタイムラインをクリア)も、折りたたみの
-   項目名と同じくテーマカラー(--color-accent)にする。リセット(.danger)は
-   破壊的操作の警告色のままにするため対象外。 */
-dialog#settingsDialog .action-sheet-row:not(.danger) {
+   項目名と同じくテーマカラー(--color-accent-text)にする。リセット(.danger)は
+   破壊的操作の警告色のままにするため対象外。
+   「情報」ダイアログ(マップで表示する/SNSで開く)・「Ashi@について」の
+   「アプリの使い方を見る」も同じ扱いにする。特に「アプリの使い方を見る」は、
+   同じaboutDialog内の「利用規約」等の折りたたみ見出し(.settings-collapsible-toggle、
+   同じ--color-accent-text)と隣り合って表示されるため、揃えないと片方だけ
+   テーマカラーになっていないのが目立って見えていた。
+   .action-sheet-heading(「情報」ダイアログの「情報」という見出し行、クリック
+   不可)も自身の定義で既に--color-accent-textになっているため、ここで除外
+   する必要はない。 */
+dialog#settingsDialog .action-sheet-row:not(.danger),
+dialog#ashiatoActionDialog .action-sheet-row:not(.danger),
+dialog#aboutDialog .action-sheet-row:not(.danger) {
     color: var(--color-accent-text);
 }
-dialog#settingsDialog .action-sheet-row:not(.danger) .action-sheet-icon {
+dialog#settingsDialog .action-sheet-row:not(.danger) .action-sheet-icon,
+dialog#ashiatoActionDialog .action-sheet-row:not(.danger) .action-sheet-icon,
+dialog#aboutDialog .action-sheet-row:not(.danger) .action-sheet-icon {
     color: var(--color-accent-text);
 }
 
@@ -3052,8 +3041,8 @@ dialog#settingsDialog .action-sheet-row:not(.danger) .action-sheet-icon {
        .action-sheet-row(横paddingは自分の4pxだけ)よりアイコンの開始位置が
        右にずれてしまう。 */
     padding: 4px 0;
+    /* .action-sheet-row(通常の項目)と太さを揃える(標準)。 */
     font: inherit;
-    font-weight: 600;
     /* 項目名はテーマカラー(--color-accent)にする(「設定」「Ashi@について」共通)。 */
     color: var(--color-accent-text);
 }
@@ -3372,6 +3361,17 @@ dialog#draftListDialog[open] {
 .draft-place {
     font-weight: 600;
     overflow-wrap: anywhere;
+    /* ライトモードは「あしあとを投稿」等のメニュー項目(.menu-dropdown button)
+       と同じ、青緑みのある--color-accent-textにする(ダークモードは下の
+       :root[data-theme="dark"]の上書きで、日時表示(.draft-meta)と同じ
+       --color-text-subtleにする)。色指定が無いとdialog#draftListDialogの
+       color(--color-text)を継承してしまい、ダークモードでは--color-textが
+       項目名用の黄色になっていて地名がテーマカラーの黄色になってしまう
+       という問題があった。 */
+    color: var(--color-accent-text);
+}
+:root[data-theme="dark"] .draft-place {
+    color: var(--color-text-subtle);
 }
 /* 日時は地名の右隣に添える(見出し行の付属情報)。 */
 .draft-meta {
