@@ -585,6 +585,46 @@
                         </div>
                     </div>
                 </div>
+                <div class="settings-collapsible">
+                    <button
+                        type="button"
+                        id="popupModeToggle"
+                        class="settings-collapsible-toggle"
+                        aria-expanded="false"
+                    >
+                        <span class="settings-collapsible-toggle-label">
+                            <span
+                                class="action-sheet-icon"
+                                id="popupModeIcon"
+                            ></span>
+                            <span>吹き出しの表示</span>
+                        </span>
+                        <span class="settings-collapsible-toggle-icon"></span>
+                    </button>
+                    <div id="popupModeRows" class="settings-collapsible-rows">
+                        <div class="settings-collapsible-rows-inner">
+                            <fieldset class="settings-fieldset">
+                                <label
+                                    ><input
+                                        type="radio"
+                                        name="popupMode"
+                                        value="single"
+                                        checked
+                                    />
+                                    1つのみ(新しく開くと前のものを閉じる)</label
+                                >
+                                <label
+                                    ><input
+                                        type="radio"
+                                        name="popupMode"
+                                        value="multiple"
+                                    />
+                                    複数開ける</label
+                                >
+                            </fieldset>
+                        </div>
+                    </div>
+                </div>
                 <div class="action-sheet">
                     <button
                         id="clearSearchCache"

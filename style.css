@@ -2107,6 +2107,55 @@ dialog#mediaLightbox::backdrop {
     height: 22px;
 }
 
+/* 「吹き出しを全て閉じる」ボタン(map.ts:createClosePopupsButton)。
+   +/-ボタンと物理px単位で確実に同じ間隔にするため、別コントロールにはせず
+   +/-と同じ.leaflet-control-zoomコンテナ(flexのgap:5px)に3つ目の子として
+   追加している(理由はmap.ts側のコメント参照。別コントロール+margin-topでは
+   Windows版Vivaldi/Firefoxで実測1pxズレた)。
+   そのため見た目は+/-ズームボタンと全く同じにしつつ、このボタンが
+   コンテナの最後の子になる(以前は「−」が最後だった)。leaflet.cssの
+   .leaflet-bar a:last-child { border-bottom: none; }がこのボタンに
+   移ってくる点、.leaflet-touch .leaflet-bar a { width/height: 30px; }に
+   負けない詳細度が必要な点は変わらないため、+/-と同じ「祖先2クラス+
+   ボタン自身のクラス」で詳細度(0,3,0)まで上げて確実に上書きする。 */
+.leaflet-bar.leaflet-control-zoom .leaflet-control-close-popups-btn,
+.leaflet-touch .leaflet-bar.leaflet-control-zoom .leaflet-control-close-popups-btn {
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--color-accent) 32%, transparent);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: var(--color-accent-text);
+    border: 1px solid var(--color-accent);
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.12),
+        0 0 8px color-mix(in srgb, var(--color-accent) 40%, transparent);
+    border-radius: 0;
+}
+:root[data-theme="dark"] .leaflet-bar.leaflet-control-zoom .leaflet-control-close-popups-btn {
+    background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+:root[data-theme="light"] .leaflet-bar.leaflet-control-zoom .leaflet-control-close-popups-btn {
+    background: color-mix(in srgb, var(--color-accent) 56%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent-pressed) 70%, var(--color-accent) 30%);
+}
+@media (hover: hover) {
+    .leaflet-bar.leaflet-control-zoom .leaflet-control-close-popups-btn:hover {
+        background: color-mix(in srgb, var(--color-accent) 40%, transparent);
+    }
+    :root[data-theme="light"] .leaflet-bar.leaflet-control-zoom .leaflet-control-close-popups-btn:hover {
+        background: color-mix(in srgb, var(--color-accent) 70%, transparent);
+    }
+}
+.leaflet-control-close-popups-btn .icon {
+    width: 20px;
+    height: 20px;
+}
+
 /* 現在地マーカー上に重ねる方位矢印(map.ts: createCurrentLocationLayer)。
    コンパスの値はmain.ts側でこの要素の中の.current-location-heading-arrow
    にrotate()を掛けて反映する。外側の要素(leaflet-marker-icon)自体は

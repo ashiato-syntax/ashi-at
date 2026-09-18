@@ -29,6 +29,7 @@ import {
   loadRailways,
   type RailwayResult,
   createCurrentLocationLayer,
+  createClosePopupsButton,
   createPrecisionPreviewLayer,
   ashiatoColor,
   restyleMapForTheme,
@@ -179,10 +180,12 @@ $("#themeToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-d
 $("#mediaVisibilityIcon").append(createIcon("eye"));
 $("#mfmDisplayIcon").append(createIcon("sparkles"));
 $("#layerDisplayIcon").append(createIcon("layers"));
+$("#popupModeIcon").append(createIcon("messages-square"));
 $("#composePrecisionIcon").append(createIcon("ruler"));
 $("#mediaVisibilityToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
 $("#mfmDisplayToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
 $("#layerDisplayToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
+$("#popupModeToggle .settings-collapsible-toggle-icon").append(createIcon("chevron-down"));
 $("#termsIcon").append(createIcon("file-text"));
 $("#privacyIcon").append(createIcon("shield"));
 $("#licenseIcon").append(createIcon("copyright"));
@@ -240,6 +243,28 @@ let cursor: Cursor | null = null;
 // ロック中(未発見)のレコードもrecordsには保持する(GPS判定に必要)が、
 // 発見済みが1件も無い間はvisualLayers/hitArea/colorはnullのまま(=地図に描画しない)。
 const ashiatoCells = new Map<string, AshiatoCell>();
+
+// 同時に複数開ける吹き出し(showAshiatoCellPopup参照)。geohash文字列 -> 現在
+// 開いているそのセルのL.Popupインスタンス。Leaflet標準のmap.openPopup()/
+// .openOn(map)は「地図につき同時に1個だけ」という制約(新しく開くと既存の
+// ものを自動で閉じる)があるため、代わりに.addTo(map)で個別に地図へ追加し、
+// この一覧で自前管理する。同じセルを指すボタンを連打しても吹き出しが
+// 重複しないよう、開く前にここで既存のものを閉じてから作り直す。
+const openAshiatoPopups = new Map<string, L.Popup>();
+
+// 「設定」ダイアログの吹き出しの表示モード。single(既定): 新しい吹き出しを
+// 開くと、それ以外の吹き出しは全て閉じる(以前の、Leaflet標準に近い挙動)。
+// multiple: 複数の吹き出しを同時に開いたままにできる。
+// showAshiatoCellPopup参照。他の設定値と同じくputSettingで永続する。
+type PopupMode = "multiple" | "single";
+let popupMode: PopupMode = "single";
+
+// +/-ズームボタンのすぐ下(map.ts:createClosePopupsButton参照)。開いている
+// 吹き出しを1つずつ.close()していく(closeイベント経由でopenAshiatoPopups
+// からも個別に外れる、showAshiatoCellPopup参照)。
+createClosePopupsButton(map).onclick = () => {
+  for (const popup of [...openAshiatoPopups.values()]) popup.close();
+};
 
 const currentLocationLayer = createCurrentLocationLayer(map);
 let watchId: number | null = null;
@@ -1384,6 +1409,19 @@ function showAshiatoCellPopup(geohash: string): void {
   const cell = ashiatoCells.get(geohash);
   if (!cell) return;
 
+  // 同じセルの吹き出しが既に開いていれば、内容(既読状態等)が古いままに
+  // ならないよう一旦閉じてから作り直す(閉じるとpopupcloseイベント経由で
+  // openAshiatoPopupsからも自動で外れる)。
+  openAshiatoPopups.get(geohash)?.close();
+
+  // 設定「吹き出しの表示」がsingle(1つのみ)の場合、他のセルの吹き出しは
+  // ここで全て閉じる(multiple=既定では何もしない、他の吹き出しは残る)。
+  if (popupMode === "single") {
+    for (const [otherGeohash, popup] of [...openAshiatoPopups]) {
+      if (otherGeohash !== geohash) popup.close();
+    }
+  }
+
   const records = [...cell.records.values()]
     .filter(
       (r) =>
@@ -1433,12 +1471,37 @@ function showAshiatoCellPopup(geohash: string): void {
   // つぶれてしまい、maxWidthだけでは広がらない(実際に描画される幅は
   // minWidthとの兼ね合いで決まる)。minWidthで下限を明示して確実に
   // 横幅を確保する。
-  const popup = L.popup({ minWidth: 268, maxWidth: 308, maxHeight: 260 })
+  // .openOn(map)(=map.openPopup())は「地図につき同時に1個だけ」という
+  // Leaflet標準の制約があり、新しく開くたびに既存の吹き出しを自動で
+  // 閉じてしまう。複数のセルの吹き出しを同時に開けるようにするため、
+  // 単なるレイヤーとして.addTo(map)する(popupopen/popupcloseイベントは
+  // Popup自身のonAdd/onRemoveで発火するため、この方法でも変わらず使える)。
+  // さらに、Leafletの各PopupインスタンスはオプションcloseOnClick
+  // (未指定時はmap.options.closePopupOnClick、既定true)に応じて
+  // 「地図上のどこをクリックしても(preclickイベントで)自分自身を閉じる」
+  // という挙動を個別に持っている。これは.openOn/.addToのどちらを使うかとは
+  // 無関係に効いてしまうため、別のセルをクリックして新しい吹き出しを開く
+  // 操作そのものが既存の吹き出しを閉じる原因になっていた。
+  // closeOnClick:falseで無効化し、閉じる手段を×ボタン/下スワイプ/
+  // 同じセルの開き直しだけに限定する。
+  const popup = L.popup({
+    minWidth: 268,
+    maxWidth: 308,
+    maxHeight: 260,
+    closeOnClick: false,
+  })
     .setLatLng([centerLat, centerLon])
     .setContent(container)
-    .openOn(map);
+    .addTo(map);
+  openAshiatoPopups.set(geohash, popup);
 
   const popupEl = popup.getElement();
+  // 複数の吹き出しが重なっているとき、奥にあるものをタップしたら最前面に
+  // 出す。popupPane内でのDOM上の並び順(=最後の子要素が最前面に描画される)
+  // を、Leaflet標準のbringToFront()(内部でtoFront()=親の最後の子に
+  // 付け替えるだけ)で操作する。押した瞬間(pointerdown)に反応させ、
+  // 実際のボタン操作等より前に手前へ出す。
+  popupEl?.addEventListener("pointerdown", () => popup.bringToFront());
 
   // Leaflet既定の×ボタンはブラウザフォントの"×"文字のままで、他のダイアログの
   // .dialog-close-xで使っているアイコン(lucideのxアイコン)と見た目が違うため、
@@ -1479,15 +1542,20 @@ function showAshiatoCellPopup(geohash: string): void {
       popupContent.style.height = `${px}px`;
     },
     getMaxHeightPx: () => Math.min(POPUP_DRAG_MAX_HEIGHT_PX, window.innerHeight * 0.7),
-    onDismiss: () => map.closePopup(),
+    // map.closePopup()(引数無し)は「map.openPopup()で開いた単一の吹き出し」
+    // 前提のAPIで、同時に複数開けるようにした今は意味を持たない。この
+    // 吹き出し自身(popup)を指定して、これだけを閉じる。
+    onDismiss: () => map.closePopup(popup),
   });
 
   // このポップアップが閉じられたら(他の吹き出しに差し替わった場合を含む)
-  // observerを解放する。実際にスクロールする領域はrowsWrapper
-  // (.ashiato-popup-rows)なので、可視判定のrootもそちらにする。
+  // observerを解放し、openAshiatoPopupsからも外す。実際にスクロールする
+  // 領域はrowsWrapper(.ashiato-popup-rows)なので、可視判定のrootもそちらにする。
   const disposeReadObserver = observeRowsForRead(rowsWrapper, rowsForReadTracking);
   map.once("popupclose", (e) => {
-    if (e.popup === popup) disposeReadObserver();
+    if (e.popup !== popup) return;
+    disposeReadObserver();
+    if (openAshiatoPopups.get(geohash) === popup) openAshiatoPopups.delete(geohash);
   });
 }
 
@@ -1536,7 +1604,9 @@ function openAshiatoActions(record: AshiatoRecord): void {
   ashiatoActionShowOnMapBtn.onclick = () => {
     ashiatoActionDialog.close();
     unlockedListDialog.close();
-    map.closePopup();
+    // このセルの吹き出しが既に開いていればshowAshiatoCellPopup内で
+    // 閉じてから作り直される(他のセルの吹き出しは複数開けるようにした
+    // 今、ここで無関係に全部閉じてしまう必要は無い)。
     const { minLat, maxLat, minLon, maxLon } = decodeGeohash(record.geohash);
     map.fitBounds(
       [
@@ -2371,6 +2441,7 @@ wireCollapsibleToggle("themeToggle", "themeRows");
 wireCollapsibleToggle("mediaVisibilityToggle", "mediaVisibilityRows");
 wireCollapsibleToggle("mfmDisplayToggle", "mfmDisplayRows");
 wireCollapsibleToggle("layerDisplayToggle", "layerDisplayRows");
+wireCollapsibleToggle("popupModeToggle", "popupModeRows");
 wireCollapsibleToggle("termsToggle", "termsRows");
 wireCollapsibleToggle("privacyToggle", "privacyRows");
 wireCollapsibleToggle("licenseToggle", "licenseRows");
@@ -2453,6 +2524,19 @@ document.querySelectorAll<HTMLInputElement>('input[name="mfmDisplay"]').forEach(
     putSetting("mfmDisplayMode", mfmDisplayMode);
     // 開いたままの一覧があれば、変更を即座に反映する。
     if (unlockedListDialog.open) refreshUnlockedList();
+  };
+});
+
+document.querySelectorAll<HTMLInputElement>('input[name="popupMode"]').forEach((el) => {
+  el.onchange = () => {
+    popupMode = el.value as PopupMode;
+    putSetting("popupMode", popupMode);
+    // singleに切り替えた時点で複数開いていれば、最新のもの以外を閉じて
+    // すぐに反映する(次に何か開くまで待たせない)。
+    if (popupMode === "single" && openAshiatoPopups.size > 1) {
+      const popups = [...openAshiatoPopups.values()];
+      for (const popup of popups.slice(0, -1)) popup.close();
+    }
   };
 });
 
@@ -3610,6 +3694,15 @@ if (splash) {
       mfmDisplayMode = savedMfmDisplay;
       const radio = document.querySelector<HTMLInputElement>(
         `input[name="mfmDisplay"][value="${savedMfmDisplay}"]`,
+      );
+      if (radio) radio.checked = true;
+    }
+
+    const savedPopupMode = await getSetting<PopupMode>("popupMode");
+    if (savedPopupMode === "multiple" || savedPopupMode === "single") {
+      popupMode = savedPopupMode;
+      const radio = document.querySelector<HTMLInputElement>(
+        `input[name="popupMode"][value="${savedPopupMode}"]`,
       );
       if (radio) radio.checked = true;
     }

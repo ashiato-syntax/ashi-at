@@ -35,6 +35,8 @@ import moon from "lucide-static/icons/moon.svg?raw";
 import navigation2 from "lucide-static/icons/navigation-2.svg?raw";
 import sparkles from "lucide-static/icons/sparkles.svg?raw";
 import pencilLine from "lucide-static/icons/pencil-line.svg?raw";
+import messageSquareX from "lucide-static/icons/message-square-x.svg?raw";
+import messagesSquare from "lucide-static/icons/messages-square.svg?raw";
 
 const ICONS = {
   footprints,
@@ -70,6 +72,8 @@ const ICONS = {
   "navigation-2": navigation2,
   sparkles,
   "pencil-line": pencilLine,
+  "message-square-x": messageSquareX,
+  "messages-square": messagesSquare,
 } as const;
 
 export type IconName = keyof typeof ICONS;

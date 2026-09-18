@@ -1168,3 +1168,39 @@ export function createCurrentLocationLayer(map: L.Map): CurrentLocationLayer {
     },
   };
 }
+
+// 開いている吹き出し(あしあと一覧のポップアップ)を全て閉じるボタン。
+// 別のL.Controlとして追加し、margin-topで+/-ボタンとの間隔を
+// (見た目上は同じ5pxになるよう)re-createしようとしたところ、Windows版の
+// Vivaldi/Firefoxで実測+/-間8px・ここ7pxと1pxだけズレる現象が起きた。
+// flexboxのgapとbox modelのmarginは、ブラウザ内部では別々の計算パスで
+// 端数(表示スケーリングが100%でない場合等)を丸めるため、指定値が同じ
+// "5px"でも仕組みが違うと必ずしも同じ物理pxに丸まらない。
+// 確実に同じ間隔にするため、別コントロールにはせず、+/-ボタンと同じ
+// .leaflet-control-zoomコンテナ(display:flex; flex-direction:column;
+// gap:5px;)の3つ目の子要素として追加する。同じgapプロパティ1つに
+// 支配されるようになるため、ブラウザの丸め方に関わらず必ず一致する。
+// クリック時の実際の処理(開いているポップアップの一覧の取得・close())は
+// main.ts側(openAshiatoPopups)の状態に依存するため持たず、ボタン要素だけを
+// 返して呼び出し側でonclickを組み立ててもらう。
+export function createClosePopupsButton(map: L.Map): HTMLAnchorElement {
+  const zoomContainer = map
+    .getContainer()
+    .querySelector<HTMLElement>(".leaflet-bar.leaflet-control-zoom")!;
+  const button = L.DomUtil.create(
+    "a",
+    "leaflet-control-close-popups-btn",
+    zoomContainer,
+  ) as HTMLAnchorElement;
+  button.href = "#";
+  button.setAttribute("role", "button");
+  button.title = "吹き出しを全て閉じる";
+  button.setAttribute("aria-label", "吹き出しを全て閉じる");
+  // ズームボタンと同じく、地図側にクリックが伝わって(パン等)しまわない
+  // ようにする(L.control.zoomも内部で自身のコンテナに同じ処理をしているが、
+  // 念のためこのボタン自身にも掛けておく)。
+  L.DomEvent.disableClickPropagation(button);
+  L.DomEvent.on(button, "click", L.DomEvent.preventDefault);
+  button.append(createIcon("message-square-x"));
+  return button;
+}
