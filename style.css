@@ -67,6 +67,14 @@
        ここでは枠線用の値だけを持つ。 */
     --color-hud-glass-border: #7fa89e;
 
+    /* ガラス系UI(ダイアログ群・メニュー・トグルカード・ステータス表示・
+       検索ボタン・地図の吹き出し)共通の不透明度。ライト/ダークそれぞれ
+       個別に調整できるよう:root[data-theme="dark"]側にも同じ値を用意している
+       (今はまだ両方とも同じ値。あとで見ながら個別に調整する想定)。 */
+    --glass-opacity: 70%;
+    --glass-hover-opacity: 85%;
+    --glass-border-glow-opacity: 60%;
+
     /* GPSトグル等、OFF状態のトラックに使う緑系の色。 */
     --color-toggle-off: #9dc2a8;
 }
@@ -128,6 +136,12 @@
 
     /* HUD周りの「ガラス」の枠線・グローの色。 */
     --color-hud-glass-border: #6a8583;
+
+    /* ガラス系UIの不透明度(ダークモード側)。:rootのコメント参照。
+       今はまだライトモードと同じ値のまま。 */
+    --glass-opacity: 70%;
+    --glass-hover-opacity: 85%;
+    --glass-border-glow-opacity: 60%;
 
     --color-toggle-off: #4b8869;
 }
@@ -437,13 +451,13 @@ button.btn-danger {
     padding: 8px 12px;
     border-radius: 0;
     /* ダイアログ群(aboutDialog等)と同じ透け方・ぼかし量・枠線に揃える。 */
-    background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+    background: color-mix(in srgb, var(--color-surface) var(--glass-opacity), transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--color-hud-glass-border);
     box-shadow:
         0 1px 3px rgba(0, 0, 0, 0.12),
-        0 0 16px color-mix(in srgb, var(--color-hud-glass-border) 60%, transparent);
+        0 0 16px color-mix(in srgb, var(--color-hud-glass-border) var(--glass-border-glow-opacity), transparent);
     font-size: 0.85rem;
     /* 検索ボタン・メニュー・トグルカードと同じ濃い青緑に揃える
        (エラー時は.status-toast.errorが--color-dangerで上書きする)。 */
@@ -614,21 +628,21 @@ button.btn-danger {
     flex: 1;
     white-space: nowrap;
     /* ダイアログ群(aboutDialog等)と同じ透け方・ぼかし量・枠線に揃える。 */
-    background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+    background: color-mix(in srgb, var(--color-surface) var(--glass-opacity), transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--color-hud-glass-border);
     border-radius: 0;
     box-shadow:
         0 1px 3px rgba(0, 0, 0, 0.12),
-        0 0 16px color-mix(in srgb, var(--color-hud-glass-border) 60%, transparent);
+        0 0 16px color-mix(in srgb, var(--color-hud-glass-border) var(--glass-border-glow-opacity), transparent);
     color: var(--color-accent-text);
 }
 /* :hoverはマウス等ホバー可能なポインタを持つ端末限定にする(理由は
    .leaflet-control-zoom-in:hover側の同じコメント参照)。 */
 @media (hover: hover) {
     .bottom-toolbar .search-buttons button:hover {
-        background: color-mix(in srgb, var(--color-surface) 85%, transparent);
+        background: color-mix(in srgb, var(--color-surface) var(--glass-hover-opacity), transparent);
     }
 }
 .toolbar-btn {
@@ -757,14 +771,14 @@ button.btn-danger {
     top: auto;
     right: 0;
     /* ダイアログ群(aboutDialog等)と同じ透け方・ぼかし量・枠線に揃える。 */
-    background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+    background: color-mix(in srgb, var(--color-surface) var(--glass-opacity), transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--color-hud-glass-border);
     border-radius: 0;
     box-shadow:
         0 2px 8px rgba(0, 0, 0, 0.1),
-        0 0 16px color-mix(in srgb, var(--color-hud-glass-border) 60%, transparent);
+        0 0 16px color-mix(in srgb, var(--color-hud-glass-border) var(--glass-border-glow-opacity), transparent);
     display: grid;
     min-width: 230px;
     /* 画面幅の狭い端末でコンテンツ側の要求幅がmin-widthを超えても、
@@ -829,7 +843,7 @@ button.btn-danger {
 @media (hover: hover) {
     .menu-dropdown button:hover {
         /* 「最新を確認」等(.bottom-toolbar .search-buttons button)と同じホバー色。 */
-        background: color-mix(in srgb, var(--color-surface) 85%, transparent);
+        background: color-mix(in srgb, var(--color-surface) var(--glass-hover-opacity), transparent);
     }
     .menu-dropdown button.danger:hover {
         background: var(--color-danger-hover-bg);
@@ -923,7 +937,6 @@ button.btn-danger {
 
 dialog#aboutDialog,
 dialog#instanceDialog,
-dialog#infoDialog,
 dialog#confirmDialog,
 dialog#ashiatoActionDialog,
 dialog#settingsDialog,
@@ -1014,7 +1027,6 @@ dialog#settingsDialog {
     + .settings-collapsible:has(.settings-collapsible-toggle[aria-expanded="true"]) {
     margin-top: -12px;
 }
-dialog#infoDialog::backdrop,
 dialog#ashiatoActionDialog::backdrop,
 dialog#confirmDialog::backdrop,
 dialog#instanceDialog::backdrop,
@@ -2202,7 +2214,7 @@ dialog#mediaLightbox::backdrop {
     top: 0;
     right: calc(100% + 6px);
     /* ダイアログ群(aboutDialog等)と同じ透け方・ぼかし量・枠線に揃える。 */
-    background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+    background: color-mix(in srgb, var(--color-surface) var(--glass-opacity), transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     /* テーマカラーを子要素(行のラベル文字等)にも継承させる(表示レイヤーの
@@ -2212,7 +2224,7 @@ dialog#mediaLightbox::backdrop {
     border-radius: 0px;
     box-shadow:
         0 1px 3px rgba(0, 0, 0, 0.12),
-        0 0 16px color-mix(in srgb, var(--color-hud-glass-border) 60%, transparent);
+        0 0 16px color-mix(in srgb, var(--color-hud-glass-border) var(--glass-border-glow-opacity), transparent);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -2406,7 +2418,7 @@ dialog#mediaLightbox::backdrop {
 #map .leaflet-popup-content-wrapper,
 #map .leaflet-popup-tip {
     /* 他のガラス系UIと同じ、薄い半透明の塗りにする。 */
-    background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+    background: color-mix(in srgb, var(--color-surface) var(--glass-opacity), transparent);
     color: var(--color-text-strong);
     /* leaflet.cssの既定border-radius:12pxを、アプリ全体の角丸廃止方針に合わせて解除する。 */
     border-radius: 0;
@@ -2418,7 +2430,7 @@ dialog#mediaLightbox::backdrop {
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid var(--color-hud-glass-border);
-    box-shadow: 0 0 10px color-mix(in srgb, var(--color-hud-glass-border) 60%, transparent);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--color-hud-glass-border) var(--glass-border-glow-opacity), transparent);
 }
 /* 吹き出しの本体(content-wrapper)を、下端(=tip、マーカー位置に固定)を
    起点に伸び上がるアニメーションにする。tipは本体の下端に張り付いているため
@@ -3113,8 +3125,8 @@ dialog#draftListDialog {
 }
 /* メニューから直接開く主要な5つのダイアログ(Ashi@について/設定/下書き/
    見つけたあしあと/あしあとを投稿)・オンボーディング・確認ダイアログ・
-   インスタンス変更ダイアログを、同じガラス表現に揃える
-   (infoDialog/ashiatoActionDialog等は対象外)。
+   インスタンス変更ダイアログ・「情報」(ashiatoActionDialog)を、
+   同じガラス表現に揃える(画像ライトボックスは意図的に対象外)。
    上のborder:noneのグループルールより後に書いて上書きする。
    他のガラス系UIと同じく、塗りを半透明+ぼかしにして縁(枠線)が
    光っているような見た目にする。 */
@@ -3125,14 +3137,15 @@ dialog#unlockedListDialog,
 dialog#composeDialog,
 dialog#onboardingDialog,
 dialog#confirmDialog,
-dialog#instanceDialog {
+dialog#instanceDialog,
+dialog#ashiatoActionDialog {
     /* マップの吹き出し(#map .leaflet-popup-content-wrapper)と同じ透け具合(70%)に揃える。 */
-    background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+    background: color-mix(in srgb, var(--color-surface) var(--glass-opacity), transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     /* メニュー(.menu-dropdown)と同じ枠線・グロー(太さ・色とも)にする。 */
     border: 1px solid var(--color-hud-glass-border);
-    box-shadow: 0 0 16px color-mix(in srgb, var(--color-hud-glass-border) 60%, transparent);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--color-hud-glass-border) var(--glass-border-glow-opacity), transparent);
 }
 /* 以前は見出し(h2)がダイアログの枠線と同じ黄色の帯だったため、border-topまで
    同じ黄色だと境目が同化して上辺だけ帯より太く見えてしまい、border-topを
