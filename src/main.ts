@@ -3104,7 +3104,7 @@ async function fetchOlder(): Promise<void> {
     // ものではないので破棄する(取り込むとホストをまたいでセル/cursorが混線する)。
     if (host !== currentHost) return;
 
-    await ingestNotes(host, notes);
+    const records = await ingestNotes(host, notes);
 
     if (notes.length > 0) {
       const { newestId: batchNewestId, oldestId } = newestAndOldestId(notes);
@@ -3124,7 +3124,11 @@ async function fetchOlder(): Promise<void> {
       }, null);
       const oldestLabel = formatDateTime(oldestCreatedAt);
 
-      setStatus(oldestLabel ? `${oldestLabel}まで探しました` : `${notes.length}件のAshiatoを検索しました`);
+      // 件数はnotes.length(#タグが付いた生のノート数)ではなく、実際に
+      // ASHIATO_CONTEXT_ID(+対応桁数)に合致してレコード化できた件数(records.length)を
+      // 表示する。タグは付いているがAshiato Syntaxとして無効なノートも
+      // 混ざりうるため、notes.lengthのままだと実態と合わない件数になる。
+      setStatus(oldestLabel ? `${oldestLabel}まで探しました` : `${records.length}件のAshiatoを検索しました`);
     } else {
       setStatus("これより古いAshiatoは見つかりませんでした");
     }
@@ -3160,7 +3164,7 @@ async function fetchNewer(): Promise<void> {
     // ものではないので破棄する(取り込むとホストをまたいでセル/cursorが混線する)。
     if (host !== currentHost) return;
 
-    await ingestNotes(host, notes);
+    const records = await ingestNotes(host, notes);
 
     if (notes.length > 0) {
       const { newestId, oldestId } = newestAndOldestId(notes);
@@ -3173,9 +3177,15 @@ async function fetchNewer(): Promise<void> {
       await putCursor(host, TAG, cursor);
     }
 
+    // 件数はnotes.length(#タグが付いた生のノート数)ではなく、実際に
+    // ASHIATO_CONTEXT_ID(+対応桁数)に合致してレコード化できた件数(records.length)を
+    // 表示する。タグは付いているがAshiato Syntaxとして無効なノートも
+    // 混ざりうるため、notes.lengthのままだと実態と合わない件数になる
+    // (「新しいあしあとはありませんでした」の分岐だけはnotes.length基準のままにし、
+    // タグ付き投稿自体が無かった場合の文言と区別する)。
     setStatus(
       notes.length > 0
-        ? `${notes.length}件の新しいあしあとを検索しました`
+        ? `${records.length}件の新しいあしあとを検索しました`
         : "新しいあしあとはありませんでした",
     );
   } catch (e) {
