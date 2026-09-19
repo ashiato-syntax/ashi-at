@@ -73,7 +73,7 @@
        (今はまだ両方とも同じ値。あとで見ながら個別に調整する想定)。 */
     --glass-opacity: 70%;
     --glass-hover-opacity: 85%;
-    --glass-border-glow-opacity: 60%;
+    --glass-border-glow-opacity: 30%;
 
     /* GPSトグル等、OFF状態のトラックに使う緑系の色。 */
     --color-toggle-off: #9dc2a8;
@@ -141,7 +141,7 @@
        今はまだライトモードと同じ値のまま。 */
     --glass-opacity: 70%;
     --glass-hover-opacity: 85%;
-    --glass-border-glow-opacity: 60%;
+    --glass-border-glow-opacity: 30%;
 
     --color-toggle-off: #4b8869;
 }
@@ -2405,7 +2405,6 @@ dialog#mediaLightbox::backdrop {
 .precision-filter-chips {
     display: flex;
     flex: none;
-    border: 1px solid var(--color-border-light);
     border-radius: 0px;
     overflow: hidden;
 }
@@ -2455,13 +2454,26 @@ dialog#mediaLightbox::backdrop {
    なく虹色グラデーション(main.tsが--chip-rare-gradientに設定)にする。
    border-color自体はグラデーションにできないため、border-imageで代用する
    (border: 1px solid ...で決めた太さ・スタイルはそのまま、塗りだけこちらが
-   上書きする)。ON/OFFどちらの状態でも枠線は虹色のままにし、ONの時だけ
-   さらに背景も虹色で塗りつぶす。 */
+   上書きする)。OFF(背景は透明のまま)はこの枠線のみで表現する。 */
 .precision-filter-chip[data-length="7"] {
     border-image: var(--chip-rare-gradient) 1;
 }
+/* ONの時は背景も虹色で塗りつぶすが、border-imageのままだと枠線側だけ角に
+   グラデーションの端の純色がそのまま出てしまい、少しずつ混ざり合う塗りつぶし
+   側より枠線の方が濃く(鮮やかに)見えてしまっていた
+   (border-imageは1px×1pxという極小領域に画像の角そのものを引き伸ばして
+   配置する一方、backgroundのグラデーションは矩形全体に連続的に描かれるため、
+   同じ座標でも角の色の決まり方が異なることが原因)。
+   ONの時だけborderを透明にしてborder-imageを外し、代わりに
+   background-clip違いの2枚の同じグラデーションを重ねる(内側=padding-box、
+   外側=border-box)ことで、枠線部分もbackgroundと全く同じ描かれ方になり、
+   濃さが揃う。 */
 .precision-filter-chip[data-length="7"][aria-pressed="true"] {
-    background: var(--chip-rare-gradient);
+    border-color: transparent;
+    border-image: none;
+    background:
+        var(--chip-rare-gradient) padding-box,
+        var(--chip-rare-gradient) border-box;
 }
 .ashiato-popup-list {
     display: flex;

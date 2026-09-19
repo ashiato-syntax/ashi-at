@@ -172,23 +172,28 @@ export function ashiatoRareGradientCss(angleDeg = 135): string {
 // 文字列を組み立てる。box-shadow自体は単色しか指定できないため(グラデーション
 // にできない)、色ごとに複数重ねることで虹色のグローを表現する
 // (吹き出し=main.ts:showAshiatoCellPopupの縁に使用)。
+//
 // 最初は全色を同じ原点(オフセット0)・半径違いだけで重ねていたが、5色の半透明が
 // 常に同じ場所で全部重なってしまい、混色されて白っぽく見えてしまっていた。
-// linear-gradient(angleDeg)と同じ向きに沿って色ごとに位置をずらすことで、
-// 各色が縁の別々の場所に偏って見えるようにし、実際に虹色のグローに見えるように
-// している(セル塗り・チップと同じ135degがデフォルト)。
-export function ashiatoRareGlowBoxShadow(angleDeg = 135): string {
-  const angleRad = (angleDeg * Math.PI) / 180;
-  // linear-gradient()の角度は「0deg=上向き、時計回り」なのでdx/dyに変換する。
-  const dx = Math.sin(angleRad);
-  const dy = -Math.cos(angleRad);
+// 次にlinear-gradientと同じ角度の一直線上に色をずらす案を試したが、今度は
+// 直線の両端(先頭のピンク・末尾の黄緑)だけが目立ち、中間色特に水色が
+// 大部分の面積を占める直線の中心(オフセット0)に押し込まれて目立たなくなって
+// しまった。吹き出しはセルやチップと違って矩形の「縁」全体にグローが回るため、
+// 一直線上ではなく、5色を均等な角度(360°/5)で円状に配置するほうが、
+// 縁のあらゆる場所にまんべんなく色が回って自然な虹色に見える。
+export function ashiatoRareGlowBoxShadow(): string {
   const stops = ASHIATO_RARE_GRADIENT_STOPS;
+  // 先頭のピンクが左上寄りに来るよう-45degを起点にし、360°を5等分して一周させる
+  // (0deg=真上、時計回り)。
+  const startDeg = -45;
+  const stepDeg = 360 / stops.length;
+  const radius = 10;
   return stops
     .map(([, color], i) => {
-      const t = i / (stops.length - 1) - 0.5; // -0.5(先頭の色) ... 0.5(末尾の色)
-      const offsetX = Math.round(t * 18 * dx);
-      const offsetY = Math.round(t * 18 * dy);
-      return `${offsetX}px ${offsetY}px 14px 1px ${color}b3`;
+      const rad = ((startDeg + stepDeg * i) * Math.PI) / 180;
+      const offsetX = Math.round(radius * Math.sin(rad));
+      const offsetY = Math.round(-radius * Math.cos(rad));
+      return `${offsetX}px ${offsetY}px 12px 1px ${color}cc`;
     })
     .join(", ");
 }

@@ -2098,10 +2098,13 @@ function enablePrecisionLengthIfNeeded(length: number): boolean {
 
 // 色見本(小さな正方形)をテキストに埋め込む。「青・緑」等の色名だけだと
 // 実際の色との対応が分かりにくいため、その色そのものを見せる。
+// 7桁(約150m)だけ、地図上のセル・チップ・吹き出しと揃えて単色ではなく
+// 虹色グラデーション(ホロカード風)にする。
 function colorSwatch(geohashLength: number): HTMLSpanElement {
   const swatch = document.createElement("span");
   swatch.className = "color-swatch";
-  swatch.style.backgroundColor = ashiatoColor(geohashLength);
+  if (geohashLength === 7) swatch.style.background = ashiatoRareGradientCss();
+  else swatch.style.backgroundColor = ashiatoColor(geohashLength);
   return swatch;
 }
 
