@@ -39,7 +39,7 @@ export const API_REQUEST_TIMEOUT_MS = 15 * 1000;
 export const TAG = "Ashiato";
 
 // 検索1ページあたりの取得件数。
-export const PAGE_SIZE = 30;
+export const PAGE_SIZE = 100;
 
 // Ashiato Syntaxの"c"(contextId)。Ashi@が扱う候補として受け入れる文脈識別子。
 // これ以外のcを持つ候補(他アプリ・他運用が同じ#Ashiatoタグ・構文を使っている
