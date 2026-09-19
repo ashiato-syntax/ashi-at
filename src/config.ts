@@ -10,11 +10,11 @@ import type { GeohashLength } from "./types.js";
 
 // trueにすると、未発見(ロック中)のAshiatoも地図に表示する。
 // GPSによる発見判定や「集めたあしあと」一覧の仕様は変えない。本番ではfalse。
-export const SHOW_LOCKED_ASHIATO_FOR_DEBUG = true;
+export const SHOW_LOCKED_ASHIATO_FOR_DEBUG = false;
 
 // trueにすると、テスト用の文脈識別子(c;test)を持つ候補も表示対象に含める。
 // 本番ではfalse。
-export const SHOW_TEST_CONTEXT_ASHIATO_FOR_DEBUG = true;
+export const SHOW_TEST_CONTEXT_ASHIATO_FOR_DEBUG = false;
 
 // --- キャッシュ(IndexedDB) --------------------------------------------------
 
@@ -88,7 +88,7 @@ export const TEXT_PREVIEW_SAFETY_CAP_LENGTH = 3000;
 // 位置精度がこの半径(メートル)を超えたら「精度が悪い」とみなす。
 // この状態では、あしあとの発見(当たり判定)・新規投稿・新規下書きを行わない
 // (下書き済みのあしあとの投稿はisDraftPostableのルールのみに従い、ここでは制限しない)。
-export const BAD_ACCURACY_RADIUS_M = 500;
+export const BAD_ACCURACY_RADIUS_M = 300;
 
 // --- 地図の色・線の太さ -----------------------------------------------------
 // 陸地・境界線の色は、Leafletがfill/stroke属性としてSVGへ直接書き込む
