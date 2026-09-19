@@ -2416,6 +2416,17 @@ closeOnBackdropClick(settingsDialog);
 
 // 「メディアの表示」「表示レイヤー」は縦に長いため、既定では折りたたんでおき、
 // 必要なときだけ開く(style.css側のgrid-template-rowsの0fr/1frアニメーション)。
+//
+// ダイアログを閉じても展開状態はDOMにクラスとして残り続けてしまい、
+// (例:「表示レイヤー」を開く→設定を閉じる→設定を開き直す、で開いたまま)
+// 次に開いたときも前回開いていた項目が開いたままになっていた。ダイアログの
+// 「close」イベント(Xボタン・背景クリック・Escapeキーいずれでも発火する)を
+// 使って、閉じるたびにそのダイアログ内の折りたたみを全て畳み直す。
+const collapsiblesByDialog = new Map<
+  HTMLDialogElement,
+  { toggle: HTMLButtonElement; rows: HTMLElement }[]
+>();
+
 function wireCollapsibleToggle(toggleId: string, rowsId: string): void {
   const toggle = $<HTMLButtonElement>(`#${toggleId}`);
   const rows = $(`#${rowsId}`);
@@ -2424,6 +2435,19 @@ function wireCollapsibleToggle(toggleId: string, rowsId: string): void {
     rows.classList.toggle("expanded", willExpand);
     toggle.setAttribute("aria-expanded", String(willExpand));
   };
+
+  const dialog = toggle.closest("dialog");
+  if (!dialog) return;
+  if (!collapsiblesByDialog.has(dialog)) {
+    collapsiblesByDialog.set(dialog, []);
+    dialog.addEventListener("close", () => {
+      for (const entry of collapsiblesByDialog.get(dialog) ?? []) {
+        entry.rows.classList.remove("expanded");
+        entry.toggle.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+  collapsiblesByDialog.get(dialog)?.push({ toggle, rows });
 }
 
 // 折りたたみを展開状態にする(プログラムから、クリックせずに)。
