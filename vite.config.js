@@ -4,12 +4,16 @@ export default defineConfig({
   // GitHub Pages(プロジェクトサイト)は/ashi-at/配下での公開になる一方、
   // Cloudflare(独自ドメインashi-at.netのルートで公開)はルートでの公開になる
   // ため、base(アセットの参照パス)を分ける必要がある。
-  // Cloudflare Pages専用の環境変数CF_PAGESで判定する案もあったが、
-  // このプロジェクトはCloudflareの新しい「Workers(wrangler)」ビルド方式で
-  // デプロイされており、CF_PAGESが立つとは限らない(Pages専用の変数のため)。
-  // 代わりに、Cloudflare側のビルド設定(Settings > Variables and Secrets)で
-  // 明示的に設定してもらう自前の環境変数DEPLOY_TARGET=cloudflareで判定する。
-  base: process.env.DEPLOY_TARGET === 'cloudflare' ? '/' : '/ashi-at/',
+  // 当初はCloudflare側で手動設定する環境変数(DEPLOY_TARGET等)で判定していたが、
+  // Cloudflareの「Workers(wrangler)」ビルドはvite.config.js/wrangler.jsoncを
+  // ビルドごとに使い捨てのコンテナ内で自動生成する方式で、ダッシュボードで
+  // 設定したビルド用環境変数が確実にvite build側へ渡るとは限らず、実際に
+  // base(/ashi-at/のまま)が反映されない不具合が起きた。
+  // 代わりに、GitHub Actions実行時に必ず自動で設定される(手動設定不要かつ
+  // Cloudflare側では立たないことが保証されている)GITHUB_ACTIONS変数で判定する
+  // 方式に変更。GitHub Actions上でのビルドだけ/ashi-at/を使い、それ以外
+  // (Cloudflareのビルド・ローカル開発時のnpm run build)は全てルート(/)にする。
+  base: process.env.GITHUB_ACTIONS ? '/ashi-at/' : '/',
 
   plugins: [],
 
