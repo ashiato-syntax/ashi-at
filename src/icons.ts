@@ -37,6 +37,12 @@ import sparkles from "lucide-static/icons/sparkles.svg?raw";
 import pencilLine from "lucide-static/icons/pencil-line.svg?raw";
 import messageSquareX from "lucide-static/icons/message-square-x.svg?raw";
 import messagesSquare from "lucide-static/icons/messages-square.svg?raw";
+// Ashi@自身のロゴマーク(favicon.svgと同じ絵柄)。lucideアイコンと違いfillが
+// --color-accentと同じ#f0c100に固定されている(stroke="currentColor"ではない)ため、
+// テーマに応じて色が変わることはない(が、アクセントカラー自体がライト/ダーク
+// 共通で#f0c100なので実害はない)。「アプリの使い方」の1枚目でfaviconと
+// 同じ見た目にするために使う。
+import ashiatoMark from "./icons/ashiato-mark.svg?raw";
 
 const ICONS = {
   footprints,
@@ -74,6 +80,7 @@ const ICONS = {
   "pencil-line": pencilLine,
   "message-square-x": messageSquareX,
   "messages-square": messagesSquare,
+  "ashiato-mark": ashiatoMark,
 } as const;
 
 export type IconName = keyof typeof ICONS;

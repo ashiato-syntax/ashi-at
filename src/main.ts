@@ -2305,7 +2305,7 @@ interface OnboardingSlide {
 
 const ONBOARDING_SLIDES: OnboardingSlide[] = [
   {
-    icon: "footprints",
+    icon: "ashiato-mark",
     title: "Ashi@とは",
     body: "Ashi@は、現実世界の場所にMisskeyノートを投稿したり、それを現地で発見できたりする、Misskeyクライアントです。\n\nAshi@で投稿するノートのことを「あしあと」といいます。",
   },

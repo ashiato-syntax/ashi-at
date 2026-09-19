@@ -1,0 +1,22 @@
+{
+  "name": "Ashi@",
+  "short_name": "Ashi@",
+  "description": "Ashi@ — あしあとを偶然見つけるためのMisskeyクライアント",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#0a2023",
+  "theme_color": "#0a2023",
+  "icons": [
+    {
+      "src": "icon_192px.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon_512px.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

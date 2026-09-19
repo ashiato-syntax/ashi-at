@@ -12,6 +12,15 @@
         />
         <title>Ashi@</title>
         <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+        <!-- ホーム画面追加(iOS/Android)用のアイコン。iOSはmanifestのiconsを見ないため
+             apple-touch-iconが別途必要。GitHub Pages(/ashi-at/配下)とCloudflare
+             (ルート配下)の両方で正しく解決されるよう、vite.config.jsのbase設定に
+             頼らない相対パス(./)にしている(publicディレクトリの中身はbaseの値に
+             関わらずdist直下にそのままコピーされるため、index.htmlから見て常に
+             同じ相対位置になる)。 -->
+        <link rel="apple-touch-icon" href="./icon_192px.png" />
+        <link rel="manifest" href="./manifest.webmanifest" />
+        <meta name="theme-color" content="#0a2023" />
         <!-- テーマ(ライト/ダーク)の初期反映。IndexedDBは非同期のため、CSS適用前に
              間に合わずライト→ダークのフラッシュが起きてしまう。そのため、選択した
              テーマをmain.ts側でlocalStorageにも同期でミラーしておき(キー名は
@@ -36,7 +45,10 @@
     </head>
     <body>
         <div id="splash" class="splash" aria-hidden="true">
-            <h1>Ashi@</h1>
+            <div class="splash-title">
+                <img class="splash-icon" src="./favicon.svg" alt="" />
+                <h1>Ashi@</h1>
+            </div>
             <p class="subtitle">どこにいた？</p>
         </div>
         <main id="app" inert>
