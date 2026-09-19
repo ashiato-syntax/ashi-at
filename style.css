@@ -2451,6 +2451,18 @@ dialog#mediaLightbox::backdrop {
     background: color-mix(in srgb, var(--chip-color, #999) 55%, var(--color-surface));
     color: var(--color-accent-contrast);
 }
+/* 7桁(約150m)は地図上のセル(map.ts)と揃え、枠線を単色の--chip-colorでは
+   なく虹色グラデーション(main.tsが--chip-rare-gradientに設定)にする。
+   border-color自体はグラデーションにできないため、border-imageで代用する
+   (border: 1px solid ...で決めた太さ・スタイルはそのまま、塗りだけこちらが
+   上書きする)。ON/OFFどちらの状態でも枠線は虹色のままにし、ONの時だけ
+   さらに背景も虹色で塗りつぶす。 */
+.precision-filter-chip[data-length="7"] {
+    border-image: var(--chip-rare-gradient) 1;
+}
+.precision-filter-chip[data-length="7"][aria-pressed="true"] {
+    background: var(--chip-rare-gradient);
+}
 .ashiato-popup-list {
     display: flex;
     flex-direction: column;
@@ -2633,6 +2645,7 @@ dialog#mediaLightbox::backdrop {
         opacity: 0.5;
     }
 }
+
 
 /* あつめたあしあと一覧・ポップアップの本文プレビュー内に表示するカスタム絵文字。
    下書き一覧は本文入力欄が無いため対象外(main.js参照)。 */

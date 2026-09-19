@@ -10,7 +10,7 @@ import type { GeohashLength } from "./types.js";
 
 // trueにすると、未発見(ロック中)のAshiatoも地図に表示する。
 // GPSによる発見判定や「集めたあしあと」一覧の仕様は変えない。本番ではfalse。
-export const SHOW_LOCKED_ASHIATO_FOR_DEBUG = false;
+export const SHOW_LOCKED_ASHIATO_FOR_DEBUG = true;
 
 // trueにすると、テスト用の文脈識別子(c;test)を持つ候補も表示対象に含める。
 // 本番ではfalse。
@@ -123,33 +123,68 @@ export const WARD_BOUNDARY_COLOR_LIGHT = "#B9B9B9";
 export const WARD_BOUNDARY_COLOR_DARK = "#52AC95";
 
 // Geohashの桁数(精度)ごとの色。精度が細かい(=判定エリアが狭い)ほど暖色にして
-// 目立たせる。4桁=青, 5桁=緑, 6桁=黄色, 7桁=赤。Ashi@が扱うのはこの4種類の
-// 桁数のみ。
+// 目立たせる。4桁=青, 5桁=緑, 6桁=赤ピンク, 7桁=虹色(ASHIATO_RARE_GRADIENT_STOPS
+// 参照)。Ashi@が扱うのはこの4種類の桁数のみ。
 // ライト/ダークで別の値を持つ(map.ts: ashiatoColor参照)。ダークモードの
 // 陸地(LAND_FILL_COLOR_DARK)・境界線(*_BOUNDARY_COLOR_DARK)がどちらも
 // 暗い青緑系のため、4桁の色を同じ青緑系(元は#00acc1)のままにすると見分けが
 // 付きにくかった。ダークモードだけ4桁を青系に振り、5桁の緑も含めて全体的に
 // 明度・彩度を上げて暗い地図の上でも視認できるようにしている。
+// 6桁は元は黄色だったが、7桁の虹色グラデーション(ホロカード風)の縁の
+// 赤みがかったピンクに寄せた(ASHIATO_RARE_GRADIENT_STOPSの0%側と同系色)。
 export const ASHIATO_COLORS_BY_LENGTH_LIGHT: Record<number, string> = {
   4: "#00acc1",
   5: "#4caf50",
-  6: "#fbc02d",
+  6: "#e91e8c",
   7: "#e53935",
 };
 export const ASHIATO_COLORS_BY_LENGTH_DARK: Record<number, string> = {
   4: "#2979ff",
   5: "#00e676",
-  6: "#ffd740",
+  6: "#ff6ec7",
   7: "#ff5252",
 };
+
+// 7桁(約150m)は現地探索の中で最も判定エリアが狭く見つけにくいセルのため、
+// 単色ではなくガチャゲーの「SSR確定」演出のような斜めの虹色グラデーションで
+// 目立たせる(セルの塗り/枠線=map.ts、表示レイヤーのチップ・吹き出しの
+// グロー=main.ts、いずれもここを唯一の情報源として参照し、色の重複定義を
+// 避ける)。ライト/ダーク共通(元々彩度の高い色のみで構成しているため、
+// 暗い地図の上でも明るい地図の上でも十分目立つ)。
+export const ASHIATO_RARE_GRADIENT_STOPS: [offset: string, color: string][] = [
+  ["0%", "#ff6ec7"],
+  ["25%", "#a685ff"],
+  ["50%", "#6ec6ff"],
+  ["75%", "#6ef2c7"],
+  ["100%", "#c8ff6e"],
+];
+
+// ASHIATO_RARE_GRADIENT_STOPSから、CSSのlinear-gradient()関数の文字列を組み立てる
+// (.precision-filter-chip[data-length="7"]の背景等、main.ts参照)。
+export function ashiatoRareGradientCss(angleDeg = 135): string {
+  const stops = ASHIATO_RARE_GRADIENT_STOPS.map(([offset, color]) => `${color} ${offset}`).join(
+    ", ",
+  );
+  return `linear-gradient(${angleDeg}deg, ${stops})`;
+}
+
+// ASHIATO_RARE_GRADIENT_STOPSの各色を、半透明の同心円状box-shadowとして
+// 重ねがけした文字列を組み立てる。box-shadow自体は単色しか指定できないため
+// (グラデーションにできない)、色ごとに半径をずらして複数重ねることで、
+// 吹き出し(main.ts:showAshiatoCellPopup)の縁ににじむ虹色のグローを表現する。
+export function ashiatoRareGlowBoxShadow(): string {
+  return ASHIATO_RARE_GRADIENT_STOPS.map(
+    ([, color], i) => `0 0 ${10 + i * 6}px ${color}99`,
+  ).join(", ");
+}
 
 // あしあとセルの境界線(outline)を、塗りの矩形よりどれだけ内側に描くか
 // (セルの縦横それぞれの長さに対する割合)。map.ts: addAshiatoGroup参照。
 export const INSET_FRACTION = 0.05;
 
 // 投稿UI表示中、選択中の精度でのGeohashセル範囲をプレビュー表示する色。
-// あしあと本体の色(4桁=青緑, 5桁=緑, 6桁=黄, 7桁=赤)と紛らわしくならないよう、
-// あしあとでは使っていない紫系で統一して表示する。
+// あしあと本体の色(4桁=青緑, 5桁=緑, 6桁=赤ピンク, 7桁=虹色)と紛らわしく
+// ならないよう、あしあとでは使っていない紫系で統一して表示する。
 export const PRECISION_PREVIEW_COLOR = "#8e24aa";
 
 // 現在地マーカー+精度円の色。

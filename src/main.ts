@@ -110,6 +110,8 @@ import {
   MIN_ZOOM_FOR_STATION_LABELS,
   TERMS_VERSION_DATE,
   PRIVACY_VERSION_DATE,
+  ashiatoRareGradientCss,
+  ashiatoRareGlowBoxShadow,
 } from "./config.js";
 
 // 4桁(約20km)・5桁(約4km)はエリアが広すぎて「現地に行って発見する」体験に
@@ -1515,8 +1517,13 @@ function showAshiatoCellPopup(geohash: string): void {
   // 吹き出しの影を、Leaflet既定の黒系(rgba(0,0,0,0.4))ではなく、このセルの
   // 色(ashiatoColor)に揃える。hex末尾に16進数のアルファ(約40%=66)を足すだけで
   // 変換できるので、rgba()への変換処理は不要。
-  const shadowColor = `${ashiatoColor(geohash.length)}80`;
-  const shadow = `0 3px 14px ${shadowColor}`;
+  // 7桁(約150m)だけ、地図上のセル・表示レイヤーのチップと揃えて単色ではなく
+  // 虹色のグローにする(box-shadow自体はグラデーションにできないため、
+  // 色ごとに半径違いで重ねがけして表現する、ashiatoRareGlowBoxShadow参照)。
+  const shadow =
+    geohash.length === 7
+      ? ashiatoRareGlowBoxShadow()
+      : `0 3px 14px ${ashiatoColor(geohash.length)}80`;
   const wrapperEl = popupEl?.querySelector<HTMLElement>(".leaflet-popup-content-wrapper");
   const tipEl = popupEl?.querySelector<HTMLElement>(".leaflet-popup-tip");
   if (wrapperEl) wrapperEl.style.boxShadow = shadow;
@@ -2054,6 +2061,14 @@ for (const chip of document.querySelectorAll<HTMLButtonElement>(".precision-filt
   const length = Number(chip.dataset.length);
   precisionFilterChipsByLength.set(length, chip);
   chip.style.setProperty("--chip-color", ashiatoColor(length));
+  // 7桁(約150m)だけ、地図上のセル(map.ts参照)と揃えて単色ではなく
+  // 虹色グラデーションにする(ON状態の塗り・枠線、style.css参照)。
+  // マップ上のセル(横長寄りの矩形)は135degのままでよいが、このチップは
+  // 横26px・縦38px前後の縦長で、同じ角度だと中間色(水色)の帯が対角線の
+  // 大部分を占めてしまい、両端のピンク・黄緑がほぼ角にしか見えなかった。
+  // チップの縦横比に合わせて縦方向寄り(160deg)にし、5色をまんべんなく
+  // 配分する。
+  if (length === 7) chip.style.setProperty("--chip-rare-gradient", ashiatoRareGradientCss(160));
   chip.onclick = () => {
     const nowVisible = !visiblePrecisionLengths.has(length);
     if (nowVisible) visiblePrecisionLengths.add(length);

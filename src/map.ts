@@ -19,6 +19,7 @@ import {
   WARD_BOUNDARY_COLOR_DARK,
   ASHIATO_COLORS_BY_LENGTH_LIGHT,
   ASHIATO_COLORS_BY_LENGTH_DARK,
+  ASHIATO_RARE_GRADIENT_STOPS,
   INSET_FRACTION,
   PRECISION_PREVIEW_COLOR,
   CURRENT_LOCATION_COLOR,
@@ -910,6 +911,58 @@ function combinedCentroid(geometries: Geometry[]): [number, number] | null {
 // あしあとセルの境界線(outline)の内側への割合(INSET_FRACTION)はconfig.ts参照
 // (addAshiatoGroup参照)。
 
+// 7桁(約150m、現地探索の中で最も判定エリアが狭く見つけにくい)セルだけ、
+// 単色ではなくガチャゲーの「SSR確定」演出のような斜めの虹色グラデーションで
+// 塗る。LeafletのfillColor/color(stroke)オプションはCSSの<paint>値を
+// そのままSVGのfill/stroke属性へ渡すだけなので、"url(#id)"を渡せば
+// グラデーション定義への参照として機能する(Leaflet自体にグラデーション用の
+// 専用APIは無いが、素のSVG機能を素通しできる)。
+// ただし参照先のグラデーション要素は、参照する<path>と同じ<svg>ルート内に
+// 無ければならない(別の<svg>にあるidは参照できない)。Leafletは対象の
+// ペイン(ここではashiatoPane7)ごとに1つの<svg>を使い回すため、そのペインの
+// <svg>に一度だけ<defs>ごと差し込めば、以降このペインに追加される7桁セルは
+// 全て同じグラデーションを再利用できる。
+const ASHIATO_RARE_GRADIENT_ID = "ashiato-rare-gradient";
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function ensureRareGradient(svg: SVGSVGElement): void {
+  if (svg.querySelector(`#${ASHIATO_RARE_GRADIENT_ID}`)) return;
+
+  let defs = svg.querySelector("defs");
+  if (!defs) {
+    defs = document.createElementNS(SVG_NS, "defs");
+    svg.insertBefore(defs, svg.firstChild);
+  }
+
+  const gradient = document.createElementNS(SVG_NS, "linearGradient");
+  gradient.setAttribute("id", ASHIATO_RARE_GRADIENT_ID);
+  gradient.setAttribute("x1", "0%");
+  gradient.setAttribute("y1", "0%");
+  gradient.setAttribute("x2", "100%");
+  gradient.setAttribute("y2", "100%");
+  // ピンク→紫→青→水色→黄緑と回る、ホログラム風の帯。
+  // (色の一覧はconfig.ts: ASHIATO_RARE_GRADIENT_STOPSを唯一の情報源とし、
+  // チップ・吹き出しのグロー(main.ts)と重複定義しない)。
+  for (const [offset, stopColor] of ASHIATO_RARE_GRADIENT_STOPS) {
+    const stop = document.createElementNS(SVG_NS, "stop");
+    stop.setAttribute("offset", offset);
+    stop.setAttribute("stop-color", stopColor);
+    gradient.append(stop);
+  }
+  defs.append(gradient);
+}
+
+// rect(塗り)・outline(枠線)を地図に追加した後に呼ぶこと(Leafletが実際の
+// <path>要素を作るのはonAdd時のため)。
+function applyRareGradient(rect: L.Rectangle, outline: L.Rectangle): void {
+  const rectEl = rect.getElement() as SVGGraphicsElement | undefined;
+  const svg = rectEl?.ownerSVGElement;
+  if (!rectEl || !svg) return;
+  ensureRareGradient(svg);
+  rectEl.setAttribute("fill", `url(#${ASHIATO_RARE_GRADIENT_ID})`);
+  outline.getElement()?.setAttribute("stroke", `url(#${ASHIATO_RARE_GRADIENT_ID})`);
+}
+
 // 表示対象レコードが全て既読かどうかで、マーカーの見た目を変えるためのCSSクラス。
 // 全て既読ならフェード(薄く・明滅なし)、1件でも未読が残っていればゆっくり明滅させる
 // (実際のスタイル・アニメーションはstyle.css参照)。
@@ -1000,6 +1053,8 @@ export function addAshiatoGroup(
   for (const v of visualLayers) v.addTo(map);
   hitArea.addTo(map);
 
+  if (geohashLength === 7) applyRareGradient(rect, outline);
+
   return { visualLayers, hitArea, geohashLength };
 }
 
@@ -1020,9 +1075,9 @@ interface PrecisionPreviewLayer {
 
 // 投稿UI表示中、選択中の精度でのGeohashセル範囲をプレビュー表示する。
 // areaOverlay(既存の「エリア」トグル)とは独立(投稿UI固有)。
-// あしあと本体の色(4桁=青緑, 5桁=緑, 6桁=黄, 7桁=赤)と紛らわしくならないよう、
-// あしあとでは使っていない紫系(PRECISION_PREVIEW_COLOR、config.ts参照)で
-// 統一して表示する。
+// あしあと本体の色(4桁=青緑, 5桁=緑, 6桁=赤ピンク, 7桁=虹色)と紛らわしく
+// ならないよう、あしあとでは使っていない紫系(PRECISION_PREVIEW_COLOR、
+// config.ts参照)で統一して表示する。
 // show()はプレビュー用に計算したgeohash文字列を返す(呼び出し側で投稿本文の
 // 組み立てに使い回せるように)。
 
