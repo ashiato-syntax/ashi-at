@@ -168,14 +168,29 @@ export function ashiatoRareGradientCss(angleDeg = 135): string {
   return `linear-gradient(${angleDeg}deg, ${stops})`;
 }
 
-// ASHIATO_RARE_GRADIENT_STOPSの各色を、半透明の同心円状box-shadowとして
-// 重ねがけした文字列を組み立てる。box-shadow自体は単色しか指定できないため
-// (グラデーションにできない)、色ごとに半径をずらして複数重ねることで、
-// 吹き出し(main.ts:showAshiatoCellPopup)の縁ににじむ虹色のグローを表現する。
-export function ashiatoRareGlowBoxShadow(): string {
-  return ASHIATO_RARE_GRADIENT_STOPS.map(
-    ([, color], i) => `0 0 ${10 + i * 6}px ${color}99`,
-  ).join(", ");
+// ASHIATO_RARE_GRADIENT_STOPSの各色を、半透明のbox-shadowとして重ねがけした
+// 文字列を組み立てる。box-shadow自体は単色しか指定できないため(グラデーション
+// にできない)、色ごとに複数重ねることで虹色のグローを表現する
+// (吹き出し=main.ts:showAshiatoCellPopupの縁に使用)。
+// 最初は全色を同じ原点(オフセット0)・半径違いだけで重ねていたが、5色の半透明が
+// 常に同じ場所で全部重なってしまい、混色されて白っぽく見えてしまっていた。
+// linear-gradient(angleDeg)と同じ向きに沿って色ごとに位置をずらすことで、
+// 各色が縁の別々の場所に偏って見えるようにし、実際に虹色のグローに見えるように
+// している(セル塗り・チップと同じ135degがデフォルト)。
+export function ashiatoRareGlowBoxShadow(angleDeg = 135): string {
+  const angleRad = (angleDeg * Math.PI) / 180;
+  // linear-gradient()の角度は「0deg=上向き、時計回り」なのでdx/dyに変換する。
+  const dx = Math.sin(angleRad);
+  const dy = -Math.cos(angleRad);
+  const stops = ASHIATO_RARE_GRADIENT_STOPS;
+  return stops
+    .map(([, color], i) => {
+      const t = i / (stops.length - 1) - 0.5; // -0.5(先頭の色) ... 0.5(末尾の色)
+      const offsetX = Math.round(t * 18 * dx);
+      const offsetY = Math.round(t * 18 * dy);
+      return `${offsetX}px ${offsetY}px 14px 1px ${color}b3`;
+    })
+    .join(", ");
 }
 
 // あしあとセルの境界線(outline)を、塗りの矩形よりどれだけ内側に描くか
