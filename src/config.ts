@@ -49,11 +49,12 @@ export const ASHIATO_CONTEXT_ID = "asat";
 
 // Ashi@で扱うgeohashの桁数(精度)。これ以外の精度の「あしあと」は対象外として
 // 無視する(地図表示にも「見つけたあしあと」にも一切出さない)。
-export const MIN_GEOHASH_LENGTH = 4;
+export const MIN_GEOHASH_LENGTH = 3;
 export const MAX_GEOHASH_LENGTH = 7;
 
 // 投稿UIの「投稿エリアサイズ」の選択肢に出す表示ラベル。
 export const PRECISION_LABELS: Record<GeohashLength, string> = {
+  3: "約130km",
   4: "約20km",
   5: "約4km",
   6: "約1km",
@@ -63,10 +64,12 @@ export const PRECISION_LABELS: Record<GeohashLength, string> = {
 // 投稿機能: geohashの桁数(判定エリアの狭さ)に応じて、下書き保存から投稿できる
 // ようになるまでの遅延時間を設ける(プライバシー配慮。投稿者の現在地が即座に
 // 特定されないようにするため)。桁数が細かい(=判定エリアが狭い)ほど投稿者の
-// 居場所が絞り込まれやすいため、4桁(約20km)・5桁(約4km)は遅延なし(直接投稿可)、
-// 6桁(約1km)は下書き保存から20分、7桁(約150m)は40分経過するまで投稿できない
-// ようにする(isDraftPostable/updateComposeButtonsの両方でこの定数を参照すること)。
+// 居場所が絞り込まれやすいため、3桁(約130km)・4桁(約20km)・5桁(約4km)は
+// 遅延なし(直接投稿可)、6桁(約1km)は下書き保存から20分、7桁(約150m)は40分
+// 経過するまで投稿できないようにする(isDraftPostable/updateComposeButtonsの
+// 両方でこの定数を参照すること)。
 export const DRAFT_POST_DELAY_MS_BY_LENGTH: Record<GeohashLength, number> = {
+  3: 0,
   4: 0,
   5: 0,
   6: 20 * 60 * 1000, // 20分
@@ -123,8 +126,8 @@ export const WARD_BOUNDARY_COLOR_LIGHT = "#B9B9B9";
 export const WARD_BOUNDARY_COLOR_DARK = "#52AC95";
 
 // Geohashの桁数(精度)ごとの色。精度が細かい(=判定エリアが狭い)ほど暖色にして
-// 目立たせる。4桁=青, 5桁=緑, 6桁=赤ピンク, 7桁=虹色(ASHIATO_RARE_GRADIENT_STOPS
-// 参照)。Ashi@が扱うのはこの4種類の桁数のみ。
+// 目立たせる。3桁=青灰, 4桁=青, 5桁=緑, 6桁=赤ピンク, 7桁=虹色
+// (ASHIATO_RARE_GRADIENT_STOPS参照)。Ashi@が扱うのはこの5種類の桁数のみ。
 // ライト/ダークで別の値を持つ(map.ts: ashiatoColor参照)。ダークモードの
 // 陸地(LAND_FILL_COLOR_DARK)・境界線(*_BOUNDARY_COLOR_DARK)がどちらも
 // 暗い青緑系のため、4桁の色を同じ青緑系(元は#00acc1)のままにすると見分けが
@@ -132,13 +135,18 @@ export const WARD_BOUNDARY_COLOR_DARK = "#52AC95";
 // 明度・彩度を上げて暗い地図の上でも視認できるようにしている。
 // 6桁は元は黄色だったが、7桁の虹色グラデーション(ホロカード風)の縁の
 // 赤みがかったピンクに寄せた(ASHIATO_RARE_GRADIENT_STOPSの0%側と同系色)。
+// 3桁は最も判定エリアが広い(=最も寒色にすべき)ため、4桁の青よりさらに彩度を
+// 落とした青灰色にした。紫系にすると投稿UIのプレビュー色(PRECISION_PREVIEW_COLOR、
+// あしあとでは使っていない紫系を意図的に選んでいる)と紛らわしくなるため避けている。
 export const ASHIATO_COLORS_BY_LENGTH_LIGHT: Record<number, string> = {
+  3: "#546e7a",
   4: "#00acc1",
   5: "#4caf50",
   6: "#e91e8c",
   7: "#e53935",
 };
 export const ASHIATO_COLORS_BY_LENGTH_DARK: Record<number, string> = {
+  3: "#90a4ae",
   4: "#2979ff",
   5: "#00e676",
   6: "#ff6ec7",
@@ -203,8 +211,8 @@ export function ashiatoRareGlowBoxShadow(): string {
 export const INSET_FRACTION = 0.05;
 
 // 投稿UI表示中、選択中の精度でのGeohashセル範囲をプレビュー表示する色。
-// あしあと本体の色(4桁=青緑, 5桁=緑, 6桁=赤ピンク, 7桁=虹色)と紛らわしく
-// ならないよう、あしあとでは使っていない紫系で統一して表示する。
+// あしあと本体の色(3桁=青灰, 4桁=青緑, 5桁=緑, 6桁=赤ピンク, 7桁=虹色)と
+// 紛らわしくならないよう、あしあとでは使っていない紫系で統一して表示する。
 export const PRECISION_PREVIEW_COLOR = "#8e24aa";
 
 // 現在地マーカー+精度円の色。

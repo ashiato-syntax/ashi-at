@@ -114,8 +114,9 @@ import {
   ashiatoRareGlowBoxShadow,
 } from "./config.js";
 
-// 4桁(約20km)・5桁(約4km)はエリアが広すぎて「現地に行って発見する」体験に
-// そぐわないため、現地探索(GPSでの発見判定=unlockedAt付与)の対象外とする。
+// 3桁(約130km)・4桁(約20km)・5桁(約4km)はエリアが広すぎて「現地に行って
+// 発見する」体験にそぐわないため、現地探索(GPSでの発見判定=unlockedAt付与)
+// の対象外とする。
 // 地図上には検索結果に含まれた時点で常に表示するが、「見つけたあしあと」
 // (収集物としての一覧・バッジ・未読管理)には一切含めない。これらのレコードは
 // unlockedAtを常にnullのまま保ち(=決して「発見」扱いにしない)、地図描画側の
@@ -1003,7 +1004,7 @@ function renderAshiatoRow(
   const footer = document.createElement("div");
   footer.className = "ashiato-row-footer";
 
-  // 4桁・5桁(現地探索の対象外、requiresOnSiteDiscovery参照)は「発見」という
+  // 3桁・4桁・5桁(現地探索の対象外、requiresOnSiteDiscovery参照)は「発見」という
   // 概念自体が無いため、レイアウト(space-between)維持のため空のspanのままにする。
   const discovered = document.createElement("span");
   discovered.className = "ashiato-discovered";
@@ -1163,7 +1164,7 @@ function isPostedWithin24h(record: AshiatoRecord): boolean {
 
 // セルの見た目(矩形)を、現在のrecords件数・状態に合わせて作り直す。
 // ロック中(未発見)のレコードは地図上に一切表示しない方針のため、
-// 表示対象は「発見済み(unlockedAtあり)」のレコードに絞る。ただし4桁・5桁は
+// 表示対象は「発見済み(unlockedAtあり)」のレコードに絞る。ただし3桁・4桁・5桁は
 // 現地探索の対象外(requiresOnSiteDiscovery参照)で、そもそもunlockedAtを
 // 持たない設計のため、それらは常に表示対象に含める。
 // 桁数ごとの表示フィルター(visiblePrecisionLengths)でオフにされている
@@ -1347,7 +1348,7 @@ function observeRowsForRead(
 
 // 「見つけたあしあと」ダイアログの中身を、アンロック済みのものだけ・
 // 選択中の並び順で再構築する。ロック中(未発見)のものはここには載せない。
-// 4桁・5桁(現地探索の対象外)は常にunlockedAtを持たない設計のため、
+// 3桁・4桁・5桁(現地探索の対象外)は常にunlockedAtを持たない設計のため、
 // 自然にこの一覧にも含まれない(見つけずに見れるので「見つけた」扱いにしない)。
 // 各行の「…」ボタンから、詳細確認・地図表示・SNSを開く・削除をまとめた
 // アクションシート(openAshiatoActions)を開く。
@@ -1396,7 +1397,7 @@ function refreshUnlockedList(): void {
 
 // セルをクリックしたときの入口。
 // ポップアップ等に出すのは、発見済み(unlockedAt)のレコード、または現地探索の
-// 対象外(4桁・5桁、requiresOnSiteDiscovery参照)のレコードのみ
+// 対象外(3桁・4桁・5桁、requiresOnSiteDiscovery参照)のレコードのみ
 // (それ以外のロック中のものは地図に表示していないため、そもそもクリックしようがない)。
 // レコードが1件なら直接開封フローへ、複数件ならポップアップで一覧を出し、
 // 選んだものだけ開封フローへ進む。
@@ -1567,7 +1568,7 @@ function showAshiatoCellPopup(geohash: string): void {
 }
 
 // あしあと1件分の「…」ボタンから呼ばれるアクションシート。地図/一覧いずれの行からも
-// 呼ばれうる(発見済み(unlockedAtがある)レコードか、現地探索の対象外(4桁・5桁、
+// 呼ばれうる(発見済み(unlockedAtがある)レコードか、現地探索の対象外(3桁・4桁・5桁、
 // requiresOnSiteDiscovery参照)のレコードのいずれか)。
 // 情報(投稿者・投稿日時・発見日時・当たり判定エリア)を表示した上で、
 // マップ表示・SNSを開く・「見つけたあしあと」からの削除の3アクションを提供する。
@@ -1858,7 +1859,7 @@ async function checkCurrentPositionAgainstCells(): Promise<void> {
   let anyLengthAutoEnabled = false;
 
   for (const cell of ashiatoCells.values()) {
-    // 4桁・5桁(現地探索の対象外、requiresOnSiteDiscovery参照)は、たとえ現在地が
+    // 3桁・4桁・5桁(現地探索の対象外、requiresOnSiteDiscovery参照)は、たとえ現在地が
     // セル内に入っていてもGPSでの発見処理そのものを行わない(=unlockedAtを
     // 決して付与しない。「見つけたあしあと」に絶対含めないため)。
     const locked = [...cell.records.values()].filter(
@@ -2052,9 +2053,9 @@ new ResizeObserver(([entry]) => {
 // あしあと本体がセルの矩形そのものになった(中心の丸マーカー廃止)ことで、
 // 従来の「エリア」トグル(セル範囲を別レイヤーで薄く重ね描きする機能)は
 // 完全に重複表示になったため廃止し、代わりに桁数ごとに地図上へ表示するか
-// どうかを選べるようにした。4桁・5桁の広いセルが密集地の7桁セルを覆い隠す
+// どうかを選べるようにした。3桁・4桁・5桁の広いセルが密集地の7桁セルを覆い隠す
 // ケースを、利用者側で個別にオフにして解消できる。
-const visiblePrecisionLengths = new Set<number>([4, 5, 6, 7]);
+const visiblePrecisionLengths = new Set<number>([3, 4, 5, 6, 7]);
 const precisionFilterChipsByLength = new Map<number, HTMLButtonElement>();
 
 for (const chip of document.querySelectorAll<HTMLButtonElement>(".precision-filter-chip")) {
@@ -2108,13 +2109,13 @@ function colorSwatch(geohashLength: number): HTMLSpanElement {
   return swatch;
 }
 
-// エリアサイズ4種の色見本+ラベルの並び。トグルカード「表示レイヤー」の
+// エリアサイズ5種の色見本+ラベルの並び。トグルカード「表示レイヤー」の
 // インフォ(#precisionFilterInfo)と同じ考え方で、使い方スライド
 // (ONBOARDING_SLIDES、「投稿するには」)でも同じ色見本を流用する。
 function buildPrecisionLegend(): HTMLSpanElement {
   const legend = document.createElement("span");
   legend.className = "precision-legend";
-  for (const length of [4, 5, 6, 7] as const) {
+  for (const length of [3, 4, 5, 6, 7] as const) {
     legend.append(colorSwatch(length), document.createTextNode(`${PRECISION_LABELS[length]} `));
   }
   return legend;
@@ -2126,16 +2127,21 @@ function buildPrecisionLegend(): HTMLSpanElement {
 $<HTMLButtonElement>("#precisionFilterInfo").onclick = () => {
   const message = document.createDocumentFragment();
   // 色とエリアサイズの対応が分かりづらいため、まず凡例を出す
-  // (■(20km) ■(4km) ■(1km) ■(150m) のように、桁数ごとの色とサイズを並べる)。
+  // (■(130km) ■(20km) ■(4km) ■(1km) ■(150m) のように、桁数ごとの色とサイズを並べる)。
   const legend = document.createElement("span");
-  for (const length of [4, 5, 6, 7] as const) {
+  for (const length of [3, 4, 5, 6, 7] as const) {
     legend.append(
       colorSwatch(length),
       document.createTextNode(`(${PRECISION_LABELS[length]}) `),
     );
   }
   const line1 = document.createElement("span");
-  line1.append(colorSwatch(4), colorSwatch(5), document.createTextNode("は現地に行かなくても見れます"));
+  line1.append(
+    colorSwatch(3),
+    colorSwatch(4),
+    colorSwatch(5),
+    document.createTextNode("は現地に行かなくても見れます"),
+  );
   const line2 = document.createElement("span");
   line2.append(colorSwatch(6), colorSwatch(7), document.createTextNode("は現地で発見する必要があります"));
   message.append(legend, document.createElement("br"), line1, document.createElement("br"), line2);
@@ -2312,7 +2318,7 @@ const ONBOARDING_SLIDES: OnboardingSlide[] = [
   {
     icon: "ruler",
     title: "投稿するには",
-    body: "あしあとを投稿するには、位置情報をONにする必要があります。\n投稿時には、投稿エリアのサイズを選択できます。選べるエリアのサイズは次の4種類です。\n",
+    body: "あしあとを投稿するには、位置情報をONにする必要があります。\n投稿時には、投稿エリアのサイズを選択できます。選べるエリアのサイズは次の5種類です。\n",
     legend: buildPrecisionLegend,
     bodyAfterLegend:
       "\n小さいほど、位置情報の精度が高いです。詳細な位置情報を投稿したくない場合は、サイズを大きくしましょう。",
@@ -2325,7 +2331,7 @@ const ONBOARDING_SLIDES: OnboardingSlide[] = [
   {
     icon: "eye",
     title: "みんなの投稿を見る",
-    body: "みんなの投稿はマップ上で閲覧できます。約20km・約4kmの投稿は、現地に行かなくても表示できます。\n\n約1km・約150mの投稿は、現地に行き、そのエリア内に入らないと表示されません。現地で見つけたあしあとは、「見つけたあしあと」に記録されます。",
+    body: "みんなの投稿はマップ上で閲覧できます。約130km・約20km・約4kmの投稿は、現地に行かなくても表示できます。\n\n約1km・約150mの投稿は、現地に行き、そのエリア内に入らないと表示されません。現地で見つけたあしあとは、「見つけたあしあと」に記録されます。",
   },
 ];
 
@@ -2613,7 +2619,7 @@ async function switchHost(host: string): Promise<number> {
   const cached = await getAshiatoRecords(host, TAG);
   // 古い順に並べておくと、ページングで足された分と混ざっても違和感がない
   cached.sort((a, b) => a.cachedAt - b.cachedAt);
-  // 4桁・5桁は「見つけたあしあと」の対象外(=unlockedAtを持たない)という不変条件を
+  // 3桁・4桁・5桁は「見つけたあしあと」の対象外(=unlockedAtを持たない)という不変条件を
   // 常に保つ。この機能追加より前に実際にGPSで発見済みになっていたキャッシュが
   // 残っていた場合に備え、ここで矯正しておく(地図上の表示自体はunlockedAtの
   // 有無に関わらず行われるため、矯正してもそのセルが見えなくなることはない)。

@@ -10,7 +10,7 @@ export interface GeohashBounds {
 }
 
 // 緯度経度からGeohashを生成する。decodeGeohashの逆演算。
-// precision桁のGeohash文字列を返す(Ashi@で使うのは5/6/7のいずれか)。
+// precision桁のGeohash文字列を返す(Ashi@で使うのは3〜7桁のいずれか)。
 export function encodeGeohash(lat: number, lon: number, precision: number): string {
   const latRange: [number, number] = [-90, 90];
   const lonRange: [number, number] = [-180, 180];

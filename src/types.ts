@@ -42,7 +42,7 @@ export interface Cursor {
   updatedAt?: number;
 }
 
-export type GeohashLength = 4 | 5 | 6 | 7;
+export type GeohashLength = 3 | 4 | 5 | 6 | 7;
 
 export interface Draft {
   id: string;

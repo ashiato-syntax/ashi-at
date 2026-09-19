@@ -333,7 +333,9 @@ export function createMap(el: string | HTMLElement): L.Map {
   map.getPane("precisionPreviewPane")!.style.zIndex = "660";
 
   // あしあとは、Geohashの桁数が細かい(=判定エリアが狭い)ほど前面に描画する。
-  // 前面から順に 7桁 > 6桁 > 5桁 > 4桁。
+  // 前面から順に 7桁 > 6桁 > 5桁 > 4桁 > 3桁。
+  map.createPane("ashiatoPane3");
+  map.getPane("ashiatoPane3")!.style.zIndex = "665";
   map.createPane("ashiatoPane4");
   map.getPane("ashiatoPane4")!.style.zIndex = "670";
   map.createPane("ashiatoPane5");
@@ -343,8 +345,10 @@ export function createMap(el: string | HTMLElement): L.Map {
   map.createPane("ashiatoPane7");
   map.getPane("ashiatoPane7")!.style.zIndex = "700";
 
-  // タップ判定も、見た目の重なり順(7→6→5→4)と一致させるため桁数ごとに分ける。
+  // タップ判定も、見た目の重なり順(7→6→5→4→3)と一致させるため桁数ごとに分ける。
   // (どの桁数のペインよりも前面)
+  map.createPane("ashiatoHitPane3");
+  map.getPane("ashiatoHitPane3")!.style.zIndex = "702";
   map.createPane("ashiatoHitPane4");
   map.getPane("ashiatoHitPane4")!.style.zIndex = "705";
   map.createPane("ashiatoHitPane5");
@@ -984,7 +988,7 @@ function readStateClassName(allRead: boolean): string {
 // 桁数(色)と既読状態(フェード/明滅)だけで表す)。
 // クリック判定(hitArea)もセル全体の矩形にする(以前の中心の小さな円に比べて
 // タップ領域が実際のセルの広さと一致し、押しやすくなる)。
-// 色・ペインはgeohashの桁数(4〜7)に応じて決まる(呼び出し側でこの桁数のみに絞り込み済み)。
+// 色・ペインはgeohashの桁数(3〜7)に応じて決まる(呼び出し側でこの桁数のみに絞り込み済み)。
 // allReadは、表示対象レコードが全て既読(readAtあり)かどうか(呼び出し側で判定済み)。
 export function addAshiatoGroup(
   map: L.Map,
@@ -1075,8 +1079,8 @@ interface PrecisionPreviewLayer {
 
 // 投稿UI表示中、選択中の精度でのGeohashセル範囲をプレビュー表示する。
 // areaOverlay(既存の「エリア」トグル)とは独立(投稿UI固有)。
-// あしあと本体の色(4桁=青緑, 5桁=緑, 6桁=赤ピンク, 7桁=虹色)と紛らわしく
-// ならないよう、あしあとでは使っていない紫系(PRECISION_PREVIEW_COLOR、
+// あしあと本体の色(3桁=青灰, 4桁=青緑, 5桁=緑, 6桁=赤ピンク, 7桁=虹色)と
+// 紛らわしくならないよう、あしあとでは使っていない紫系(PRECISION_PREVIEW_COLOR、
 // config.ts参照)で統一して表示する。
 // show()はプレビュー用に計算したgeohash文字列を返す(呼び出し側で投稿本文の
 // 組み立てに使い回せるように)。

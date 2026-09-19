@@ -112,6 +112,13 @@
                                 <button
                                     type="button"
                                     class="precision-filter-chip"
+                                    data-length="3"
+                                    aria-pressed="true"
+                                    aria-label="約130kmの範囲の表示切り替え"
+                                ></button>
+                                <button
+                                    type="button"
+                                    class="precision-filter-chip"
                                     data-length="4"
                                     aria-pressed="true"
                                     aria-label="約20kmの範囲の表示切り替え"
@@ -360,6 +367,10 @@
                     <span class="action-sheet-icon" id="composePrecisionIcon"></span>
                     <span>エリアサイズ</span>
                 </legend>
+                <label
+                    ><input type="radio" name="precision" value="3" />
+                    約130km</label
+                >
                 <label
                     ><input type="radio" name="precision" value="4" />
                     約20km</label
