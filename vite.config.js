@@ -1,7 +1,17 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/ashi-at/',
+  // GitHub Pages(プロジェクトサイト)は/ashi-at/配下での公開になる一方、
+  // Cloudflare(独自ドメインashi-at.netのルートで公開)はルートでの公開になる
+  // ため、base(アセットの参照パス)を分ける必要がある。
+  // Cloudflare Pages専用の環境変数CF_PAGESで判定する案もあったが、
+  // このプロジェクトはCloudflareの新しい「Workers(wrangler)」ビルド方式で
+  // デプロイされており、CF_PAGESが立つとは限らない(Pages専用の変数のため)。
+  // 代わりに、Cloudflare側のビルド設定(Settings > Variables and Secrets)で
+  // 明示的に設定してもらう自前の環境変数DEPLOY_TARGET=cloudflareで判定する。
+  base: process.env.DEPLOY_TARGET === 'cloudflare' ? '/' : '/ashi-at/',
+
+  plugins: [],
 
   build: {
     // Vite 8のデフォルトCSSミニファイア(lightningcss)には、同じ宣言内に
