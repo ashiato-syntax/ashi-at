@@ -2131,7 +2131,7 @@ $<HTMLButtonElement>("#precisionFilterInfo").onclick = () => {
   for (const length of [4, 5, 6, 7] as const) {
     legend.append(
       colorSwatch(length),
-      document.createTextNode(`(${PRECISION_LABELS[length].replace(/^約/, "")}) `),
+      document.createTextNode(`(${PRECISION_LABELS[length]}) `),
     );
   }
   const line1 = document.createElement("span");
